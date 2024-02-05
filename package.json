@@ -1,0 +1,18 @@
+{
+  "author": "Sam Stelfox <sstelfox@bedroomprogrammers.net>",
+  "name": "banyanfs",
+  "license": "MIT",
+  "version": "0.1.0",
+  "scripts": {
+    "build": "webpack",
+    "dev": "webpack serve",
+    "test": "wasm-pack test --node && wasm-pack test --firefox --headless && wasm-pack test --chrome --headless"
+  },
+  "devDependencies": {
+    "@wasm-tool/wasm-pack-plugin": "^1",
+    "copy-webpack-plugin": "^11",
+    "webpack": "^5",
+    "webpack-cli": "^5",
+    "webpack-dev-server": "^4"
+  }
+}
