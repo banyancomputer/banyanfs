@@ -2,27 +2,16 @@ use std::ops::Deref;
 
 use chacha20poly1305::XNonce as ChaChaNonce;
 use nom::bytes::streaming::take;
-use nom::combinator::{map_res, verify};
-use nom::error::{Error, ErrorKind, ParseError};
 use nom::IResult;
 use rand::Rng;
 
-pub(crate) struct Nonce([u8; 24]);
+const NONCE_LENGTH: usize = 24;
+
+pub(crate) struct Nonce([u8; NONCE_LENGTH]);
 
 impl Nonce {
-    pub(crate) fn as_bytes(&self) -> &[u8; 24] {
+    pub(crate) fn as_bytes(&self) -> &[u8; NONCE_LENGTH] {
         &self.0
-    }
-
-    pub(crate) fn from_slice(input: &[u8]) -> Result<Self, NonceError<&[u8]>> {
-        if input.len() < 24 {
-            return Err(NonceError::InvalidLength);
-        }
-
-        let mut nonce = [0; 24];
-        nonce.copy_from_slice(input);
-
-        Ok(Self(nonce))
     }
 
     pub(crate) fn generate(rng: &mut impl Rng) -> Self {
@@ -30,7 +19,12 @@ impl Nonce {
     }
 
     fn parse(input: &[u8]) -> IResult<&[u8], Self> {
-        map_res(take(24u8), Self::from_slice)(input)
+        let (remaining, slice) = take(NONCE_LENGTH)(input)?;
+
+        let mut nonce_bytes = [0u8; NONCE_LENGTH];
+        nonce_bytes.copy_from_slice(slice);
+
+        Ok((remaining, Self(nonce_bytes)))
     }
 }
 
@@ -42,50 +36,24 @@ impl Deref for Nonce {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub(crate) enum NonceError<I> {
-    #[error("invalid nonce length")]
-    InvalidLength,
-
-    #[error("nom parsing error: {0}")]
-    NomError(#[from] Error<I>),
-}
-
-impl<I> ParseError<I> for NonceError<I> {
-    fn append(_: I, _: ErrorKind, other: Self) -> Self {
-        other
-    }
-
-    fn from_error_kind(input: I, kind: ErrorKind) -> Self {
-        Self::NomError(Error::new(input, kind))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_nonce_from_slice() {
-        let mut rng = rand::thread_rng();
-        let input: [u8; 24] = rng.gen();
-        let nonce = Nonce::from_slice(&input).unwrap();
-        assert_eq!(nonce.as_bytes(), &input);
-    }
-
-    #[test]
-    fn test_nonce_from_slice_invalid_length() {
-        let input = [0u8; 23];
-        let nonce = Nonce::from_slice(&input);
-        assert!(matches!(nonce, Err(NonceError::InvalidLength)));
-    }
-
-    #[test]
     fn test_nonce_parsing() {
         let mut rng = rand::thread_rng();
-        let input: [u8; 24] = rng.gen();
+        let input: [u8; NONCE_LENGTH + 4] = rng.gen();
         let (remaining, nonce) = Nonce::parse(&input).unwrap();
-        assert_eq!(remaining, &[]);
-        assert_eq!(nonce.as_bytes(), &input);
+
+        assert_eq!(remaining, &input[NONCE_LENGTH..]);
+        assert_eq!(nonce.as_bytes(), &input[..NONCE_LENGTH]);
+    }
+
+    #[test]
+    fn test_nonce_parsing_stream_too_short() {
+        let input = [0u8; NONCE_LENGTH - 1];
+        let result = Nonce::parse(&input);
+        assert!(matches!(result, Err(nom::Err::Incomplete(_))));
     }
 }

@@ -27,7 +27,7 @@ impl AccessKey {
             .encrypt_in_place_detached(&nonce, aad, &mut msg_with_vp)
             .map_err(|_| AccessKeyError::CryptoFailure)?;
 
-        Ok(EscrowedAccessKey::assemble(nonce, msg_with_vp, tag.into()))
+        Ok(EscrowedAccessKey::assemble(nonce, msg_with_vp, tag))
     }
 
     pub(crate) fn from_bytes(key: [u8; 32]) -> Self {

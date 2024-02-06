@@ -9,11 +9,13 @@ use rand::Rng;
 use sha2::Digest;
 
 mod access_key;
+mod authentication_tag;
 mod escrowed_access_key;
 mod nonce;
 mod utils;
 
 pub(crate) use access_key::AccessKey;
+pub(crate) use authentication_tag::AuthenticationTag;
 pub(crate) use escrowed_access_key::EscrowedAccessKey;
 pub(crate) use nonce::Nonce;
 
@@ -65,7 +67,7 @@ pub fn full_key_walkthrough() {
 
     // signing
     let mut digest = sha2::Sha384::new();
-    digest.update(key_contents);
+    digest.update(&key_contents);
     let signature: ecdsa::Signature<NistP384> =
         p384_signing_key.sign_digest_with_rng(&mut rng, digest);
     let signature_bytes = signature.to_vec();
@@ -154,4 +156,12 @@ pub fn full_key_walkthrough() {
     let final_hash = hasher.finalize();
     let hash = final_hash.to_vec();
     tracing::info!("blake3_hash({})={hash:02x?}", hash.len());
+}
+
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum CryptoError {
+    /// I would love this to be more descriptive, but the underlying library deliberately opaques
+    /// the failure reason to avoid potential side-channel leakage.
+    #[error("failed to perform symmetric decryption")]
+    DecryptionFailure,
 }
