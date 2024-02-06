@@ -28,18 +28,18 @@ pub fn full_key_walkthrough() {
     let key = AccessKey::generate(&mut rng);
     let nonce = Nonce::generate(&mut rng);
 
-    let payload = key
-        .encrypt(nonce, key_contents, authenticated_data)
-        .unwrap();
+    //let payload = key
+    //    .encrypt(nonce, key_contents, authenticated_data)
+    //    .unwrap();
 
-    // NOTE: Encryption boundary, need to transfer authenticated_data, nonce, cipher_text, tag. It is expected remote side already has key
+    //// NOTE: Encryption boundary, need to transfer authenticated_data, nonce, cipher_text, tag. It is expected remote side already has key
 
-    let access_key = payload.decrypt(&key, authenticated_data).unwrap();
-    tracing::info!(
-        "received_key_contents({})={:02x?}",
-        access_key.len(),
-        access_key.as_bytes(),
-    );
+    //let access_key = payload.decrypt(&key, authenticated_data).unwrap();
+    //tracing::info!(
+    //    "received_key_contents({})={:02x?}",
+    //    access_key.len(),
+    //    access_key.as_bytes(),
+    //);
 
     // lets get to our ECDSA keys... and do some basic operations on them
     let p384_signing_key = ecdsa::SigningKey::<NistP384>::random(&mut rng);

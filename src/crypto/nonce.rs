@@ -2,6 +2,7 @@ use std::ops::Deref;
 
 use chacha20poly1305::XNonce as ChaChaNonce;
 use nom::bytes::streaming::take;
+use nom::combinator::all_consuming;
 use nom::IResult;
 use rand::Rng;
 
@@ -21,10 +22,15 @@ impl Nonce {
     fn parse(input: &[u8]) -> IResult<&[u8], Self> {
         let (remaining, slice) = take(NONCE_LENGTH)(input)?;
 
-        let mut nonce_bytes = [0u8; NONCE_LENGTH];
-        nonce_bytes.copy_from_slice(slice);
+        let mut bytes = [0u8; NONCE_LENGTH];
+        bytes.copy_from_slice(slice);
 
-        Ok((remaining, Self(nonce_bytes)))
+        Ok((remaining, Self(bytes)))
+    }
+
+    pub(crate) fn parse_complete(input: &[u8]) -> Result<Self, nom::Err<nom::error::Error<&[u8]>>> {
+        let (_, tag) = all_consuming(Self::parse)(input)?;
+        Ok(tag)
     }
 }
 

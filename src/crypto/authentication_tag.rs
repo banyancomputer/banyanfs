@@ -22,10 +22,10 @@ impl AuthenticationTag {
     pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
         let (remaining, slice) = take(TAG_LENGTH)(input)?;
 
-        let mut nonce_bytes = [0u8; TAG_LENGTH];
-        nonce_bytes.copy_from_slice(slice);
+        let mut bytes = [0u8; TAG_LENGTH];
+        bytes.copy_from_slice(slice);
 
-        Ok((remaining, Self(nonce_bytes)))
+        Ok((remaining, Self(bytes)))
     }
 
     pub(crate) fn parse_complete(input: &[u8]) -> Result<Self, nom::Err<nom::error::Error<&[u8]>>> {
