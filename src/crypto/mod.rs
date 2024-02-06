@@ -12,12 +12,18 @@ mod access_key;
 mod authentication_tag;
 mod escrowed_access_key;
 mod nonce;
+mod signature;
+mod signing_key;
 mod utils;
+mod verifying_key;
 
 pub(crate) use access_key::AccessKey;
 pub(crate) use authentication_tag::AuthenticationTag;
 pub(crate) use escrowed_access_key::EscrowedAccessKey;
 pub(crate) use nonce::Nonce;
+pub(crate) use signature::Signature;
+pub(crate) use signing_key::SigningKey;
+pub(crate) use verifying_key::VerifyingKey;
 
 pub fn full_key_walkthrough() {
     let mut rng = utils::cs_rng();
