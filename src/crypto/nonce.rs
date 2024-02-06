@@ -1,6 +1,7 @@
 use std::ops::Deref;
 
-use chacha20poly1305::Nonce as ChaChaNonce;
+use chacha20poly1305::XNonce as ChaChaNonce;
+use chacha20poly1305::XChaCha20Poly1305;
 use rand::Rng;
 
 pub(crate) struct Nonce([u8; 24]);

@@ -1,18 +1,24 @@
 use std::ops::Deref;
 
+use chacha20poly1305::aead::{Aead, KeyInit, Payload};
+use chacha20poly1305::{Key as ChaChaKey, XChaCha20Poly1305};
 use rand::Rng;
 
-use crate::crypto::encrypted_payload::EncryptedPayload;
+use crate::crypto::{EncryptedPayload, Nonce};
 
 pub(crate) struct SymmetricKey([u8; 32]);
 
 impl SymmetricKey {
     pub(crate) fn encrypt(
         &self,
-        plain: &[u8],
+        nonce: &Nonce,
+        msg: &[u8],
         aad: &[u8],
     ) -> Result<EncryptedPayload, SymmetricKeyError> {
-        unimplemented!()
+        XChaCha20Poly1305::new(self)
+            .encrypt(nonce, Payload { msg, aad })
+            .map_err(|_| SymmetricKeyError::CryptoFailure)
+            .map(EncryptedPayload::from_cipher_blob)
     }
 
     pub(crate) fn from_bytes(key: [u8; 32]) -> Self {
@@ -25,15 +31,17 @@ impl SymmetricKey {
 }
 
 impl Deref for SymmetricKey {
-    type Target = [u8; 32];
+    type Target = ChaChaKey;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        ChaChaKey::from_slice(&self.0)
     }
 }
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum SymmetricKeyError {
-    #[error("encrypting failed: {0}")]
-    EncryptionFailed(String),
+    /// I would love this to be more descriptive, but the underlying library deliberately opaques
+    /// the failure reason to avoid potential side-channel leakage.
+    #[error("failed to encrypt data")]
+    CryptoFailure,
 }
