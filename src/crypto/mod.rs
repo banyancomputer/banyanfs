@@ -164,4 +164,7 @@ pub(crate) enum CryptoError {
     /// the failure reason to avoid potential side-channel leakage.
     #[error("failed to perform symmetric decryption")]
     DecryptionFailure,
+
+    #[error("failed to perform symmetric encryption")]
+    EncryptionFailure,
 }

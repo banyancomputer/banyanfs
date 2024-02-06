@@ -2,6 +2,7 @@ use std::ops::Deref;
 
 use chacha20poly1305::Tag as ChaChaTag;
 use nom::bytes::streaming::take;
+use nom::combinator::all_consuming;
 use nom::IResult;
 
 const TAG_LENGTH: usize = 16;
@@ -14,13 +15,22 @@ impl AuthenticationTag {
         &self.0
     }
 
-    fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+    pub(crate) fn empty() -> Self {
+        Self([0u8; TAG_LENGTH])
+    }
+
+    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
         let (remaining, slice) = take(TAG_LENGTH)(input)?;
 
         let mut nonce_bytes = [0u8; TAG_LENGTH];
         nonce_bytes.copy_from_slice(slice);
 
         Ok((remaining, Self(nonce_bytes)))
+    }
+
+    pub(crate) fn parse_complete(input: &[u8]) -> Result<Self, nom::Err<nom::error::Error<&[u8]>>> {
+        let (_, tag) = all_consuming(Self::parse)(input)?;
+        Ok(tag)
     }
 }
 

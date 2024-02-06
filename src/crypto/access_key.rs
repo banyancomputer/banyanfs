@@ -4,7 +4,7 @@ use chacha20poly1305::aead::{AeadInPlace, KeyInit};
 use chacha20poly1305::{Key as ChaChaKey, XChaCha20Poly1305};
 use rand::Rng;
 
-use crate::crypto::{EscrowedAccessKey, Nonce};
+use crate::crypto::{AuthenticationTag, EscrowedAccessKey, Nonce};
 
 pub(crate) struct AccessKey([u8; 32]);
 
@@ -27,7 +27,10 @@ impl AccessKey {
             .encrypt_in_place_detached(&nonce, aad, &mut msg_with_vp)
             .map_err(|_| AccessKeyError::CryptoFailure)?;
 
-        Ok(EscrowedAccessKey::assemble(nonce, msg_with_vp, tag))
+        let (_, auth_tag) =
+            AuthenticationTag::parse(&tag).map_err(|_| AccessKeyError::CryptoFailure)?;
+
+        Ok(EscrowedAccessKey::assemble(nonce, msg_with_vp, auth_tag))
     }
 
     pub(crate) fn from_bytes(key: [u8; 32]) -> Self {

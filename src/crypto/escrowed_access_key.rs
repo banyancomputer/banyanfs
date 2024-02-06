@@ -3,7 +3,7 @@ use nom::error::ErrorKind;
 use nom::number::complete::le_u32;
 use nom::sequence::tuple;
 
-use crate::crypto::utils::symmetric_decrypt;
+use crate::crypto::utils::short_symmetric_decrypt;
 use crate::crypto::{AccessKey, AuthenticationTag, CryptoError, Nonce};
 
 pub(crate) struct EscrowedAccessKey {
@@ -26,21 +26,21 @@ impl EscrowedAccessKey {
         key: &AccessKey,
         aad: &[u8],
     ) -> Result<AccessKey, EncryptedPayloadError<&[u8]>> {
-        let result = symmetric_decrypt(key, &self.nonce, &self.cipher_text, &self.tag, aad)
+        let result = short_symmetric_decrypt(key, &self.nonce, &self.cipher_text, &self.tag, aad)
             .map_err(EncryptedPayloadError::CryptoFailure)?;
 
-        let key = tuple((take(32usize), le_u32))(result.as_slice())
-            .and_then(|(_, (key, suffix))| {
-                if suffix == 0 {
-                    Ok(key)
-                } else {
-                    Err(nom::Err::Error((&result, ErrorKind::Tag)))
-                }
-            })
-            .unwrap();
+        //let key = tuple((take(32usize), le_u32))(result.as_slice())
+        //    .and_then(|(_, (key, suffix))| {
+        //        if suffix == 0 {
+        //            Ok(key)
+        //        } else {
+        //            Err(nom::Err::Error((&result, ErrorKind::Tag)))
+        //        }
+        //    })
+        //    .unwrap();
 
         let mut fixed_key: [u8; 32] = [0u8; 32];
-        fixed_key.copy_from_slice(&key);
+        fixed_key.copy_from_slice(&result);
 
         Ok(AccessKey::from_bytes(fixed_key))
     }
