@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use chacha20poly1305::aead::generic_array::GenericArray;
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::XChaCha20Poly1305;
@@ -10,42 +8,36 @@ use p384::{NistP384, PublicKey};
 use rand::Rng;
 use sha2::Digest;
 
-mod encrypted_payload;
+mod access_key;
+mod escrowed_access_key;
 mod nonce;
-mod symmetric_key;
 mod utils;
 
-pub(crate) use encrypted_payload::EncryptedPayload;
+pub(crate) use access_key::AccessKey;
+pub(crate) use escrowed_access_key::EscrowedAccessKey;
 pub(crate) use nonce::Nonce;
-pub(crate) use symmetric_key::SymmetricKey;
 
 pub fn full_key_walkthrough() {
     let mut rng = utils::cs_rng();
 
-    let plain_text = b"A test encryption string".to_vec();
-    let authenticated_data = b"visible but verified".to_vec();
+    let key_contents = b"deadbeefdeadbeefdeadbeefdeadbeef";
+    let authenticated_data = b"visible but verified";
 
-    let key = symmetric_key::SymmetricKey::generate(&mut rng);
+    let key = AccessKey::generate(&mut rng);
     let nonce = Nonce::generate(&mut rng);
 
     let payload = key
-        .encrypt(&nonce, &plain_text, &authenticated_data)
+        .encrypt(nonce, key_contents, authenticated_data)
         .unwrap();
-
-    // doesn't need to be split but demonstrates the separation of data here
-    //let (cipher_text, tag) = cipher_blob.split_at(cipher_blob.len() - 16);
-
-    //tracing::info!(
-    //    "cipher_text({})={cipher_text:02x?}, tag({})={tag:02x?}",
-    //    cipher_text.len(),
-    //    tag.len()
-    //);
 
     // NOTE: Encryption boundary, need to transfer authenticated_data, nonce, cipher_text, tag. It is expected remote side already has key
 
-    let plain_text_bytes = payload.decrypt(&key, &nonce, &authenticated_data).unwrap();
-    let raw_string = String::from_utf8(plain_text_bytes.clone()).unwrap();
-    tracing::info!("parsed_plain_text({})={raw_string}", raw_string.len());
+    let access_key = payload.decrypt(&key, authenticated_data).unwrap();
+    tracing::info!(
+        "received_key_contents({})={:02x?}",
+        access_key.len(),
+        access_key.as_bytes(),
+    );
 
     // lets get to our ECDSA keys... and do some basic operations on them
     let p384_signing_key = ecdsa::SigningKey::<NistP384>::random(&mut rng);
@@ -73,7 +65,7 @@ pub fn full_key_walkthrough() {
 
     // signing
     let mut digest = sha2::Sha384::new();
-    digest.update(&plain_text);
+    digest.update(key_contents);
     let signature: ecdsa::Signature<NistP384> =
         p384_signing_key.sign_digest_with_rng(&mut rng, digest);
     let signature_bytes = signature.to_vec();
@@ -87,7 +79,7 @@ pub fn full_key_walkthrough() {
     let signature: ecdsa::Signature<NistP384> =
         ecdsa::Signature::from_slice(&signature_bytes).unwrap();
     let mut digest = sha2::Sha384::new();
-    digest.update(&plain_text);
+    digest.update(&key_contents);
     p384_verifying_key
         .verify_digest(digest, &signature)
         .unwrap();
