@@ -4,6 +4,7 @@
 
 pub mod crypto;
 pub mod error;
+pub mod parser;
 pub mod version;
 
 #[cfg(target_arch = "wasm32")]

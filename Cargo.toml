@@ -8,6 +8,7 @@ readme = "README.md"
 edition = "2021"
 
 [features]
+strict = []
 
 [dependencies]
 async-trait = "^0.1"
