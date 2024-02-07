@@ -45,15 +45,14 @@ impl AccessKey {
 
     pub(crate) fn lock(
         &self,
+        rng: &mut impl Rng,
         signing_key: &SigningKey,
-        aad: &[u8],
     ) -> Result<Self, AccessKeyError<&[u8]>> {
         match self {
             Self::Locked { .. } => Ok(self.clone()),
             Self::Open { key } => {
                 // todo: dh exchange w/ ephemeral key
                 // hkdf to derive key
-                let mut rng = crate::crypto::utils::cs_rng();
                 let eph_dh_key: [u8; 32] = rng.gen();
 
                 let mut key_payload = [0u8; 36];
@@ -61,7 +60,7 @@ impl AccessKey {
 
                 let chacha_key = ChaChaKey::from_slice(&eph_dh_key);
                 let cipher = XChaCha20Poly1305::new(chacha_key);
-                let nonce = Nonce::generate(&mut rng);
+                let nonce = Nonce::generate(rng);
 
                 let raw_tag = cipher.encrypt_in_place_detached(&nonce, &[], &mut key_payload)?;
                 drop(cipher);
