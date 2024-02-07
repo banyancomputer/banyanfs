@@ -1,10 +1,16 @@
-use nom::bytes::complete::take;
+use nom::bits::bits;
+use nom::bytes::streaming::{tag, take};
+use nom::error::Error as NomError;
 use nom::error::ErrorKind;
-use nom::number::complete::le_u32;
+use nom::multi::count;
+use nom::number::streaming::{le_u32, le_u8};
 use nom::sequence::tuple;
+use nom::{IResult, Needed};
 
 use crate::crypto::utils::short_symmetric_decrypt;
 use crate::crypto::{AccessKey, AuthenticationTag, CryptoError, Nonce};
+
+const ESCROWED_ACCESS_RECORD_SIZE: usize = 148;
 
 pub(crate) struct EscrowedAccessKey {
     nonce: Nonce,
@@ -29,20 +35,30 @@ impl EscrowedAccessKey {
         let result = short_symmetric_decrypt(key, &self.nonce, &self.cipher_text, &self.tag, aad)
             .map_err(EncryptedPayloadError::CryptoFailure)?;
 
-        //let key = tuple((take(32usize), le_u32))(result.as_slice())
-        //    .and_then(|(_, (key, suffix))| {
-        //        if suffix == 0 {
-        //            Ok(key)
-        //        } else {
-        //            Err(nom::Err::Error((&result, ErrorKind::Tag)))
-        //        }
-        //    })
-        //    .unwrap();
-
         let mut fixed_key: [u8; 32] = [0u8; 32];
         fixed_key.copy_from_slice(&result);
 
         Ok(AccessKey::from_bytes(fixed_key))
+    }
+
+    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+        todo!()
+    }
+
+    pub(crate) fn parse_many(input: &[u8], key_count: u8) -> IResult<&[u8], Vec<Self>> {
+        let (input, keys) = match count(Self::parse, key_count as usize)(input) {
+            Ok(res) => res,
+            Err(nom::Err::Incomplete(Needed::Size(_))) => {
+                // If there wasn't enough data for one of the records, return how much more data we
+                // _actually_ need before we can keep going.
+                let total_size = key_count as usize * ESCROWED_ACCESS_RECORD_SIZE;
+
+                return Err(nom::Err::Incomplete(Needed::new(total_size - input.len())));
+            }
+            Err(err) => return Err(err),
+        };
+
+        Ok((input, keys))
     }
 
     pub(crate) fn to_bytes(&self) -> [u8; 148] {

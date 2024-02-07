@@ -4,7 +4,8 @@ use chacha20poly1305::aead::{AeadInPlace, KeyInit};
 use chacha20poly1305::{Key as ChaChaKey, XChaCha20Poly1305};
 use rand::Rng;
 
-use crate::crypto::{AuthenticationTag, EscrowedAccessKey, Nonce};
+use crate::crypto::{AuthenticationTag, Nonce};
+use crate::parser::EscrowedAccessKey;
 
 const KEY_LENGTH: usize = 32;
 

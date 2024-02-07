@@ -10,16 +10,14 @@ use sha2::Digest;
 
 mod access_key;
 mod authentication_tag;
-mod escrowed_access_key;
 mod nonce;
 mod signature;
 mod signing_key;
-mod utils;
+pub(crate) mod utils;
 mod verifying_key;
 
 pub(crate) use access_key::AccessKey;
 pub(crate) use authentication_tag::AuthenticationTag;
-pub(crate) use escrowed_access_key::EscrowedAccessKey;
 pub(crate) use nonce::Nonce;
 pub(crate) use signature::Signature;
 pub(crate) use signing_key::SigningKey;
