@@ -27,7 +27,7 @@ rand_chacha = "^0.3"
 sha2 = "^0.10"
 
 #bytes = "^1"
-uuid = { version = "^1", features = ["v4", "serde"] }
+uuid = { version = "^1", features = ["v7", "serde"] }
 nom = "^7"
 
 #jwt-simple = "^0.11"
