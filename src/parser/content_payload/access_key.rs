@@ -1,5 +1,7 @@
 use chacha20poly1305::aead::{AeadInPlace, KeyInit};
-use chacha20poly1305::{Key as ChaChaKey, XChaCha20Poly1305};
+use chacha20poly1305::{
+    Key as ChaChaKey, Tag as ChaChaTag, XChaCha20Poly1305, XNonce as ChaChaNonce,
+};
 use nom::bits::bits;
 use nom::bytes::streaming::{tag, take};
 use nom::error::Error as NomError;
@@ -13,18 +15,25 @@ use rand::Rng;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 //use crate::crypto::utils::short_symmetric_decrypt;
-use crate::crypto::{AuthenticationTag, CryptoError, Nonce, SigningKey};
+//use crate::crypto::{AuthenticationTag, CryptoError, Nonce, SigningKey};
+use crate::crypto::{CryptoError, SigningKey};
 
-const ACCESS_KEY_RECORD_SIZE: usize = 148;
+const ACCESS_KEY_RECORD_LENGTH: usize = 148;
 
 const KEY_LENGTH: usize = 32;
+
+const NONCE_LENGTH: usize = 24;
+
+const VERIFICATION_PATTERN_LENGTH: usize = 4;
+
+const TAG_LENGTH: usize = 16;
 
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub(crate) enum AccessKey {
     Locked {
-        //nonce: Nonce,
-        cipher_text: [u8; 36],
-        //tag: AuthenticationTag,
+        nonce: [u8; NONCE_LENGTH],
+        cipher_text: [u8; KEY_LENGTH + VERIFICATION_PATTERN_LENGTH],
+        tag: [u8; TAG_LENGTH],
     },
     Open {
         key: [u8; KEY_LENGTH],
@@ -60,31 +69,35 @@ impl AccessKey {
 
                 let chacha_key = ChaChaKey::from_slice(&eph_dh_key);
                 let cipher = XChaCha20Poly1305::new(chacha_key);
-                let nonce = Nonce::generate(rng);
 
-                let raw_tag = cipher.encrypt_in_place_detached(&nonce, &[], &mut key_payload)?;
-                drop(cipher);
-                let tag_slice = raw_tag.as_bytes();
+                let nonce: [u8; NONCE_LENGTH] = rng.gen();
+                let cha_nonce = ChaChaNonce::from_slice(&nonce);
 
-                let mut tag_bytes = [0u8; 16];
-                tag_bytes.copy_from_slice(tag_slice);
+                let mut raw_tag =
+                    cipher.encrypt_in_place_detached(cha_nonce, &[], &mut key_payload)?;
 
-                let tag = AuthenticationTag::from(tag_bytes);
+                let mut tag = [0u8; TAG_LENGTH];
+                tag.copy_from_slice(raw_tag.as_bytes());
+                raw_tag.zeroize();
 
                 Ok(Self::Locked {
-                    //nonce,
+                    nonce,
                     cipher_text: key_payload,
-                    //tag,
+                    tag,
                 })
             }
         }
     }
 
-    pub(crate) fn new(nonce: Nonce, cipher_text: [u8; 36], tag: AuthenticationTag) -> Self {
+    pub(crate) fn new(
+        nonce: [u8; NONCE_LENGTH],
+        cipher_text: [u8; KEY_LENGTH + VERIFICATION_PATTERN_LENGTH],
+        tag: [u8; TAG_LENGTH],
+    ) -> Self {
         Self::Locked {
-            //nonce,
+            nonce,
             cipher_text,
-            //tag,
+            tag,
         }
     }
 
@@ -109,7 +122,7 @@ impl AccessKey {
             Err(nom::Err::Incomplete(Needed::Size(_))) => {
                 // If there wasn't enough data for one of the records, return how much more data we
                 // _actually_ need before we can keep going.
-                let total_size = key_count as usize * ACCESS_KEY_RECORD_SIZE;
+                let total_size = key_count as usize * ACCESS_KEY_RECORD_LENGTH;
 
                 return Err(nom::Err::Incomplete(Needed::new(total_size - input.len())));
             }

@@ -3,7 +3,7 @@ use chacha20poly1305::XChaCha20Poly1305;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
-use crate::crypto::{AuthenticationTag, CryptoError, Nonce};
+//use crate::crypto::{AuthenticationTag, CryptoError, Nonce};
 use crate::parser::AccessKey;
 
 /// Data exceeding this length should use the streaming primitives instead.

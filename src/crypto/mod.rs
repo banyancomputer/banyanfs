@@ -8,14 +8,14 @@ use p384::{NistP384, PublicKey};
 use rand::Rng;
 use sha2::Digest;
 
-mod authentication_tag;
+//mod authentication_tag;
 mod nonce;
 mod signature;
 mod signing_key;
 pub(crate) mod utils;
 mod verifying_key;
 
-pub(crate) use authentication_tag::AuthenticationTag;
+//pub(crate) use authentication_tag::AuthenticationTag;
 pub(crate) use nonce::Nonce;
 pub(crate) use signature::Signature;
 pub(crate) use signing_key::SigningKey;
