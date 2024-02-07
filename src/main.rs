@@ -1,4 +1,5 @@
 use banyanfs::prelude::*;
+use banyanfs::version::version;
 
 #[cfg(target_arch = "wasm32")]
 fn main() -> BanyanFsResult<()> {
@@ -24,6 +25,7 @@ async fn main() -> BanyanFsResult<()> {
         .with_filter(env_filter);
 
     tracing_subscriber::registry().with(stderr_layer).init();
+    tracing::debug!("running banyanfs {}", version());
 
     let _encoded_drive_data = include_bytes!("../fixtures/reference_drive.bfs");
 

@@ -11,12 +11,9 @@ fn report_build_profile() {
 fn report_enabled_features() {
     let mut enabled_features: Vec<&str> = Vec::new();
 
-    // NOTE: When features are added or removed, they need to be manually listed here
-    //#[cfg(feature = "development")]
-    //enabled_features.push("development");
+    #[cfg(feature = "strict")]
+    enabled_features.push("strict");
 
-    // Mostly here to prevent a mut warning from showing up with no available features but also
-    // kind of useful...
     if enabled_features.is_empty() {
         enabled_features.push("none");
     }
