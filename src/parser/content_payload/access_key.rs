@@ -7,6 +7,7 @@ use nom::error::ErrorKind;
 use nom::multi::count;
 use nom::number::streaming::{le_u32, le_u8};
 use nom::sequence::tuple;
+use nom::AsBytes;
 use nom::{IResult, Needed};
 use rand::Rng;
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -18,7 +19,7 @@ const ACCESS_KEY_RECORD_SIZE: usize = 148;
 
 const KEY_LENGTH: usize = 32;
 
-#[derive(Zeroize, ZeroizeOnDrop)]
+#[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub(crate) enum AccessKey {
     Locked {
         //nonce: Nonce,
@@ -42,6 +43,44 @@ impl AccessKey {
         Self::Open { key: rng.gen() }
     }
 
+    pub(crate) fn lock(
+        &self,
+        signing_key: &SigningKey,
+        aad: &[u8],
+    ) -> Result<Self, AccessKeyError<&[u8]>> {
+        match self {
+            Self::Locked { .. } => Ok(self.clone()),
+            Self::Open { key } => {
+                // todo: dh exchange w/ ephemeral key
+                // hkdf to derive key
+                let mut rng = crate::crypto::utils::cs_rng();
+                let eph_dh_key: [u8; 32] = rng.gen();
+
+                let mut key_payload = [0u8; 36];
+                key_payload[..32].copy_from_slice(key);
+
+                let chacha_key = ChaChaKey::from_slice(&eph_dh_key);
+                let cipher = XChaCha20Poly1305::new(chacha_key);
+                let nonce = Nonce::generate(&mut rng);
+
+                let raw_tag = cipher.encrypt_in_place_detached(&nonce, &[], &mut key_payload)?;
+                drop(cipher);
+                let tag_slice = raw_tag.as_bytes();
+
+                let mut tag_bytes = [0u8; 16];
+                tag_bytes.copy_from_slice(tag_slice);
+
+                let tag = AuthenticationTag::from(tag_bytes);
+
+                Ok(Self::Locked {
+                    //nonce,
+                    cipher_text: key_payload,
+                    //tag,
+                })
+            }
+        }
+    }
+
     pub(crate) fn new(nonce: Nonce, cipher_text: [u8; 36], tag: AuthenticationTag) -> Self {
         Self::Locked {
             //nonce,
@@ -50,7 +89,7 @@ impl AccessKey {
         }
     }
 
-    pub(crate) fn unlock(&self, key: &SigningKey) -> Result<AccessKey, AccessKeyError<&[u8]>> {
+    pub(crate) fn unlock(&self, key: &SigningKey) -> Result<Self, AccessKeyError<&[u8]>> {
         todo!()
         //let result = short_symmetric_decrypt(key, &self.nonce, &self.cipher_text, &self.tag, aad)
         //    .map_err(EncryptedPayloadError::CryptoFailure)?;
@@ -116,12 +155,18 @@ pub(crate) enum AccessKeyError<I> {
     #[error("decoding data failed: {0}")]
     FormatFailure(#[from] nom::Err<nom::error::Error<I>>),
 
-    #[error("crypto helper error: {0}")]
-    CryptoFailure(#[from] CryptoError),
+    #[error("unspecified crypto error")]
+    CryptoFailure,
 
     #[error("validation failed most likely due to the use of an incorrect key")]
     IncorrectKey,
 
     #[error("key must be unlocked before it can be used")]
     LockedKey,
+}
+
+impl<I> From<chacha20poly1305::Error> for AccessKeyError<I> {
+    fn from(_: chacha20poly1305::Error) -> Self {
+        AccessKeyError::CryptoFailure
+    }
 }

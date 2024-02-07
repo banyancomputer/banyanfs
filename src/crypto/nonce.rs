@@ -8,6 +8,7 @@ use rand::Rng;
 
 const NONCE_LENGTH: usize = 24;
 
+#[derive(Clone)]
 pub(crate) struct Nonce([u8; NONCE_LENGTH]);
 
 impl Nonce {

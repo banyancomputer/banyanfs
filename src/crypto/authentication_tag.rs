@@ -7,7 +7,7 @@ use nom::IResult;
 
 const TAG_LENGTH: usize = 16;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct AuthenticationTag([u8; TAG_LENGTH]);
 
 impl AuthenticationTag {
@@ -39,6 +39,12 @@ impl Deref for AuthenticationTag {
 
     fn deref(&self) -> &Self::Target {
         ChaChaTag::from_slice(&self.0)
+    }
+}
+
+impl From<[u8; TAG_LENGTH]> for AuthenticationTag {
+    fn from(bytes: [u8; TAG_LENGTH]) -> Self {
+        Self(bytes)
     }
 }
 
