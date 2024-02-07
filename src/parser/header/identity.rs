@@ -7,15 +7,12 @@ use nom::sequence::tuple;
 
 use crate::parser::header::BANYAN_FS_MAGIC;
 
-pub(crate) struct IdentityHeader {
-    header_length: u32,
-}
+pub(crate) struct IdentityHeader;
 
 impl IdentityHeader {
     pub(crate) fn parse_with_magic(input: &[u8]) -> nom::IResult<&[u8], Self> {
-        let (input, (_, header_length)) = tuple((banyan_fs_magic_tag, le_u32))(input)?;
-        let format_header = Self { header_length };
-        Ok((input, format_header))
+        let (input, _magic) = banyan_fs_magic_tag(input)?;
+        Ok((input, Self))
     }
 }
 
