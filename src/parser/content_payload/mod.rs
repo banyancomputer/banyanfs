@@ -6,11 +6,8 @@ use nom::number::streaming::{le_u32, le_u8};
 use nom::sequence::tuple;
 use nom::IResult;
 
-mod access_key;
-
-pub(crate) use access_key::AccessKey;
-
 use crate::crypto::SigningKey;
+use crate::parser::crypto::AccessKey;
 
 pub(crate) enum ContentPayload {
     Private,

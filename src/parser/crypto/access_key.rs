@@ -12,11 +12,11 @@ use nom::sequence::tuple;
 use nom::AsBytes;
 use nom::{IResult, Needed};
 use rand::Rng;
-use zeroize::{Zeroize, ZeroizeOnDrop};
 
 //use crate::crypto::utils::short_symmetric_decrypt;
 //use crate::crypto::{AuthenticationTag, CryptoError, Nonce, SigningKey};
 use crate::crypto::{CryptoError, SigningKey};
+use crate::parser::crypto::KeyId;
 
 const ACCESS_KEY_RECORD_LENGTH: usize = 148;
 
@@ -28,9 +28,10 @@ const VERIFICATION_PATTERN_LENGTH: usize = 4;
 
 const TAG_LENGTH: usize = 16;
 
-#[derive(Clone, Zeroize, ZeroizeOnDrop)]
+#[derive(Clone)]
 pub(crate) enum AccessKey {
     Locked {
+        key_id: KeyId,
         nonce: [u8; NONCE_LENGTH],
         cipher_text: [u8; KEY_LENGTH + VERIFICATION_PATTERN_LENGTH],
         tag: [u8; TAG_LENGTH],
@@ -73,17 +74,18 @@ impl AccessKey {
                 let nonce: [u8; NONCE_LENGTH] = rng.gen();
                 let cha_nonce = ChaChaNonce::from_slice(&nonce);
 
-                let mut raw_tag =
-                    cipher.encrypt_in_place_detached(cha_nonce, &[], &mut key_payload)?;
+                let raw_tag = cipher.encrypt_in_place_detached(cha_nonce, &[], &mut key_payload)?;
 
                 let mut tag = [0u8; TAG_LENGTH];
                 tag.copy_from_slice(raw_tag.as_bytes());
-                raw_tag.zeroize();
+
+                let key_id = signing_key.key_id();
 
                 Ok(Self::Locked {
                     nonce,
                     cipher_text: key_payload,
                     tag,
+                    key_id,
                 })
             }
         }
@@ -93,11 +95,13 @@ impl AccessKey {
         nonce: [u8; NONCE_LENGTH],
         cipher_text: [u8; KEY_LENGTH + VERIFICATION_PATTERN_LENGTH],
         tag: [u8; TAG_LENGTH],
+        key_id: KeyId,
     ) -> Self {
         Self::Locked {
             nonce,
             cipher_text,
             tag,
+            key_id,
         }
     }
 

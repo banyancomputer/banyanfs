@@ -4,7 +4,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
 //use crate::crypto::{AuthenticationTag, CryptoError, Nonce};
-use crate::parser::AccessKey;
+use crate::parser::crypto::AccessKey;
 
 /// Data exceeding this length should use the streaming primitives instead.
 const SHORT_ENCRYPTION_LENGTH_LIMIT: usize = 262_144;

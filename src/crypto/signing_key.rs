@@ -5,6 +5,7 @@ use rand::{CryptoRng, Rng};
 use sha2::Digest;
 
 use crate::crypto::{Signature, VerifyingKey};
+use crate::parser::crypto::KeyId;
 
 const KEY_SIZE: usize = 48;
 
@@ -16,6 +17,10 @@ impl SigningKey {
     pub(crate) fn generate(rng: &mut impl CryptoRngCore) -> Self {
         let inner = ecdsa::SigningKey::<NistP384>::random(rng);
         Self { inner }
+    }
+
+    pub(crate) fn key_id(&self) -> KeyId {
+        self.verifying_key().key_id()
     }
 
     pub(crate) fn to_private_bytes(&self) -> [u8; KEY_SIZE] {
