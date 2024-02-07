@@ -6,9 +6,9 @@ use nom::number::streaming::{le_u32, le_u8};
 use nom::sequence::tuple;
 use nom::IResult;
 
-mod escrowed_access_key;
+mod access_key;
 
-pub(crate) use escrowed_access_key::EscrowedAccessKey;
+pub(crate) use access_key::AccessKey;
 
 use crate::crypto::SigningKey;
 
@@ -20,7 +20,7 @@ pub(crate) enum ContentPayload {
 impl ContentPayload {
     pub(crate) fn parse_private<'a>(input: &'a [u8], _key: &SigningKey) -> IResult<&'a [u8], Self> {
         let (input, key_count) = le_u8(input)?;
-        let (input, _escrowed_keys) = EscrowedAccessKey::parse_many(input, key_count)?;
+        let (input, _escrowed_keys) = AccessKey::parse_many(input, key_count)?;
         Ok((input, ContentPayload::Private))
     }
 

@@ -8,7 +8,6 @@ use p384::{NistP384, PublicKey};
 use rand::Rng;
 use sha2::Digest;
 
-mod access_key;
 mod authentication_tag;
 mod nonce;
 mod signature;
@@ -16,7 +15,6 @@ mod signing_key;
 pub(crate) mod utils;
 mod verifying_key;
 
-pub(crate) use access_key::AccessKey;
 pub(crate) use authentication_tag::AuthenticationTag;
 pub(crate) use nonce::Nonce;
 pub(crate) use signature::Signature;
@@ -29,8 +27,8 @@ pub fn full_key_walkthrough() {
     let key_contents = b"deadbeefdeadbeefdeadbeefdeadbeef";
     let authenticated_data = b"visible but verified";
 
-    let key = AccessKey::generate(&mut rng);
-    let nonce = Nonce::generate(&mut rng);
+    //let key = AccessKey::generate(&mut rng);
+    //let nonce = Nonce::generate(&mut rng);
 
     //let payload = key
     //    .encrypt(nonce, key_contents, authenticated_data)
