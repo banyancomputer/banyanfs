@@ -8,7 +8,7 @@ use nom::{Err, IResult};
 use p384::ecdh::EphemeralSecret;
 use p384::NistP384;
 
-use crate::codec::crypto::KeyId;
+use crate::codec::crypto::{Fingerprint, KeyId};
 use crate::codec::AsyncEncodable;
 
 const KEY_SIZE: usize = 49;
@@ -37,14 +37,12 @@ impl VerifyingKey {
         (pub_key, secret_bytes)
     }
 
+    pub(crate) fn fingerprint(&self) -> Fingerprint {
+        Fingerprint::from(self)
+    }
+
     pub(crate) fn key_id(&self) -> KeyId {
-        let public_key_bytes = self.inner_key.to_encoded_point(true);
-        let public_key_hash = blake3::hash(public_key_bytes.as_bytes());
-
-        let mut key_id = [0u8; 2];
-        key_id.copy_from_slice(&public_key_hash.as_bytes()[..2]);
-
-        KeyId::from(u16::from_le_bytes(key_id))
+        self.fingerprint().key_id()
     }
 
     pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {

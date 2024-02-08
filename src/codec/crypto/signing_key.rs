@@ -2,7 +2,7 @@ use ecdsa::signature::rand_core::CryptoRngCore;
 use ecdsa::signature::RandomizedDigestSigner;
 use p384::NistP384;
 
-use crate::codec::crypto::{KeyId, Signature, VerifyingKey};
+use crate::codec::crypto::{Fingerprint, KeyId, Signature, VerifyingKey};
 
 const KEY_SIZE: usize = 48;
 
@@ -25,6 +25,10 @@ impl SigningKey {
         }
 
         secret_bytes
+    }
+
+    pub(crate) fn fingerprint(&self) -> Fingerprint {
+        self.verifying_key().fingerprint()
     }
 
     pub(crate) fn generate(rng: &mut impl CryptoRngCore) -> Self {

@@ -44,7 +44,6 @@ async fn main() -> BanyanFsResult<()> {
 
     tracing::info!("output_stream: {:02x?}", output_stream);
 
-    //let key: &[u8] = &[0x55, 0x68];
     //let mut drive = Drive::from_slice(encoded_drive_data);
 
     //if !drive.check_accessibility(key) {
