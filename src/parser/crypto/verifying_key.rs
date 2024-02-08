@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use ecdsa::signature::rand_core::CryptoRngCore;
 use elliptic_curve::sec1::ToEncodedPoint;
 use nom::bytes::streaming::take;
@@ -18,14 +20,22 @@ pub(crate) struct VerifyingKey {
 }
 
 impl VerifyingKey {
-    pub(crate) fn dh_exchange_key(&self, rng: &mut impl CryptoRngCore) -> (Self, [u8; 32]) {
+    pub(crate) fn ephemeral_dh_exchange(&self, rng: &mut impl CryptoRngCore) -> (Self, [u8; 32]) {
         let eph_secret: EphemeralSecret = EphemeralSecret::random(rng);
-        let eph_pub_bytes = eph_secret
-            .public_key()
-            .to_encoded_point(true)
-            .as_bytes()
-            .to_vec();
-        todo!()
+
+        let pub_key = Self {
+            inner_key: eph_secret.public_key().into(),
+        };
+
+        let shared_secret = eph_secret.diffie_hellman(&self.inner_key.into());
+        let secret_expansion = shared_secret.extract::<sha2::Sha384>(None);
+
+        let mut secret_bytes = [0u8; 32];
+        if secret_expansion.expand(&[], &mut secret_bytes).is_err() {
+            unreachable!("secret_bytes will always have the correct length");
+        }
+
+        (pub_key, secret_bytes)
     }
 
     pub(crate) fn key_id(&self) -> KeyId {
@@ -63,6 +73,14 @@ impl VerifyingKey {
         public_key.copy_from_slice(compressed_pubkey.as_bytes());
 
         public_key
+    }
+}
+
+impl Deref for VerifyingKey {
+    type Target = ecdsa::VerifyingKey<NistP384>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner_key
     }
 }
 

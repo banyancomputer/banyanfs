@@ -13,6 +13,22 @@ pub(crate) struct SigningKey {
 }
 
 impl SigningKey {
+    pub(crate) fn dh_exchange(&self, other_pubkey: &VerifyingKey) -> [u8; 32] {
+        let shared_secret = elliptic_curve::ecdh::diffie_hellman(
+            self.inner.as_nonzero_scalar(),
+            other_pubkey.as_affine(),
+        );
+
+        let secret_expansion = shared_secret.extract::<sha2::Sha384>(None);
+
+        let mut secret_bytes = [0u8; 32];
+        if secret_expansion.expand(&[], &mut secret_bytes).is_err() {
+            unreachable!("secret_bytes will always have the correct length");
+        }
+
+        secret_bytes
+    }
+
     pub(crate) fn generate(rng: &mut impl CryptoRngCore) -> Self {
         let inner = ecdsa::SigningKey::<NistP384>::random(rng);
         Self { inner }

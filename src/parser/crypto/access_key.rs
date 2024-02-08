@@ -2,6 +2,7 @@ use chacha20poly1305::aead::{AeadInPlace, KeyInit};
 use chacha20poly1305::{
     Key as ChaChaKey, Tag as ChaChaTag, XChaCha20Poly1305, XNonce as ChaChaNonce,
 };
+use ecdsa::signature::rand_core::CryptoRngCore;
 use nom::bits::bits;
 use nom::bytes::streaming::{tag, take};
 use nom::error::Error as NomError;
@@ -11,7 +12,7 @@ use nom::number::streaming::{le_u32, le_u8};
 use nom::sequence::tuple;
 use nom::AsBytes;
 use nom::{IResult, Needed};
-use rand::Rng;
+use rand::{CryptoRng, Rng};
 
 //use crate::crypto::utils::short_symmetric_decrypt;
 //use crate::crypto::{AuthenticationTag, CryptoError, Nonce, SigningKey};
@@ -30,7 +31,7 @@ const KEY_VERIFICATION_PATTERN_LENGTH: usize = 4;
 pub(crate) enum AccessKey {
     Locked {
         key_id: KeyId,
-        //dh_exchange: VerifyingKey,
+        dh_exchange_key: VerifyingKey,
         nonce: Nonce,
         cipher_text: [u8; ACCESS_KEY_CIPHER_TEXT_LENGTH],
         tag: AuthenticationTag,
@@ -54,20 +55,20 @@ impl AccessKey {
 
     pub(crate) fn lock_for(
         &self,
-        rng: &mut impl Rng,
+        rng: &mut impl CryptoRngCore,
         verifying_key: &VerifyingKey,
     ) -> Result<Self, AccessKeyError<&[u8]>> {
         match self {
             Self::Locked { .. } => Ok(self.clone()),
             Self::Open { key } => {
-                // todo: dh exchange w/ ephemeral key
-                // hkdf to derive key
-                let eph_dh_key: [u8; 32] = rng.gen();
+                let (dh_exchange_key, shared_secret) = verifying_key.ephemeral_dh_exchange(rng);
 
+                // Intentionally leave the last four bytes as zeros which acts as our successful
+                // decryption oracle.
                 let mut key_payload = [0u8; 36];
                 key_payload[..32].copy_from_slice(key);
 
-                let chacha_key = ChaChaKey::from_slice(&eph_dh_key);
+                let chacha_key = ChaChaKey::from_slice(&shared_secret);
                 let cipher = XChaCha20Poly1305::new(chacha_key);
 
                 let nonce = Nonce::generate(rng);
@@ -80,26 +81,13 @@ impl AccessKey {
                 let key_id = verifying_key.key_id();
 
                 Ok(Self::Locked {
+                    dh_exchange_key,
                     nonce,
                     cipher_text: key_payload,
                     tag,
                     key_id,
                 })
             }
-        }
-    }
-
-    pub(crate) fn new(
-        nonce: Nonce,
-        cipher_text: [u8; SYMMETRIC_KEY_LENGTH + KEY_VERIFICATION_PATTERN_LENGTH],
-        tag: AuthenticationTag,
-        key_id: KeyId,
-    ) -> Self {
-        Self::Locked {
-            nonce,
-            cipher_text,
-            tag,
-            key_id,
         }
     }
 
@@ -115,7 +103,7 @@ impl AccessKey {
     }
 
     pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
-        let (input, (key_id, pub_key, nonce, cipher_text, tag)) = tuple((
+        let (input, (key_id, dh_exchange_key, nonce, cipher_text, tag)) = tuple((
             KeyId::parse,
             VerifyingKey::parse,
             Nonce::parse,
@@ -125,6 +113,7 @@ impl AccessKey {
 
         let access_key = AccessKey::Locked {
             key_id,
+            dh_exchange_key,
             nonce,
             cipher_text: cipher_text.try_into().unwrap(),
             tag,
