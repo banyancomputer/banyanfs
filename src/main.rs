@@ -1,5 +1,4 @@
 use banyanfs::prelude::*;
-use banyanfs::version::version;
 
 #[cfg(target_arch = "wasm32")]
 fn main() -> BanyanFsResult<()> {
@@ -9,7 +8,6 @@ fn main() -> BanyanFsResult<()> {
 #[cfg(not(target_arch = "wasm32"))]
 #[tokio::main]
 async fn main() -> BanyanFsResult<()> {
-    use banyanfs::codec::header::{FilesystemId, FormatHeader};
     use tracing::Level;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
@@ -32,8 +30,6 @@ async fn main() -> BanyanFsResult<()> {
 
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
-
-    use banyanfs::codec::AsyncEncodable;
 
     let mut rng = ChaCha20Rng::from_entropy();
 

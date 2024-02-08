@@ -1,11 +1,9 @@
 mod data_header;
-mod filesystem_id;
 mod format_header;
 mod identity_header;
 mod public_settings;
 
 pub(crate) use data_header::DataHeader;
-pub use filesystem_id::FilesystemId;
 pub use format_header::FormatHeader;
 pub use identity_header::IdentityHeader;
 pub(crate) use public_settings::PublicSettings;

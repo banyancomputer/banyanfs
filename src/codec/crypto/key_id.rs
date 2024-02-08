@@ -1,8 +1,8 @@
 use std::ops::Deref;
 
+use futures::{AsyncWrite, AsyncWriteExt};
 use nom::number::streaming::le_u16;
 use nom::IResult;
-use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::codec::AsyncEncodable;
 
@@ -26,7 +26,7 @@ impl AsyncEncodable for KeyId {
         &self,
         writer: &mut W,
         start_pos: usize,
-    ) -> tokio::io::Result<usize> {
+    ) -> std::io::Result<usize> {
         writer.write_all(&self.0.to_le_bytes()).await?;
         Ok(start_pos + 2)
     }

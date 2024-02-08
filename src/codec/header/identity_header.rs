@@ -1,10 +1,10 @@
+use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bits::bits;
 use nom::bytes::streaming::{tag, take};
 use nom::error::Error as NomError;
 use nom::error::ErrorKind;
 use nom::number::streaming::{le_u32, le_u8};
 use nom::sequence::tuple;
-use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::codec::header::BANYAN_FS_MAGIC;
 use crate::codec::AsyncEncodable;
@@ -47,9 +47,9 @@ impl AsyncEncodable for IdentityHeader {
         &self,
         writer: &mut W,
         start_pos: usize,
-    ) -> tokio::io::Result<usize> {
+    ) -> std::io::Result<usize> {
         writer.write_all(BANYAN_FS_MAGIC).await?;
-        writer.write_u8(0x01).await?;
+        writer.write(&[0x01]).await?;
 
         Ok(start_pos + BANYAN_FS_MAGIC.len() + 1)
     }

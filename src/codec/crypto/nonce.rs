@@ -1,11 +1,11 @@
 use std::ops::Deref;
 
 use chacha20poly1305::XNonce as ChaChaNonce;
+use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 use nom::combinator::all_consuming;
 use nom::IResult;
 use rand::Rng;
-use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::codec::AsyncEncodable;
 
@@ -48,7 +48,7 @@ impl AsyncEncodable for Nonce {
         &self,
         writer: &mut W,
         start_pos: usize,
-    ) -> tokio::io::Result<usize> {
+    ) -> std::io::Result<usize> {
         writer.write_all(&self.0).await?;
         Ok(start_pos + self.0.len())
     }

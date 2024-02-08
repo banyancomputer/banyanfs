@@ -1,10 +1,10 @@
+use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bits::bits;
 use nom::bytes::streaming::{tag, take};
 use nom::error::Error as NomError;
 use nom::error::ErrorKind;
 use nom::number::streaming::{le_u32, le_u8};
 use nom::sequence::tuple;
-use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::codec::AsyncEncodable;
 
@@ -61,7 +61,7 @@ impl AsyncEncodable for PublicSettings {
         &self,
         writer: &mut W,
         start_pos: usize,
-    ) -> tokio::io::Result<usize> {
+    ) -> std::io::Result<usize> {
         let mut settings_byte = 0;
 
         if self.ecc_present {
@@ -72,7 +72,7 @@ impl AsyncEncodable for PublicSettings {
             settings_byte |= PRIVATE_BIT;
         }
 
-        writer.write_u8(settings_byte).await?;
+        writer.write(&[settings_byte]).await?;
         Ok(start_pos + 1)
     }
 }

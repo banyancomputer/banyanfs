@@ -1,9 +1,9 @@
+use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bits::bits;
 use nom::bytes::streaming::{tag, take};
 use nom::error::Error as NomError;
 use nom::error::ErrorKind;
 use nom::sequence::tuple;
-use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::codec::AsyncEncodable;
 
@@ -32,7 +32,7 @@ impl AsyncEncodable for Cid {
         &self,
         writer: &mut W,
         start_pos: usize,
-    ) -> tokio::io::Result<usize> {
+    ) -> std::io::Result<usize> {
         writer.write_all(&self.0).await?;
         Ok(start_pos + self.0.len())
     }

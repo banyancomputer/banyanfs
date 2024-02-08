@@ -1,14 +1,15 @@
+use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bits::bits;
 use nom::bytes::streaming::{tag, take};
 use nom::error::Error as NomError;
 use nom::error::ErrorKind;
 use nom::number::streaming::{le_u32, le_u8};
 use nom::sequence::tuple;
-use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::codec::AsyncEncodable;
 
-use crate::codec::header::{FilesystemId, IdentityHeader, PublicSettings};
+use crate::codec::header::{IdentityHeader, PublicSettings};
+use crate::filesystem::FilesystemId;
 
 pub struct FormatHeader {
     pub ecc_present: bool,
@@ -42,7 +43,7 @@ impl AsyncEncodable for FormatHeader {
         &self,
         writer: &mut W,
         start_pos: usize,
-    ) -> tokio::io::Result<usize> {
+    ) -> std::io::Result<usize> {
         let start_pos = IdentityHeader::encode(&IdentityHeader, writer, start_pos).await?;
         let start_pos = self.filesystem_id.encode(writer, start_pos).await?;
 

@@ -1,12 +1,12 @@
 use std::ops::Deref;
 
 use ecdsa::signature::rand_core::CryptoRngCore;
+use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 use nom::error::ErrorKind;
 use nom::{Err, IResult};
 use p384::ecdh::EphemeralSecret;
 use p384::NistP384;
-use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::codec::crypto::KeyId;
 use crate::codec::AsyncEncodable;

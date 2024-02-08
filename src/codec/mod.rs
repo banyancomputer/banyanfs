@@ -6,7 +6,7 @@ pub mod header;
 use std::future::Future;
 use std::pin::Pin;
 
-use tokio::io::AsyncWrite;
+use futures::AsyncWrite;
 
 #[async_trait::async_trait]
 pub trait AsyncEncodable {
