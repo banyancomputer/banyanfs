@@ -8,14 +8,10 @@ use p384::{NistP384, PublicKey};
 use rand::Rng;
 use sha2::Digest;
 
-mod signature;
 mod signing_key;
 pub(crate) mod utils;
-mod verifying_key;
 
-pub(crate) use signature::Signature;
 pub(crate) use signing_key::SigningKey;
-pub(crate) use verifying_key::VerifyingKey;
 
 pub fn full_key_walkthrough() {
     let mut rng = utils::cs_rng();

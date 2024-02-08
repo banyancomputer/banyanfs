@@ -16,9 +16,13 @@ use rand::Rng;
 //use crate::crypto::utils::short_symmetric_decrypt;
 //use crate::crypto::{AuthenticationTag, CryptoError, Nonce, SigningKey};
 use crate::crypto::{CryptoError, SigningKey};
-use crate::parser::crypto::{AuthenticationTag, KeyId, Nonce, SYMMETRIC_KEY_LENGTH, TAG_LENGTH};
+use crate::parser::crypto::{
+    AuthenticationTag, KeyId, Nonce, VerifyingKey, SYMMETRIC_KEY_LENGTH, TAG_LENGTH,
+};
 
-const ACCESS_KEY_RECORD_LENGTH: usize = 148;
+const ACCESS_KEY_CIPHER_TEXT_LENGTH: usize = SYMMETRIC_KEY_LENGTH + KEY_VERIFICATION_PATTERN_LENGTH;
+
+const ACCESS_KEY_RECORD_LENGTH: usize = KeyId::size() + VerifyingKey::size() + 146;
 
 const KEY_VERIFICATION_PATTERN_LENGTH: usize = 4;
 
@@ -27,7 +31,7 @@ pub(crate) enum AccessKey {
     Locked {
         key_id: KeyId,
         nonce: Nonce,
-        cipher_text: [u8; SYMMETRIC_KEY_LENGTH + KEY_VERIFICATION_PATTERN_LENGTH],
+        cipher_text: [u8; ACCESS_KEY_CIPHER_TEXT_LENGTH],
         tag: AuthenticationTag,
     },
     Open {
@@ -112,9 +116,9 @@ impl AccessKey {
     pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
         let (input, (key_id, pub_key, nonce, cipher_text, tag)) = tuple((
             KeyId::parse,
-            take(49u8),
+            VerifyingKey::parse,
             Nonce::parse,
-            take(SYMMETRIC_KEY_LENGTH + KEY_VERIFICATION_PATTERN_LENGTH),
+            take(ACCESS_KEY_CIPHER_TEXT_LENGTH),
             AuthenticationTag::parse,
         ))(input)?;
 

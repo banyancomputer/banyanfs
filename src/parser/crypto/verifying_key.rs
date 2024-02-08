@@ -1,3 +1,7 @@
+use nom::bytes::streaming::take;
+use nom::combinator::all_consuming;
+use nom::error::{ErrorKind, ParseError};
+use nom::{Err, IResult};
 use p384::NistP384;
 
 use crate::parser::crypto::KeyId;
@@ -17,6 +21,24 @@ impl VerifyingKey {
         key_id.copy_from_slice(public_key_hash.as_bytes());
 
         KeyId::from(u16::from_le_bytes(key_id))
+    }
+
+    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+        let (remaining, slice) = take(KEY_SIZE)(input)?;
+
+        let mut bytes = [0u8; KEY_SIZE];
+        bytes.copy_from_slice(slice);
+
+        let key = match ecdsa::VerifyingKey::from_sec1_bytes(&bytes) {
+            Ok(key) => key,
+            Err(err) => return Err(Err::Failure(nom::error::Error::new(input, ErrorKind::Fail))),
+        };
+
+        Ok((remaining, Self { inner_key: key }))
+    }
+
+    pub(crate) const fn size() -> usize {
+        KEY_SIZE
     }
 
     pub(crate) fn to_bytes(&self) -> [u8; KEY_SIZE] {

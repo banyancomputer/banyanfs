@@ -4,8 +4,7 @@ use p384::NistP384;
 use rand::{CryptoRng, Rng};
 use sha2::Digest;
 
-use crate::crypto::{Signature, VerifyingKey};
-use crate::parser::crypto::KeyId;
+use crate::parser::crypto::{KeyId, Signature, VerifyingKey};
 
 const KEY_SIZE: usize = 48;
 

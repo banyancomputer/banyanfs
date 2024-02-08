@@ -13,6 +13,10 @@ impl KeyId {
         let (input, key_id) = le_u16(input)?;
         Ok((input, Self(key_id)))
     }
+
+    pub(crate) const fn size() -> usize {
+        2
+    }
 }
 
 impl Deref for KeyId {
