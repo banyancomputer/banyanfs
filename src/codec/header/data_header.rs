@@ -5,7 +5,7 @@ use nom::error::ErrorKind;
 use nom::number::streaming::{le_u32, le_u8};
 use nom::sequence::tuple;
 
-use crate::parser::header::BANYAN_DATA_MAGIC;
+use crate::codec::header::BANYAN_DATA_MAGIC;
 
 const ECC_PRESENT_BIT: u8 = 0b0100_0000;
 

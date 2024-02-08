@@ -1,29 +1,23 @@
-use chacha20poly1305::aead::{AeadInPlace, KeyInit};
-use chacha20poly1305::{
-    Key as ChaChaKey, Tag as ChaChaTag, XChaCha20Poly1305, XNonce as ChaChaNonce,
-};
+use chacha20poly1305::{AeadInPlace, Key as ChaChaKey, KeyInit, XChaCha20Poly1305};
 use ecdsa::signature::rand_core::CryptoRngCore;
-use nom::bits::bits;
-use nom::bytes::streaming::{tag, take};
-use nom::error::Error as NomError;
-use nom::error::ErrorKind;
+use nom::bytes::streaming::take;
 use nom::multi::count;
-use nom::number::streaming::{le_u32, le_u8};
 use nom::sequence::tuple;
-use nom::AsBytes;
-use nom::{IResult, Needed};
-use rand::{CryptoRng, Rng};
+use nom::{AsBytes, IResult, Needed};
+use rand::Rng;
 
-//use crate::crypto::utils::short_symmetric_decrypt;
-//use crate::crypto::{AuthenticationTag, CryptoError, Nonce, SigningKey};
-use crate::crypto::{CryptoError, SigningKey};
-use crate::parser::crypto::{
+use crate::codec::crypto::{
     AuthenticationTag, KeyId, Nonce, VerifyingKey, SYMMETRIC_KEY_LENGTH, TAG_LENGTH,
 };
+use crate::crypto::SigningKey;
 
 const ACCESS_KEY_CIPHER_TEXT_LENGTH: usize = SYMMETRIC_KEY_LENGTH + KEY_VERIFICATION_PATTERN_LENGTH;
 
-const ACCESS_KEY_RECORD_LENGTH: usize = KeyId::size() + VerifyingKey::size() + 146;
+const ACCESS_KEY_RECORD_LENGTH: usize = KeyId::size()
+    + VerifyingKey::size()
+    + Nonce::size()
+    + ACCESS_KEY_CIPHER_TEXT_LENGTH
+    + AuthenticationTag::size();
 
 const KEY_VERIFICATION_PATTERN_LENGTH: usize = 4;
 
@@ -92,14 +86,40 @@ impl AccessKey {
     }
 
     pub(crate) fn unlock(&self, key: &SigningKey) -> Result<Self, AccessKeyError<&[u8]>> {
-        todo!()
-        //let result = short_symmetric_decrypt(key, &self.nonce, &self.cipher_text, &self.tag, aad)
-        //    .map_err(EncryptedPayloadError::CryptoFailure)?;
+        match self {
+            AccessKey::Open { .. } => Err(AccessKeyError::AlreadyUnlocked),
+            AccessKey::Locked {
+                key_id,
+                dh_exchange_key,
+                nonce,
+                cipher_text,
+                tag,
+            } => {
+                if key_id != &key.verifying_key().key_id() {
+                    return Err(AccessKeyError::IncorrectKey);
+                }
 
-        //let mut fixed_key: [u8; 32] = [0u8; 32];
-        //fixed_key.copy_from_slice(&result);
+                let shared_secret = key.dh_exchange(dh_exchange_key);
 
-        //Ok(AccessKey::Open { key: fixed_key })
+                let mut key_payload = cipher_text.to_vec();
+
+                XChaCha20Poly1305::new(ChaChaKey::from_slice(&shared_secret))
+                    .decrypt_in_place_detached(nonce, &[], &mut key_payload, tag)
+                    .map_err(|_| AccessKeyError::CryptoFailure)?;
+
+                let mut key = [0u8; SYMMETRIC_KEY_LENGTH];
+                key.copy_from_slice(&key_payload[..SYMMETRIC_KEY_LENGTH]);
+
+                let mut verification_pattern = [0u8; KEY_VERIFICATION_PATTERN_LENGTH];
+                verification_pattern.copy_from_slice(&key_payload[SYMMETRIC_KEY_LENGTH..]);
+
+                if u32::from_le_bytes(verification_pattern) != 0 {
+                    return Err(AccessKeyError::IncorrectKey);
+                }
+
+                Ok(AccessKey::Open { key })
+            }
+        }
     }
 
     pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
@@ -138,38 +158,19 @@ impl AccessKey {
         Ok((input, keys))
     }
 
-    //pub(crate) fn to_bytes(&self) -> Result<[u8; 148], AccessKeyError<&[u8]>> {
-    //    match self {
-    //        AccessKey::Locked {
-    //            nonce,
-    //            cipher_text,
-    //            tag,
-    //        } => {
-    //            let mut bytes = [0u8; 148];
-    //            let mut current_idx = 0;
-
-    //            let nonce_bytes = nonce.as_bytes();
-    //            let nonce_len = nonce_bytes.len();
-    //            bytes[current_idx..(current_idx + nonce_len)].copy_from_slice(nonce_bytes);
-    //            current_idx += nonce_len;
-
-    //            let cipher_len = cipher_text.len();
-    //            bytes[current_idx..(current_idx + cipher_len)].copy_from_slice(cipher_text);
-    //            current_idx += cipher_len;
-
-    //            let tag_bytes = tag.as_bytes();
-    //            let tag_len = tag_bytes.len();
-    //            bytes[current_idx..(current_idx + tag_len)].copy_from_slice(tag_bytes);
-
-    //            Ok(bytes)
-    //        }
-    //        AccessKey::Open { .. } => unimplemented!(),
-    //    }
-    //}
+    pub(crate) fn to_bytes(&self) -> Result<[u8; 148], AccessKeyError<&[u8]>> {
+        match self {
+            AccessKey::Locked { .. } => todo!(),
+            AccessKey::Open { .. } => Err(AccessKeyError::MustLockForExport),
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum AccessKeyError<I> {
+    #[error("key is already unlocked")]
+    AlreadyUnlocked,
+
     #[error("decoding data failed: {0}")]
     FormatFailure(#[from] nom::Err<nom::error::Error<I>>),
 
@@ -181,6 +182,9 @@ pub(crate) enum AccessKeyError<I> {
 
     #[error("key must be unlocked before it can be used")]
     LockedKey,
+
+    #[error("exporting access keys is only allowed while locked")]
+    MustLockForExport,
 }
 
 impl<I> From<chacha20poly1305::Error> for AccessKeyError<I> {

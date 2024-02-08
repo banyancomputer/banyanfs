@@ -33,6 +33,10 @@ impl Nonce {
         let (_, tag) = all_consuming(Self::parse)(input)?;
         Ok(tag)
     }
+
+    pub(crate) const fn size() -> usize {
+        NONCE_LENGTH
+    }
 }
 
 impl Deref for Nonce {

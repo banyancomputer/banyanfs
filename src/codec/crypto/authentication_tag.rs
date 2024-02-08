@@ -32,6 +32,10 @@ impl AuthenticationTag {
         let (_, tag) = all_consuming(Self::parse)(input)?;
         Ok(tag)
     }
+
+    pub(crate) const fn size() -> usize {
+        TAG_LENGTH
+    }
 }
 
 impl Deref for AuthenticationTag {

@@ -1,13 +1,8 @@
-use nom::bits::bits;
-use nom::bytes::streaming::{tag, take};
-use nom::error::Error as NomError;
-use nom::error::ErrorKind;
-use nom::number::streaming::{le_u32, le_u8};
-use nom::sequence::tuple;
+use nom::number::streaming::le_u8;
 use nom::IResult;
 
+use crate::codec::crypto::AccessKey;
 use crate::crypto::SigningKey;
-use crate::parser::crypto::AccessKey;
 
 pub(crate) enum ContentPayload {
     Private,
@@ -15,7 +10,8 @@ pub(crate) enum ContentPayload {
 }
 
 impl ContentPayload {
-    pub(crate) fn parse_private<'a>(input: &'a [u8], _key: &SigningKey) -> IResult<&'a [u8], Self> {
+    pub(crate) fn parse_private<'a>(input: &'a [u8], key: &SigningKey) -> IResult<&'a [u8], Self> {
+        let _key_id = key.key_id();
         let (input, key_count) = le_u8(input)?;
         let (input, _escrowed_keys) = AccessKey::parse_many(input, key_count)?;
         Ok((input, ContentPayload::Private))

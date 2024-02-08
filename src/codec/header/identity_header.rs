@@ -5,7 +5,7 @@ use nom::error::ErrorKind;
 use nom::number::streaming::{le_u32, le_u8};
 use nom::sequence::tuple;
 
-use crate::parser::header::BANYAN_FS_MAGIC;
+use crate::codec::header::BANYAN_FS_MAGIC;
 
 pub(crate) struct IdentityHeader;
 

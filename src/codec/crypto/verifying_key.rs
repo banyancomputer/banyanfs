@@ -1,16 +1,13 @@
 use std::ops::Deref;
 
 use ecdsa::signature::rand_core::CryptoRngCore;
-use elliptic_curve::sec1::ToEncodedPoint;
 use nom::bytes::streaming::take;
-use nom::combinator::all_consuming;
-use nom::error::{ErrorKind, ParseError};
+use nom::error::ErrorKind;
 use nom::{Err, IResult};
 use p384::ecdh::EphemeralSecret;
 use p384::NistP384;
-use rand::Rng;
 
-use crate::parser::crypto::KeyId;
+use crate::codec::crypto::KeyId;
 
 const KEY_SIZE: usize = 49;
 
@@ -43,7 +40,7 @@ impl VerifyingKey {
         let public_key_hash = blake3::hash(public_key_bytes.as_bytes());
 
         let mut key_id = [0u8; 2];
-        key_id.copy_from_slice(public_key_hash.as_bytes());
+        key_id.copy_from_slice(&public_key_hash.as_bytes()[..2]);
 
         KeyId::from(u16::from_le_bytes(key_id))
     }

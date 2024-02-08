@@ -1,10 +1,8 @@
 use ecdsa::signature::rand_core::CryptoRngCore;
 use ecdsa::signature::RandomizedDigestSigner;
 use p384::NistP384;
-use rand::{CryptoRng, Rng};
-use sha2::Digest;
 
-use crate::parser::crypto::{KeyId, Signature, VerifyingKey};
+use crate::codec::crypto::{KeyId, Signature, VerifyingKey};
 
 const KEY_SIZE: usize = 48;
 
@@ -34,10 +32,12 @@ impl SigningKey {
         Self { inner }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn key_id(&self) -> KeyId {
         self.verifying_key().key_id()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn to_private_bytes(&self) -> [u8; KEY_SIZE] {
         let private_key_bytes = self.inner.to_bytes();
 

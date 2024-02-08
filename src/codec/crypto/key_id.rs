@@ -1,11 +1,9 @@
 use std::ops::Deref;
 
-use nom::combinator::all_consuming;
 use nom::number::streaming::le_u16;
 use nom::IResult;
-use rand::Rng;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(crate) struct KeyId(u16);
 
 impl KeyId {

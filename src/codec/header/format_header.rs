@@ -5,7 +5,7 @@ use nom::error::ErrorKind;
 use nom::number::streaming::{le_u32, le_u8};
 use nom::sequence::tuple;
 
-use crate::parser::header::{FilesystemId, IdentityHeader, PublicSettings};
+use crate::codec::header::{FilesystemId, IdentityHeader, PublicSettings};
 
 pub(crate) struct FormatHeader {
     ecc_present: bool,
