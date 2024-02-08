@@ -1,18 +1,33 @@
+use ecdsa::signature::rand_core::CryptoRngCore;
+use elliptic_curve::sec1::ToEncodedPoint;
 use nom::bytes::streaming::take;
 use nom::combinator::all_consuming;
 use nom::error::{ErrorKind, ParseError};
 use nom::{Err, IResult};
+use p384::ecdh::EphemeralSecret;
 use p384::NistP384;
+use rand::Rng;
 
 use crate::parser::crypto::KeyId;
 
 const KEY_SIZE: usize = 49;
 
+#[derive(Clone)]
 pub(crate) struct VerifyingKey {
     inner_key: ecdsa::VerifyingKey<NistP384>,
 }
 
 impl VerifyingKey {
+    pub(crate) fn dh_exchange_key(&self, rng: &mut impl CryptoRngCore) -> (Self, [u8; 32]) {
+        let eph_secret: EphemeralSecret = EphemeralSecret::random(rng);
+        let eph_pub_bytes = eph_secret
+            .public_key()
+            .to_encoded_point(true)
+            .as_bytes()
+            .to_vec();
+        todo!()
+    }
+
     pub(crate) fn key_id(&self) -> KeyId {
         let public_key_bytes = self.inner_key.to_encoded_point(true);
         let public_key_hash = blake3::hash(public_key_bytes.as_bytes());

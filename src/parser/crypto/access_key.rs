@@ -30,6 +30,7 @@ const KEY_VERIFICATION_PATTERN_LENGTH: usize = 4;
 pub(crate) enum AccessKey {
     Locked {
         key_id: KeyId,
+        //dh_exchange: VerifyingKey,
         nonce: Nonce,
         cipher_text: [u8; ACCESS_KEY_CIPHER_TEXT_LENGTH],
         tag: AuthenticationTag,
@@ -51,10 +52,10 @@ impl AccessKey {
         Self::Open { key: rng.gen() }
     }
 
-    pub(crate) fn lock(
+    pub(crate) fn lock_for(
         &self,
         rng: &mut impl Rng,
-        signing_key: &SigningKey,
+        verifying_key: &VerifyingKey,
     ) -> Result<Self, AccessKeyError<&[u8]>> {
         match self {
             Self::Locked { .. } => Ok(self.clone()),
@@ -76,7 +77,7 @@ impl AccessKey {
                 tag_bytes.copy_from_slice(raw_tag.as_bytes());
                 let tag = AuthenticationTag::from(tag_bytes);
 
-                let key_id = signing_key.key_id();
+                let key_id = verifying_key.key_id();
 
                 Ok(Self::Locked {
                     nonce,
@@ -122,7 +123,14 @@ impl AccessKey {
             AuthenticationTag::parse,
         ))(input)?;
 
-        todo!()
+        let access_key = AccessKey::Locked {
+            key_id,
+            nonce,
+            cipher_text: cipher_text.try_into().unwrap(),
+            tag,
+        };
+
+        Ok((input, access_key))
     }
 
     pub(crate) fn parse_many(input: &[u8], key_count: u8) -> IResult<&[u8], Vec<Self>> {
