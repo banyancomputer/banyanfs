@@ -49,8 +49,7 @@ impl AsyncEncodable for IdentityHeader {
         start_pos: usize,
     ) -> std::io::Result<usize> {
         writer.write_all(BANYAN_FS_MAGIC).await?;
-        writer.write(&[0x01]).await?;
-
+        writer.write_all(&[0x01]).await?;
         Ok(start_pos + BANYAN_FS_MAGIC.len() + 1)
     }
 }

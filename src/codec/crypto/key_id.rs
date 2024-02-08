@@ -6,8 +6,8 @@ use nom::IResult;
 
 use crate::codec::AsyncEncodable;
 
-#[derive(Clone, Copy, PartialEq)]
-pub(crate) struct KeyId(u16);
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct KeyId(u16);
 
 impl KeyId {
     pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {

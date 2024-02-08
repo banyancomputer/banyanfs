@@ -1,6 +1,6 @@
-mod cid;
-mod content_payload;
-pub(crate) mod crypto;
+pub mod cid;
+pub mod content_payload;
+pub mod crypto;
 pub mod header;
 
 use std::future::Future;

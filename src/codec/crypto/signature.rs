@@ -1,6 +1,6 @@
 use p384::NistP384;
 
-pub(crate) struct Signature {
+pub struct Signature {
     inner: ecdsa::Signature<NistP384>,
 }
 

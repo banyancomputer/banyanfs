@@ -26,12 +26,7 @@ async fn main() -> BanyanFsResult<()> {
     tracing_subscriber::registry().with(stderr_layer).init();
     tracing::debug!("running banyanfs {}", version());
 
-    let _encoded_drive_data = include_bytes!("../fixtures/reference_drive.bfs");
-
-    use rand::SeedableRng;
-    use rand_chacha::ChaCha20Rng;
-
-    let mut rng = ChaCha20Rng::from_entropy();
+    let mut rng = banyanfs::utils::crypto_rng();
 
     let header = FormatHeader {
         ecc_present: false,
@@ -44,7 +39,8 @@ async fn main() -> BanyanFsResult<()> {
 
     tracing::info!("output_stream: {:02x?}", output_stream);
 
-    //let mut drive = Drive::from_slice(encoded_drive_data);
+    let signing_key = SigningKey::generate(&mut rng);
+    let _drive = Drive::initialize(&signing_key);
 
     //if !drive.check_accessibility(key) {
     //    tracing::error!("key doesn't have access to the drive");

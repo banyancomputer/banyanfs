@@ -6,7 +6,7 @@ use crate::codec::crypto::{Fingerprint, KeyId, Signature, VerifyingKey};
 
 const KEY_SIZE: usize = 48;
 
-pub(crate) struct SigningKey {
+pub struct SigningKey {
     inner: ecdsa::SigningKey<NistP384>,
 }
 
@@ -27,11 +27,11 @@ impl SigningKey {
         secret_bytes
     }
 
-    pub(crate) fn fingerprint(&self) -> Fingerprint {
+    pub fn fingerprint(&self) -> Fingerprint {
         self.verifying_key().fingerprint()
     }
 
-    pub(crate) fn generate(rng: &mut impl CryptoRngCore) -> Self {
+    pub fn generate(rng: &mut impl CryptoRngCore) -> Self {
         let inner = ecdsa::SigningKey::<NistP384>::random(rng);
         Self { inner }
     }

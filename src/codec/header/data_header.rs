@@ -13,13 +13,13 @@ const TRUNCATION_BIT: u8 = 0b1000_0000;
 
 const BLOCK_SIZE_MASK: u8 = 0b0000_0011;
 
-pub(crate) struct DataHeader {
+pub struct DataHeader {
     version: u8,
     data_options: DataOptions,
 }
 
 impl DataHeader {
-    pub(crate) fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
         let (input, (version, data_options)) = tuple((le_u8, DataOptions::parse))(input)?;
 
         let data_header = DataHeader {
@@ -30,7 +30,7 @@ impl DataHeader {
         Ok((input, data_header))
     }
 
-    pub(crate) fn parse_with_magic(input: &[u8]) -> nom::IResult<&[u8], Self> {
+    pub fn parse_with_magic(input: &[u8]) -> nom::IResult<&[u8], Self> {
         let (input, (_magic, data_header)) =
             tuple((banyan_data_magic_tag, DataHeader::parse))(input)?;
         Ok((input, data_header))

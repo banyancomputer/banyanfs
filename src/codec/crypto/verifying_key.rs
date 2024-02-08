@@ -14,7 +14,7 @@ use crate::codec::AsyncEncodable;
 const KEY_SIZE: usize = 49;
 
 #[derive(Clone)]
-pub(crate) struct VerifyingKey {
+pub struct VerifyingKey {
     inner_key: ecdsa::VerifyingKey<NistP384>,
 }
 
@@ -45,7 +45,7 @@ impl VerifyingKey {
         self.fingerprint().key_id()
     }
 
-    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
         let (remaining, slice) = take(KEY_SIZE)(input)?;
 
         let mut bytes = [0u8; KEY_SIZE];
