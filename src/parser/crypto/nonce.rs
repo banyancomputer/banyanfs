@@ -20,7 +20,7 @@ impl Nonce {
         Self(rng.gen())
     }
 
-    fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
         let (remaining, slice) = take(NONCE_LENGTH)(input)?;
 
         let mut bytes = [0u8; NONCE_LENGTH];

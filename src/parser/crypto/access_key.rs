@@ -16,7 +16,7 @@ use rand::Rng;
 //use crate::crypto::utils::short_symmetric_decrypt;
 //use crate::crypto::{AuthenticationTag, CryptoError, Nonce, SigningKey};
 use crate::crypto::{CryptoError, SigningKey};
-use crate::parser::crypto::{KeyId, NONCE_LENGTH, SYMMETRIC_KEY_LENGTH, TAG_LENGTH};
+use crate::parser::crypto::{AuthenticationTag, KeyId, Nonce, SYMMETRIC_KEY_LENGTH, TAG_LENGTH};
 
 const ACCESS_KEY_RECORD_LENGTH: usize = 148;
 
@@ -26,9 +26,9 @@ const KEY_VERIFICATION_PATTERN_LENGTH: usize = 4;
 pub(crate) enum AccessKey {
     Locked {
         key_id: KeyId,
-        nonce: [u8; NONCE_LENGTH],
+        nonce: Nonce,
         cipher_text: [u8; SYMMETRIC_KEY_LENGTH + KEY_VERIFICATION_PATTERN_LENGTH],
-        tag: [u8; TAG_LENGTH],
+        tag: AuthenticationTag,
     },
     Open {
         key: [u8; SYMMETRIC_KEY_LENGTH],
@@ -65,13 +65,12 @@ impl AccessKey {
                 let chacha_key = ChaChaKey::from_slice(&eph_dh_key);
                 let cipher = XChaCha20Poly1305::new(chacha_key);
 
-                let nonce: [u8; NONCE_LENGTH] = rng.gen();
-                let cha_nonce = ChaChaNonce::from_slice(&nonce);
+                let nonce = Nonce::generate(rng);
+                let raw_tag = cipher.encrypt_in_place_detached(&nonce, &[], &mut key_payload)?;
 
-                let raw_tag = cipher.encrypt_in_place_detached(cha_nonce, &[], &mut key_payload)?;
-
-                let mut tag = [0u8; TAG_LENGTH];
-                tag.copy_from_slice(raw_tag.as_bytes());
+                let mut tag_bytes = [0u8; TAG_LENGTH];
+                tag_bytes.copy_from_slice(raw_tag.as_bytes());
+                let tag = AuthenticationTag::from(tag_bytes);
 
                 let key_id = signing_key.key_id();
 
@@ -86,9 +85,9 @@ impl AccessKey {
     }
 
     pub(crate) fn new(
-        nonce: [u8; NONCE_LENGTH],
+        nonce: Nonce,
         cipher_text: [u8; SYMMETRIC_KEY_LENGTH + KEY_VERIFICATION_PATTERN_LENGTH],
-        tag: [u8; TAG_LENGTH],
+        tag: AuthenticationTag,
         key_id: KeyId,
     ) -> Self {
         Self::Locked {
@@ -111,6 +110,14 @@ impl AccessKey {
     }
 
     pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+        let (input, (key_id, pub_key, nonce, cipher_text, tag)) = tuple((
+            KeyId::parse,
+            take(49u8),
+            Nonce::parse,
+            take(SYMMETRIC_KEY_LENGTH + KEY_VERIFICATION_PATTERN_LENGTH),
+            AuthenticationTag::parse,
+        ))(input)?;
+
         todo!()
     }
 

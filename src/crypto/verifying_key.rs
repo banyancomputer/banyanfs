@@ -13,10 +13,10 @@ impl VerifyingKey {
         let public_key_bytes = self.inner_key.to_encoded_point(true);
         let public_key_hash = blake3::hash(public_key_bytes.as_bytes());
 
-        let mut key_id = [0u8; 4];
+        let mut key_id = [0u8; 2];
         key_id.copy_from_slice(public_key_hash.as_bytes());
 
-        KeyId::from(u32::from_le_bytes(key_id))
+        KeyId::from(u16::from_le_bytes(key_id))
     }
 
     pub(crate) fn to_bytes(&self) -> [u8; KEY_SIZE] {
