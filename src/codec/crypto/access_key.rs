@@ -4,13 +4,14 @@ use nom::AsBytes;
 use rand::Rng;
 
 use crate::codec::crypto::{
-    AuthenticationTag, LockedAccessKey, Nonce, VerifyingKey, SYMMETRIC_KEY_LENGTH, TAG_LENGTH,
+    AuthenticationTag, LockedAccessKey, Nonce, VerifyingKey, SYMMETRIC_KEY_LENGTH,
 };
 
 #[derive(Clone)]
 pub struct AccessKey([u8; SYMMETRIC_KEY_LENGTH]);
 
 impl AccessKey {
+    #[allow(dead_code)]
     pub(crate) fn chacha_key(&self) -> &ChaChaKey {
         ChaChaKey::from_slice(&self.0)
     }
@@ -37,7 +38,7 @@ impl AccessKey {
         let nonce = Nonce::generate(rng);
         let raw_tag = cipher.encrypt_in_place_detached(&nonce, &[], &mut key_payload)?;
 
-        let mut tag_bytes = [0u8; TAG_LENGTH];
+        let mut tag_bytes = [0u8; AuthenticationTag::size()];
         tag_bytes.copy_from_slice(raw_tag.as_bytes());
         let tag = AuthenticationTag::from(tag_bytes);
 

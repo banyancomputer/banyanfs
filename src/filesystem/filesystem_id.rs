@@ -1,12 +1,9 @@
-use std::time::SystemTime;
-
+use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bits::bits;
-use nom::bytes::streaming::{tag, take};
+use nom::bytes::streaming::take;
 use nom::error::Error as NomError;
 use nom::error::ErrorKind;
-use nom::sequence::tuple;
-use rand::{Rng, RngCore};
+use rand::RngCore;
 use uuid::{NoContext, Timestamp, Uuid};
 
 use crate::codec::AsyncEncodable;
@@ -16,7 +13,8 @@ const ID_LENGTH: usize = 16;
 pub struct FilesystemId([u8; ID_LENGTH]);
 
 impl FilesystemId {
-    pub fn generate(rng: &mut impl RngCore) -> Self {
+    pub fn generate(_rng: &mut impl RngCore) -> Self {
+        // todo: this needs to use the provided rng
         let ts = Timestamp::now(NoContext);
         let uuid = Uuid::new_v7(ts);
         Self(uuid.to_bytes_le())
@@ -47,7 +45,7 @@ impl FilesystemId {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl AsyncEncodable for FilesystemId {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,

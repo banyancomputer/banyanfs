@@ -9,7 +9,7 @@ mod signing_key;
 mod verifying_key;
 
 pub use access_key::AccessKey;
-pub use authentication_tag::{AuthenticationTag, TAG_LENGTH};
+pub use authentication_tag::AuthenticationTag;
 pub use fingerprint::Fingerprint;
 pub use key_id::KeyId;
 pub use locked_access_key::LockedAccessKey;

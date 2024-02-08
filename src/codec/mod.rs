@@ -3,12 +3,10 @@ pub mod content_payload;
 pub mod crypto;
 pub mod header;
 
-use std::future::Future;
-use std::pin::Pin;
-
+use async_trait::async_trait;
 use futures::AsyncWrite;
 
-#[async_trait::async_trait]
+#[async_trait]
 pub trait AsyncEncodable {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,

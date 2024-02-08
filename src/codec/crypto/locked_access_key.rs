@@ -1,14 +1,11 @@
 use chacha20poly1305::{AeadInPlace, Key as ChaChaKey, KeyInit, XChaCha20Poly1305};
-use ecdsa::signature::rand_core::CryptoRngCore;
 use nom::bytes::streaming::take;
 use nom::multi::count;
 use nom::sequence::tuple;
-use nom::{AsBytes, IResult, Needed};
-use rand::{CryptoRng, Rng};
+use nom::{IResult, Needed};
 
 use crate::codec::crypto::{
     AccessKey, AuthenticationTag, KeyId, Nonce, SigningKey, VerifyingKey, SYMMETRIC_KEY_LENGTH,
-    TAG_LENGTH,
 };
 const ACCESS_KEY_CIPHER_TEXT_LENGTH: usize = SYMMETRIC_KEY_LENGTH + KEY_VERIFICATION_PATTERN_LENGTH;
 

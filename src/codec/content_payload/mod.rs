@@ -1,16 +1,18 @@
-use nom::error::{Error as NomError, ErrorKind, ParseError};
+use nom::error::{Error as NomError, ErrorKind};
 use nom::number::streaming::le_u8;
 use nom::{Err, IResult};
 
 use crate::codec::crypto::{AccessKey, LockedAccessKey, SigningKey};
 
+#[allow(dead_code)]
 pub(crate) enum ContentPayload {
     Private { access_key: AccessKey },
     Public,
 }
 
 impl ContentPayload {
-    pub(crate) fn parse_private<'a>(input: &'a [u8], key: &SigningKey) -> IResult<&'a [u8], Self> {
+    #[allow(dead_code)]
+    pub fn parse_private<'a>(input: &'a [u8], key: &SigningKey) -> IResult<&'a [u8], Self> {
         let (input, key_count) = le_u8(input)?;
         let (input, locked_keys) = LockedAccessKey::parse_many(input, key_count)?;
 
@@ -33,7 +35,8 @@ impl ContentPayload {
         Ok((input, ContentPayload::Private { access_key }))
     }
 
-    pub(crate) fn parse_public(input: &[u8]) -> IResult<&[u8], Self> {
+    #[allow(dead_code)]
+    pub fn parse_public(input: &[u8]) -> IResult<&[u8], Self> {
         Ok((input, ContentPayload::Public))
     }
 }

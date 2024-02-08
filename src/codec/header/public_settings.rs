@@ -70,7 +70,7 @@ impl AsyncEncodable for PublicSettings {
             settings_byte |= PRIVATE_BIT;
         }
 
-        writer.write(&[settings_byte]).await?;
+        writer.write_all(&[settings_byte]).await?;
         Ok(start_pos + 1)
     }
 }

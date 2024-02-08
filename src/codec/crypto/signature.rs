@@ -17,7 +17,7 @@ impl Signature {
         Ok(Self { inner })
     }
 
-    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+    pub fn parse(_input: &[u8]) -> IResult<&[u8], Self> {
         todo!()
     }
 

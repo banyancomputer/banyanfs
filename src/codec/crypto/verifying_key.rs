@@ -1,5 +1,6 @@
 use std::ops::Deref;
 
+use async_trait::async_trait;
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
@@ -74,6 +75,19 @@ impl VerifyingKey {
         public_key.copy_from_slice(compressed_pubkey.as_bytes());
 
         public_key
+    }
+}
+
+#[async_trait]
+impl AsyncEncodable for VerifyingKey {
+    async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+        start_pos: usize,
+    ) -> std::io::Result<usize> {
+        let key_bytes = self.to_bytes();
+        writer.write_all(&key_bytes).await?;
+        Ok(start_pos + key_bytes.len())
     }
 }
 

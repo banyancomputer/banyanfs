@@ -1,9 +1,5 @@
-use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bits::bits;
-use nom::bytes::streaming::{tag, take};
-use nom::error::Error as NomError;
-use nom::error::ErrorKind;
-use nom::number::streaming::{le_u32, le_u8};
+use async_trait::async_trait;
+use futures::AsyncWrite;
 use nom::sequence::tuple;
 
 use crate::codec::AsyncEncodable;
@@ -37,7 +33,7 @@ impl FormatHeader {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl AsyncEncodable for FormatHeader {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,

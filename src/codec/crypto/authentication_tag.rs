@@ -1,5 +1,6 @@
 use std::ops::Deref;
 
+use async_trait::async_trait;
 use chacha20poly1305::Tag as ChaChaTag;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
@@ -8,21 +9,17 @@ use nom::IResult;
 
 use crate::codec::AsyncEncodable;
 
-pub(crate) const TAG_LENGTH: usize = 16;
+const TAG_LENGTH: usize = 16;
 
 #[derive(Clone, Debug)]
-pub(crate) struct AuthenticationTag([u8; TAG_LENGTH]);
+pub struct AuthenticationTag([u8; TAG_LENGTH]);
 
 impl AuthenticationTag {
-    pub(crate) fn as_bytes(&self) -> &[u8; TAG_LENGTH] {
+    pub fn as_bytes(&self) -> &[u8; TAG_LENGTH] {
         &self.0
     }
 
-    pub(crate) fn empty() -> Self {
-        Self([0u8; TAG_LENGTH])
-    }
-
-    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
         let (remaining, slice) = take(TAG_LENGTH)(input)?;
 
         let mut bytes = [0u8; TAG_LENGTH];
@@ -31,17 +28,17 @@ impl AuthenticationTag {
         Ok((remaining, Self(bytes)))
     }
 
-    pub(crate) fn parse_complete(input: &[u8]) -> Result<Self, nom::Err<nom::error::Error<&[u8]>>> {
+    pub fn parse_complete(input: &[u8]) -> Result<Self, nom::Err<nom::error::Error<&[u8]>>> {
         let (_, tag) = all_consuming(Self::parse)(input)?;
         Ok(tag)
     }
 
-    pub(crate) const fn size() -> usize {
+    pub const fn size() -> usize {
         TAG_LENGTH
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl AsyncEncodable for AuthenticationTag {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
