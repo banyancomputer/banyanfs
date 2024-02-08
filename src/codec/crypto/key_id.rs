@@ -2,6 +2,9 @@ use std::ops::Deref;
 
 use nom::number::streaming::le_u16;
 use nom::IResult;
+use tokio::io::{AsyncWrite, AsyncWriteExt};
+
+use crate::codec::AsyncEncodable;
 
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct KeyId(u16);
@@ -14,6 +17,18 @@ impl KeyId {
 
     pub(crate) const fn size() -> usize {
         2
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncEncodable for KeyId {
+    async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+        start_pos: usize,
+    ) -> tokio::io::Result<usize> {
+        writer.write_all(&self.0.to_le_bytes()).await?;
+        Ok(start_pos + 2)
     }
 }
 

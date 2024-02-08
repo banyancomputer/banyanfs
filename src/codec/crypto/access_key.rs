@@ -7,7 +7,8 @@ use nom::{AsBytes, IResult, Needed};
 use rand::{CryptoRng, Rng};
 
 use crate::codec::crypto::{
-    AuthenticationTag, KeyId, LockedAccessKey, Nonce, SigningKey, VerifyingKey, SYMMETRIC_KEY_LENGTH, TAG_LENGTH,
+    AuthenticationTag, KeyId, LockedAccessKey, Nonce, SigningKey, VerifyingKey,
+    SYMMETRIC_KEY_LENGTH, TAG_LENGTH,
 };
 
 #[derive(Clone)]
@@ -64,23 +65,11 @@ impl From<[u8; SYMMETRIC_KEY_LENGTH]> for AccessKey {
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum AccessKeyError<I> {
-    #[error("key is already unlocked")]
-    AlreadyUnlocked,
-
     #[error("decoding data failed: {0}")]
     FormatFailure(#[from] nom::Err<nom::error::Error<I>>),
 
     #[error("unspecified crypto error")]
     CryptoFailure,
-
-    #[error("validation failed most likely due to the use of an incorrect key")]
-    IncorrectKey,
-
-    #[error("key must be unlocked before it can be used")]
-    LockedKey,
-
-    #[error("exporting access keys is only allowed while locked")]
-    MustLockForExport,
 }
 
 impl<I> From<chacha20poly1305::Error> for AccessKeyError<I> {

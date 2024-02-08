@@ -1,18 +1,22 @@
+use std::time::SystemTime;
+
 use nom::bits::bits;
 use nom::bytes::streaming::{tag, take};
 use nom::error::Error as NomError;
 use nom::error::ErrorKind;
 use nom::sequence::tuple;
 use rand::{Rng, RngCore};
-use std::time::SystemTime;
+use tokio::io::{AsyncWrite, AsyncWriteExt};
 use uuid::{NoContext, Timestamp, Uuid};
+
+use crate::codec::AsyncEncodable;
 
 const ID_LENGTH: usize = 16;
 
-pub(crate) struct FilesystemId([u8; ID_LENGTH]);
+pub struct FilesystemId([u8; ID_LENGTH]);
 
 impl FilesystemId {
-    pub(crate) fn generate(rng: &mut impl RngCore) -> Self {
+    pub fn generate(rng: &mut impl RngCore) -> Self {
         let ts = Timestamp::now(NoContext);
         let uuid = Uuid::new_v7(ts);
         Self(uuid.to_bytes_le())
@@ -36,5 +40,21 @@ impl FilesystemId {
         bytes.copy_from_slice(id_bytes);
 
         Ok((remaining, Self(bytes)))
+    }
+
+    pub(crate) const fn size() -> usize {
+        ID_LENGTH
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncEncodable for FilesystemId {
+    async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+        start_pos: usize,
+    ) -> tokio::io::Result<usize> {
+        writer.write_all(&self.0).await?;
+        Ok(start_pos + self.0.len())
     }
 }

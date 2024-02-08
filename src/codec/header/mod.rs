@@ -5,9 +5,9 @@ mod identity_header;
 mod public_settings;
 
 pub(crate) use data_header::DataHeader;
-pub(crate) use filesystem_id::FilesystemId;
-pub(crate) use format_header::FormatHeader;
-pub(crate) use identity_header::IdentityHeader;
+pub use filesystem_id::FilesystemId;
+pub use format_header::FormatHeader;
+pub use identity_header::IdentityHeader;
 pub(crate) use public_settings::PublicSettings;
 
 const BANYAN_FS_MAGIC: &[u8] = b"BYFS";

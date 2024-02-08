@@ -5,6 +5,9 @@ use nom::bytes::streaming::take;
 use nom::combinator::all_consuming;
 use nom::IResult;
 use rand::Rng;
+use tokio::io::{AsyncWrite, AsyncWriteExt};
+
+use crate::codec::AsyncEncodable;
 
 pub(crate) const NONCE_LENGTH: usize = 24;
 
@@ -36,6 +39,18 @@ impl Nonce {
 
     pub(crate) const fn size() -> usize {
         NONCE_LENGTH
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncEncodable for Nonce {
+    async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+        start_pos: usize,
+    ) -> tokio::io::Result<usize> {
+        writer.write_all(&self.0).await?;
+        Ok(start_pos + self.0.len())
     }
 }
 

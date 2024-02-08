@@ -4,10 +4,12 @@ use nom::error::Error as NomError;
 use nom::error::ErrorKind;
 use nom::number::streaming::{le_u32, le_u8};
 use nom::sequence::tuple;
+use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::codec::header::BANYAN_FS_MAGIC;
+use crate::codec::AsyncEncodable;
 
-pub(crate) struct IdentityHeader;
+pub struct IdentityHeader;
 
 impl IdentityHeader {
     pub(crate) fn parse_with_magic(input: &[u8]) -> nom::IResult<&[u8], Self> {
@@ -36,5 +38,19 @@ fn fs_version_one(input: &[u8]) -> nom::IResult<&[u8], ()> {
         Ok((input, ()))
     } else {
         Err(nom::Err::Failure(NomError::new(input, ErrorKind::Tag)))
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncEncodable for IdentityHeader {
+    async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+        start_pos: usize,
+    ) -> tokio::io::Result<usize> {
+        writer.write_all(BANYAN_FS_MAGIC).await?;
+        writer.write_u8(0x01).await?;
+
+        Ok(start_pos + BANYAN_FS_MAGIC.len() + 1)
     }
 }

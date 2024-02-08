@@ -4,13 +4,16 @@ use nom::error::Error as NomError;
 use nom::error::ErrorKind;
 use nom::number::streaming::{le_u32, le_u8};
 use nom::sequence::tuple;
+use tokio::io::{AsyncWrite, AsyncWriteExt};
+
+use crate::codec::AsyncEncodable;
 
 use crate::codec::header::{FilesystemId, IdentityHeader, PublicSettings};
 
-pub(crate) struct FormatHeader {
-    ecc_present: bool,
-    private: bool,
-    filesystem_id: FilesystemId,
+pub struct FormatHeader {
+    pub ecc_present: bool,
+    pub private: bool,
+    pub filesystem_id: FilesystemId,
 }
 
 impl FormatHeader {
@@ -30,5 +33,22 @@ impl FormatHeader {
         };
 
         Ok((input, header))
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncEncodable for FormatHeader {
+    async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+        start_pos: usize,
+    ) -> tokio::io::Result<usize> {
+        let start_pos = IdentityHeader::encode(&IdentityHeader, writer, start_pos).await?;
+        let start_pos = self.filesystem_id.encode(writer, start_pos).await?;
+
+        let settings = PublicSettings::new(self.ecc_present, self.private);
+        let start_pos = settings.encode(writer, start_pos).await?;
+
+        Ok(start_pos)
     }
 }

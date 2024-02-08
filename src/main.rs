@@ -9,6 +9,7 @@ fn main() -> BanyanFsResult<()> {
 #[cfg(not(target_arch = "wasm32"))]
 #[tokio::main]
 async fn main() -> BanyanFsResult<()> {
+    use banyanfs::codec::header::{FilesystemId, FormatHeader};
     use tracing::Level;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
@@ -32,7 +33,20 @@ async fn main() -> BanyanFsResult<()> {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    let _rng = ChaCha20Rng::from_entropy();
+    use banyanfs::codec::AsyncEncodable;
+
+    let mut rng = ChaCha20Rng::from_entropy();
+
+    let header = FormatHeader {
+        ecc_present: false,
+        private: false,
+        filesystem_id: FilesystemId::generate(&mut rng),
+    };
+
+    let mut output_stream = Vec::new();
+    header.encode(&mut output_stream, 0).await.unwrap();
+
+    tracing::info!("output_stream: {:02x?}", output_stream);
 
     //let key: &[u8] = &[0x55, 0x68];
     //let mut drive = Drive::from_slice(encoded_drive_data);

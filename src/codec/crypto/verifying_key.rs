@@ -6,8 +6,10 @@ use nom::error::ErrorKind;
 use nom::{Err, IResult};
 use p384::ecdh::EphemeralSecret;
 use p384::NistP384;
+use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::codec::crypto::KeyId;
+use crate::codec::AsyncEncodable;
 
 const KEY_SIZE: usize = 49;
 

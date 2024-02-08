@@ -4,6 +4,9 @@ use chacha20poly1305::Tag as ChaChaTag;
 use nom::bytes::streaming::take;
 use nom::combinator::all_consuming;
 use nom::IResult;
+use tokio::io::{AsyncWrite, AsyncWriteExt};
+
+use crate::codec::AsyncEncodable;
 
 pub(crate) const TAG_LENGTH: usize = 16;
 
@@ -35,6 +38,18 @@ impl AuthenticationTag {
 
     pub(crate) const fn size() -> usize {
         TAG_LENGTH
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncEncodable for AuthenticationTag {
+    async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+        start_pos: usize,
+    ) -> tokio::io::Result<usize> {
+        writer.write_all(&self.0).await?;
+        Ok(start_pos + self.0.len())
     }
 }
 
