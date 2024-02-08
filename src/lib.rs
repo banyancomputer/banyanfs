@@ -1,9 +1,8 @@
-//#![allow(unused_variables)]
-//#![allow(dead_code)]
-//#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(dead_code)]
+#![allow(unused_imports)]
 
 pub mod codec;
-pub mod crypto;
 pub mod error;
 pub mod version;
 

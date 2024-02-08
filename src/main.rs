@@ -29,7 +29,10 @@ async fn main() -> BanyanFsResult<()> {
 
     let _encoded_drive_data = include_bytes!("../fixtures/reference_drive.bfs");
 
-    banyanfs::crypto::full_key_walkthrough();
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha20Rng;
+
+    let _rng = ChaCha20Rng::from_entropy();
 
     //let key: &[u8] = &[0x55, 0x68];
     //let mut drive = Drive::from_slice(encoded_drive_data);

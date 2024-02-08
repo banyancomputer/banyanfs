@@ -1,8 +1,7 @@
 use nom::number::streaming::le_u8;
 use nom::IResult;
 
-use crate::codec::crypto::AccessKey;
-use crate::crypto::SigningKey;
+use crate::codec::crypto::{AccessKey, LockedAccessKey, SigningKey};
 
 pub(crate) enum ContentPayload {
     Private,
@@ -13,7 +12,7 @@ impl ContentPayload {
     pub(crate) fn parse_private<'a>(input: &'a [u8], key: &SigningKey) -> IResult<&'a [u8], Self> {
         let _key_id = key.key_id();
         let (input, key_count) = le_u8(input)?;
-        let (input, _escrowed_keys) = AccessKey::parse_many(input, key_count)?;
+        let (input, _escrowed_keys) = LockedAccessKey::parse_many(input, key_count)?;
         Ok((input, ContentPayload::Private))
     }
 
