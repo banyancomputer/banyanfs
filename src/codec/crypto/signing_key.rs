@@ -11,6 +11,7 @@ pub struct SigningKey {
 }
 
 impl SigningKey {
+    #[allow(dead_code)]
     pub(crate) fn dh_exchange(&self, other_pubkey: &VerifyingKey) -> [u8; 32] {
         let shared_secret = elliptic_curve::ecdh::diffie_hellman(
             self.inner.as_nonzero_scalar(),

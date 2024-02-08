@@ -6,7 +6,7 @@ mod public_settings;
 pub use data_header::DataHeader;
 pub use format_header::FormatHeader;
 pub use identity_header::IdentityHeader;
-pub(crate) use public_settings::PublicSettings;
+pub use public_settings::PublicSettings;
 
 const BANYAN_FS_MAGIC: &[u8] = b"BYFS";
 

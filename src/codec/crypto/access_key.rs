@@ -1,29 +1,25 @@
 use chacha20poly1305::{AeadInPlace, Key as ChaChaKey, KeyInit, XChaCha20Poly1305};
 use ecdsa::signature::rand_core::CryptoRngCore;
-use nom::bytes::streaming::take;
-use nom::multi::count;
-use nom::sequence::tuple;
-use nom::{AsBytes, IResult, Needed};
-use rand::{CryptoRng, Rng};
+use nom::AsBytes;
+use rand::Rng;
 
 use crate::codec::crypto::{
-    AuthenticationTag, KeyId, LockedAccessKey, Nonce, SigningKey, VerifyingKey,
-    SYMMETRIC_KEY_LENGTH, TAG_LENGTH,
+    AuthenticationTag, LockedAccessKey, Nonce, VerifyingKey, SYMMETRIC_KEY_LENGTH, TAG_LENGTH,
 };
 
 #[derive(Clone)]
-pub(crate) struct AccessKey([u8; SYMMETRIC_KEY_LENGTH]);
+pub struct AccessKey([u8; SYMMETRIC_KEY_LENGTH]);
 
 impl AccessKey {
     pub(crate) fn chacha_key(&self) -> &ChaChaKey {
         ChaChaKey::from_slice(&self.0)
     }
 
-    pub(crate) fn generate(rng: &mut impl CryptoRngCore) -> Self {
+    pub fn generate(rng: &mut impl CryptoRngCore) -> Self {
         Self(rng.gen())
     }
 
-    pub(crate) fn lock_for(
+    pub fn lock_for(
         &self,
         rng: &mut impl CryptoRngCore,
         verifying_key: &VerifyingKey,
@@ -64,7 +60,7 @@ impl From<[u8; SYMMETRIC_KEY_LENGTH]> for AccessKey {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum AccessKeyError<I> {
+pub enum AccessKeyError<I> {
     #[error("decoding data failed: {0}")]
     FormatFailure(#[from] nom::Err<nom::error::Error<I>>),
 

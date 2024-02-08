@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod filesystem_id;
 
 pub use filesystem_id::FilesystemId;

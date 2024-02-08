@@ -18,7 +18,7 @@ pub struct FormatHeader {
 }
 
 impl FormatHeader {
-    pub(crate) fn parse_with_magic(input: &[u8]) -> nom::IResult<&[u8], Self> {
+    pub fn parse_with_magic(input: &[u8]) -> nom::IResult<&[u8], Self> {
         let mut header_parser = tuple((
             IdentityHeader::parse_with_magic,
             FilesystemId::parse,

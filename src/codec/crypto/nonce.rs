@@ -1,5 +1,6 @@
 use std::ops::Deref;
 
+use async_trait::async_trait;
 use chacha20poly1305::XNonce as ChaChaNonce;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
@@ -9,21 +10,22 @@ use rand::Rng;
 
 use crate::codec::AsyncEncodable;
 
-pub(crate) const NONCE_LENGTH: usize = 24;
+const NONCE_LENGTH: usize = 24;
 
 #[derive(Clone)]
-pub(crate) struct Nonce([u8; NONCE_LENGTH]);
+pub struct Nonce([u8; NONCE_LENGTH]);
 
 impl Nonce {
-    pub(crate) fn as_bytes(&self) -> &[u8; NONCE_LENGTH] {
+    pub fn as_bytes(&self) -> &[u8; NONCE_LENGTH] {
         &self.0
     }
 
+    #[allow(dead_code)]
     pub(crate) fn generate(rng: &mut impl Rng) -> Self {
         Self(rng.gen())
     }
 
-    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
         let (remaining, slice) = take(NONCE_LENGTH)(input)?;
 
         let mut bytes = [0u8; NONCE_LENGTH];
@@ -32,17 +34,17 @@ impl Nonce {
         Ok((remaining, Self(bytes)))
     }
 
-    pub(crate) fn parse_complete(input: &[u8]) -> Result<Self, nom::Err<nom::error::Error<&[u8]>>> {
+    pub fn parse_complete(input: &[u8]) -> Result<Self, nom::Err<nom::error::Error<&[u8]>>> {
         let (_, tag) = all_consuming(Self::parse)(input)?;
         Ok(tag)
     }
 
-    pub(crate) const fn size() -> usize {
+    pub const fn size() -> usize {
         NONCE_LENGTH
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl AsyncEncodable for Nonce {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,

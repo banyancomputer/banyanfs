@@ -8,12 +8,12 @@ mod signature;
 mod signing_key;
 mod verifying_key;
 
-pub(crate) use access_key::AccessKey;
-pub(crate) use authentication_tag::{AuthenticationTag, TAG_LENGTH};
+pub use access_key::AccessKey;
+pub use authentication_tag::{AuthenticationTag, TAG_LENGTH};
 pub use fingerprint::Fingerprint;
 pub use key_id::KeyId;
-pub(crate) use locked_access_key::LockedAccessKey;
-pub(crate) use nonce::Nonce;
+pub use locked_access_key::LockedAccessKey;
+pub use nonce::Nonce;
 pub use signature::Signature;
 pub use signing_key::SigningKey;
 pub use verifying_key::VerifyingKey;

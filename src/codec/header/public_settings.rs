@@ -1,10 +1,8 @@
+use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bits::bits;
-use nom::bytes::streaming::{tag, take};
+use nom::bytes::streaming::take;
 use nom::error::Error as NomError;
 use nom::error::ErrorKind;
-use nom::number::streaming::{le_u32, le_u8};
-use nom::sequence::tuple;
 
 use crate::codec::AsyncEncodable;
 
@@ -14,24 +12,24 @@ const PRIVATE_BIT: u8 = 0x01;
 
 const RESERVED_BITS: u8 = 0xfc;
 
-pub(crate) struct PublicSettings {
+pub struct PublicSettings {
     ecc_present: bool,
     private: bool,
 }
 
 impl PublicSettings {
-    pub(crate) fn ecc_present(&self) -> bool {
+    pub fn ecc_present(&self) -> bool {
         self.ecc_present
     }
 
-    pub(crate) fn new(ecc_present: bool, private: bool) -> Self {
+    pub fn new(ecc_present: bool, private: bool) -> Self {
         Self {
             ecc_present,
             private,
         }
     }
 
-    pub(crate) fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
         let (input, settings_byte) = take(1u8)(input)?;
         let settings_byte = settings_byte[0];
 
@@ -50,12 +48,12 @@ impl PublicSettings {
         Ok((input, settings))
     }
 
-    pub(crate) fn private(&self) -> bool {
+    pub fn private(&self) -> bool {
         self.private
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl AsyncEncodable for PublicSettings {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,

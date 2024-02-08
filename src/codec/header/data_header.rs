@@ -1,8 +1,5 @@
-use nom::bits::bits;
 use nom::bytes::streaming::{tag, take};
-use nom::error::Error as NomError;
-use nom::error::ErrorKind;
-use nom::number::streaming::{le_u32, le_u8};
+use nom::number::streaming::le_u8;
 use nom::sequence::tuple;
 
 use crate::codec::header::BANYAN_DATA_MAGIC;
@@ -19,6 +16,10 @@ pub struct DataHeader {
 }
 
 impl DataHeader {
+    pub fn data_options(&self) -> DataOptions {
+        self.data_options
+    }
+
     pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
         let (input, (version, data_options)) = tuple((le_u8, DataOptions::parse))(input)?;
 
@@ -35,16 +36,29 @@ impl DataHeader {
             tuple((banyan_data_magic_tag, DataHeader::parse))(input)?;
         Ok((input, data_header))
     }
+
+    pub fn version(&self) -> u8 {
+        self.version
+    }
 }
 
-pub(crate) struct DataOptions {
+#[derive(Clone, Copy)]
+pub struct DataOptions {
     truncated: bool,
     ecc_present: bool,
     block_size: BlockSize,
 }
 
 impl DataOptions {
-    pub(crate) fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
+    pub fn block_size(&self) -> BlockSize {
+        self.block_size
+    }
+
+    pub fn ecc_present(&self) -> bool {
+        self.ecc_present
+    }
+
+    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
         let (input, version_byte) = take(1u8)(input)?;
         let option_byte = version_byte[0];
 
@@ -67,9 +81,14 @@ impl DataOptions {
 
         Ok((input, data_options))
     }
+
+    pub fn truncated(&self) -> bool {
+        self.truncated
+    }
 }
 
-pub(crate) enum BlockSize {
+#[derive(Debug, Clone, Copy)]
+pub enum BlockSize {
     /// Encoded value 0b00, this block will contain 256KiB of data.
     Small,
 

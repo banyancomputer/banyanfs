@@ -1,10 +1,8 @@
+use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bits::bits;
 use nom::bytes::streaming::{tag, take};
 use nom::error::Error as NomError;
 use nom::error::ErrorKind;
-use nom::number::streaming::{le_u32, le_u8};
-use nom::sequence::tuple;
 
 use crate::codec::header::BANYAN_FS_MAGIC;
 use crate::codec::AsyncEncodable;
@@ -12,17 +10,24 @@ use crate::codec::AsyncEncodable;
 pub struct IdentityHeader;
 
 impl IdentityHeader {
-    pub(crate) fn parse_with_magic(input: &[u8]) -> nom::IResult<&[u8], Self> {
-        let (input, _magic) = banyan_fs_magic_tag(input)?;
+    pub fn parse_with_magic(input: &[u8]) -> nom::IResult<&[u8], Self> {
+        let (input, _magic) = banyanfs_magic_tag(input)?;
+        let (input, version) = version_field(input)?;
+
+        // Only version one is valid
+        if version != 0x01 {
+            return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Tag)));
+        }
+
         Ok((input, Self))
     }
 }
 
-fn banyan_fs_magic_tag(input: &[u8]) -> nom::IResult<&[u8], &[u8]> {
+fn banyanfs_magic_tag(input: &[u8]) -> nom::IResult<&[u8], &[u8]> {
     tag(BANYAN_FS_MAGIC)(input)
 }
 
-fn fs_version_one(input: &[u8]) -> nom::IResult<&[u8], ()> {
+fn version_field(input: &[u8]) -> nom::IResult<&[u8], u8> {
     let (input, version_byte) = take(1u8)(input)?;
     let version_byte = version_byte[0];
 
@@ -34,14 +39,10 @@ fn fs_version_one(input: &[u8]) -> nom::IResult<&[u8], ()> {
     }
 
     let version = version_byte & 0x7f;
-    if version == 0x01 {
-        Ok((input, ()))
-    } else {
-        Err(nom::Err::Failure(NomError::new(input, ErrorKind::Tag)))
-    }
+    Ok((input, version))
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl AsyncEncodable for IdentityHeader {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
@@ -50,6 +51,7 @@ impl AsyncEncodable for IdentityHeader {
     ) -> std::io::Result<usize> {
         writer.write_all(BANYAN_FS_MAGIC).await?;
         writer.write_all(&[0x01]).await?;
+
         Ok(start_pos + BANYAN_FS_MAGIC.len() + 1)
     }
 }

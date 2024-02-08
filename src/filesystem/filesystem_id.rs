@@ -22,7 +22,7 @@ impl FilesystemId {
         Self(uuid.to_bytes_le())
     }
 
-    pub(crate) fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
         let (remaining, id_bytes) = take(ID_LENGTH)(input)?;
 
         // All zeros and all ones are disallowed, this isn't actually harmful though so we'll only
@@ -42,7 +42,7 @@ impl FilesystemId {
         Ok((remaining, Self(bytes)))
     }
 
-    pub(crate) const fn size() -> usize {
+    pub const fn size() -> usize {
         ID_LENGTH
     }
 }

@@ -36,7 +36,6 @@ async fn main() -> BanyanFsResult<()> {
 
     let mut output_stream = Vec::new();
     header.encode(&mut output_stream, 0).await.unwrap();
-
     tracing::info!("output_stream: {:02x?}", output_stream);
 
     let signing_key = SigningKey::generate(&mut rng);

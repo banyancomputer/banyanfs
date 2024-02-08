@@ -19,6 +19,7 @@ pub struct VerifyingKey {
 }
 
 impl VerifyingKey {
+    #[allow(dead_code)]
     pub(crate) fn ephemeral_dh_exchange(&self, rng: &mut impl CryptoRngCore) -> (Self, [u8; 32]) {
         let eph_secret: EphemeralSecret = EphemeralSecret::random(rng);
 
@@ -37,11 +38,11 @@ impl VerifyingKey {
         (pub_key, secret_bytes)
     }
 
-    pub(crate) fn fingerprint(&self) -> Fingerprint {
+    pub fn fingerprint(&self) -> Fingerprint {
         Fingerprint::from(self)
     }
 
-    pub(crate) fn key_id(&self) -> KeyId {
+    pub fn key_id(&self) -> KeyId {
         self.fingerprint().key_id()
     }
 
@@ -53,17 +54,20 @@ impl VerifyingKey {
 
         let key = match ecdsa::VerifyingKey::from_sec1_bytes(&bytes) {
             Ok(key) => key,
-            Err(err) => return Err(Err::Failure(nom::error::Error::new(input, ErrorKind::Fail))),
+            Err(err) => {
+                tracing::error!("failed to decode ECDSA key: {err}");
+                return Err(Err::Failure(nom::error::Error::new(input, ErrorKind::Fail)));
+            }
         };
 
         Ok((remaining, Self { inner_key: key }))
     }
 
-    pub(crate) const fn size() -> usize {
+    pub const fn size() -> usize {
         KEY_SIZE
     }
 
-    pub(crate) fn to_bytes(&self) -> [u8; KEY_SIZE] {
+    pub fn to_bytes(&self) -> [u8; KEY_SIZE] {
         let compressed_pubkey = self.inner_key.to_encoded_point(true);
 
         let mut public_key = [0u8; KEY_SIZE];
