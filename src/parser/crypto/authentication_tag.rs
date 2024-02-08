@@ -5,6 +5,8 @@ use nom::bytes::streaming::take;
 use nom::combinator::all_consuming;
 use nom::IResult;
 
+pub(crate) const TAG_LENGTH: usize = 16;
+
 #[derive(Clone, Debug)]
 pub(crate) struct AuthenticationTag([u8; TAG_LENGTH]);
 

@@ -16,28 +16,22 @@ use rand::Rng;
 //use crate::crypto::utils::short_symmetric_decrypt;
 //use crate::crypto::{AuthenticationTag, CryptoError, Nonce, SigningKey};
 use crate::crypto::{CryptoError, SigningKey};
-use crate::parser::crypto::KeyId;
+use crate::parser::crypto::{KeyId, NONCE_LENGTH, SYMMETRIC_KEY_LENGTH, TAG_LENGTH};
 
 const ACCESS_KEY_RECORD_LENGTH: usize = 148;
 
-const KEY_LENGTH: usize = 32;
-
-const NONCE_LENGTH: usize = 24;
-
-const VERIFICATION_PATTERN_LENGTH: usize = 4;
-
-const TAG_LENGTH: usize = 16;
+const KEY_VERIFICATION_PATTERN_LENGTH: usize = 4;
 
 #[derive(Clone)]
 pub(crate) enum AccessKey {
     Locked {
         key_id: KeyId,
         nonce: [u8; NONCE_LENGTH],
-        cipher_text: [u8; KEY_LENGTH + VERIFICATION_PATTERN_LENGTH],
+        cipher_text: [u8; SYMMETRIC_KEY_LENGTH + KEY_VERIFICATION_PATTERN_LENGTH],
         tag: [u8; TAG_LENGTH],
     },
     Open {
-        key: [u8; KEY_LENGTH],
+        key: [u8; SYMMETRIC_KEY_LENGTH],
     },
 }
 
@@ -93,7 +87,7 @@ impl AccessKey {
 
     pub(crate) fn new(
         nonce: [u8; NONCE_LENGTH],
-        cipher_text: [u8; KEY_LENGTH + VERIFICATION_PATTERN_LENGTH],
+        cipher_text: [u8; SYMMETRIC_KEY_LENGTH + KEY_VERIFICATION_PATTERN_LENGTH],
         tag: [u8; TAG_LENGTH],
         key_id: KeyId,
     ) -> Self {

@@ -6,7 +6,7 @@ use nom::combinator::all_consuming;
 use nom::IResult;
 use rand::Rng;
 
-const NONCE_LENGTH: usize = 24;
+pub(crate) const NONCE_LENGTH: usize = 24;
 
 #[derive(Clone)]
 pub(crate) struct Nonce([u8; NONCE_LENGTH]);
@@ -55,6 +55,9 @@ mod tests {
 
         assert_eq!(remaining, &input[NONCE_LENGTH..]);
         assert_eq!(nonce.as_bytes(), &input[..NONCE_LENGTH]);
+
+        assert!(Nonce::parse_complete(&input).is_err());
+        assert!(Nonce::parse_complete(&input[..NONCE_LENGTH]).is_ok());
     }
 
     #[test]
