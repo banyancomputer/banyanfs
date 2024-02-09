@@ -5,7 +5,7 @@ use nom::sequence::tuple;
 use crate::codec::AsyncEncodable;
 
 use crate::codec::header::{IdentityHeader, PublicSettings};
-use crate::filesystem::FilesystemId;
+use crate::codec::FilesystemId;
 
 pub struct FormatHeader {
     pub ecc_present: bool,

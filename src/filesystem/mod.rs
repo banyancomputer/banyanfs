@@ -1,16 +1,11 @@
-#![allow(dead_code)]
-
-mod filesystem_id;
-
-pub use filesystem_id::FilesystemId;
-
 use crate::codec::crypto::SigningKey;
+use crate::codec::FilesystemId;
 
-type ActorId = u16;
+pub type ActorId = u16;
 
 pub struct Drive {
-    filesystem_id: FilesystemId,
-    root: DriveDirectory,
+    _filesystem_id: FilesystemId,
+    _root: DriveDirectory,
 }
 
 impl Drive {
@@ -18,25 +13,25 @@ impl Drive {
         let mut rng = crate::utils::crypto_rng();
 
         Self {
-            filesystem_id: FilesystemId::generate(&mut rng),
-            root: DriveDirectory::new(),
+            _filesystem_id: FilesystemId::generate(&mut rng),
+            _root: DriveDirectory::new(),
         }
     }
 }
 
 #[derive(Clone)]
-pub(crate) enum DriveEntity {
+pub enum DriveEntity {
     File(DriveFile),
     Directory(DriveDirectory),
 }
 
 #[derive(Clone)]
-pub(crate) struct DriveFile {
-    content_ref: u16,
+pub struct DriveFile {
+    _content_ref: u16,
 }
 
 #[derive(Clone)]
-pub(crate) struct DriveDirectory;
+pub struct DriveDirectory;
 
 impl DriveDirectory {
     pub(crate) fn new() -> Self {
