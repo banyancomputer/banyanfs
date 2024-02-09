@@ -7,21 +7,18 @@ use nom::{IResult, Needed};
 use crate::codec::crypto::{
     AccessKey, AuthenticationTag, KeyId, Nonce, SigningKey, VerifyingKey, SYMMETRIC_KEY_LENGTH,
 };
-const ACCESS_KEY_CIPHER_TEXT_LENGTH: usize = SYMMETRIC_KEY_LENGTH + KEY_VERIFICATION_PATTERN_LENGTH;
 
 const ACCESS_KEY_RECORD_LENGTH: usize = KeyId::size()
     + VerifyingKey::size()
     + Nonce::size()
-    + ACCESS_KEY_CIPHER_TEXT_LENGTH
+    + SYMMETRIC_KEY_LENGTH
     + AuthenticationTag::size();
-
-const KEY_VERIFICATION_PATTERN_LENGTH: usize = 4;
 
 pub struct LockedAccessKey {
     pub(crate) key_id: KeyId,
     pub(crate) dh_exchange_key: VerifyingKey,
     pub(crate) nonce: Nonce,
-    pub(crate) cipher_text: [u8; ACCESS_KEY_CIPHER_TEXT_LENGTH],
+    pub(crate) cipher_text: [u8; SYMMETRIC_KEY_LENGTH],
     pub(crate) tag: AuthenticationTag,
 }
 
@@ -42,32 +39,28 @@ impl LockedAccessKey {
             .map_err(|_| LockedAccessKeyError::CryptoFailure)?;
 
         let mut key = [0u8; SYMMETRIC_KEY_LENGTH];
-        key.copy_from_slice(&key_payload[..SYMMETRIC_KEY_LENGTH]);
-
-        let mut verification_pattern = [0u8; KEY_VERIFICATION_PATTERN_LENGTH];
-        verification_pattern.copy_from_slice(&key_payload[SYMMETRIC_KEY_LENGTH..]);
-
-        if u32::from_le_bytes(verification_pattern) != 0 {
-            return Err(LockedAccessKeyError::IncorrectKey);
-        }
+        key.copy_from_slice(&key_payload);
 
         Ok(AccessKey::from(key))
     }
 
     pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
-        let (input, (key_id, dh_exchange_key, nonce, cipher_text, tag)) = tuple((
+        let (input, (key_id, dh_exchange_key, nonce, raw_cipher_text, tag)) = tuple((
             KeyId::parse,
             VerifyingKey::parse,
             Nonce::parse,
-            take(ACCESS_KEY_CIPHER_TEXT_LENGTH),
+            take(SYMMETRIC_KEY_LENGTH),
             AuthenticationTag::parse,
         ))(input)?;
+
+        let mut cipher_text = [0u8; SYMMETRIC_KEY_LENGTH];
+        cipher_text.copy_from_slice(raw_cipher_text);
 
         let access_key = Self {
             key_id,
             dh_exchange_key,
             nonce,
-            cipher_text: cipher_text.try_into().unwrap(),
+            cipher_text,
             tag,
         };
 

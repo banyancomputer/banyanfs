@@ -27,10 +27,8 @@ impl AccessKey {
     ) -> Result<LockedAccessKey, AccessKeyError<&[u8]>> {
         let (dh_exchange_key, shared_secret) = verifying_key.ephemeral_dh_exchange(rng);
 
-        // Intentionally leave the last four bytes as zeros which acts as our successful
-        // decryption oracle.
-        let mut key_payload = [0u8; 36];
-        key_payload[..32].copy_from_slice(&self.0);
+        let mut key_payload = [0u8; SYMMETRIC_KEY_LENGTH];
+        key_payload.copy_from_slice(&self.0);
 
         let chacha_key = ChaChaKey::from_slice(&shared_secret);
         let cipher = XChaCha20Poly1305::new(chacha_key);

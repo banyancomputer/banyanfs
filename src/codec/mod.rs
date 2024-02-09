@@ -1,4 +1,3 @@
-pub mod cid;
 pub mod content_payload;
 pub mod crypto;
 pub mod header;
