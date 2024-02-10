@@ -57,11 +57,9 @@ impl AsyncEncodable for IdentityHeader {
     }
 }
 
-#[cfg(tests)]
+#[cfg(test)]
 mod tests {
     use super::*;
-
-    use rand::Rng;
 
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::*;
@@ -73,12 +71,13 @@ mod tests {
         let mut source = BANYAN_FS_MAGIC.to_vec();
         source.extend(&[0x01]);
 
-        let parsed = IdentityHeader::parse_with_magic(&source).unwrap();
+        let (remaining, parsed) = IdentityHeader::parse_with_magic(&source).unwrap();
+        assert!(remaining.is_empty());
         assert_eq!(parsed, IdentityHeader);
 
         let mut encoded = Vec::new();
         parsed.encode(&mut encoded, 0).await.unwrap();
 
-        asssert_eq!(source, encoded);
+        assert_eq!(source, encoded);
     }
 }

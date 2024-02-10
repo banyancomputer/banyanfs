@@ -76,18 +76,21 @@ impl AsyncEncodable for PublicSettings {
     }
 }
 
-#[cfg(tests)]
+#[cfg(test)]
 mod tests {
     use super::*;
 
-    use rand::Rng;
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::*;
 
-    #[tokio::test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_round_trip_public_noecc() {
         // Manually construct a correct header according to the RFC
-        let mut source = vec![0b0000_0000];
+        let source = vec![0b0000_0000];
 
-        let parsed = PublicSettings::parse(&source).unwrap();
+        let (remaining, parsed) = PublicSettings::parse(&source).unwrap();
+        assert!(remaining.is_empty());
         assert_eq!(
             parsed,
             PublicSettings {
@@ -98,15 +101,17 @@ mod tests {
 
         let mut encoded = Vec::new();
         parsed.encode(&mut encoded, 0).await.unwrap();
-        asssert_eq!(source, encoded);
+        assert_eq!(source, encoded);
     }
 
-    #[tokio::test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_round_trip_public_ecc() {
         // Manually construct a correct header according to the RFC
-        let mut source = vec![0b0000_0010];
+        let source = vec![0b0000_0010];
 
-        let parsed = PublicSettings::parse(&source).unwrap();
+        let (remaining, parsed) = PublicSettings::parse(&source).unwrap();
+        assert!(remaining.is_empty());
         assert_eq!(
             parsed,
             PublicSettings {
@@ -117,15 +122,17 @@ mod tests {
 
         let mut encoded = Vec::new();
         parsed.encode(&mut encoded, 0).await.unwrap();
-        asssert_eq!(source, encoded);
+        assert_eq!(source, encoded);
     }
 
-    #[tokio::test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_round_trip_private_noecc() {
         // Manually construct a correct header according to the RFC
-        let mut source = vec![0b0000_0001];
+        let source = vec![0b0000_0001];
 
-        let parsed = PublicSettings::parse(&source).unwrap();
+        let (remaining, parsed) = PublicSettings::parse(&source).unwrap();
+        assert!(remaining.is_empty());
         assert_eq!(
             parsed,
             PublicSettings {
@@ -136,15 +143,17 @@ mod tests {
 
         let mut encoded = Vec::new();
         parsed.encode(&mut encoded, 0).await.unwrap();
-        asssert_eq!(source, encoded);
+        assert_eq!(source, encoded);
     }
 
-    #[tokio::test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_round_trip_private_ecc() {
         // Manually construct a correct header according to the RFC
-        let mut source = vec![0b0000_0011];
+        let source = vec![0b0000_0011];
 
-        let parsed = PublicSettings::parse(&source).unwrap();
+        let (remaining, parsed) = PublicSettings::parse(&source).unwrap();
+        assert!(remaining.is_empty());
         assert_eq!(
             parsed,
             PublicSettings {
@@ -155,13 +164,14 @@ mod tests {
 
         let mut encoded = Vec::new();
         parsed.encode(&mut encoded, 0).await.unwrap();
-        asssert_eq!(source, encoded);
+        assert_eq!(source, encoded);
     }
 
-    #[tokio::test]
     #[cfg(feature = "strict")]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_invalid() {
-        let mut source = vec![0b0100_0000];
+        let source = vec![0b0100_0000];
         assert!(PublicSettings::parse(&source).is_err());
     }
 }
