@@ -13,6 +13,6 @@ pub trait AsyncEncodable {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
-        start_pos: usize,
+        pos: usize,
     ) -> std::io::Result<usize>;
 }

@@ -10,6 +10,7 @@ use crate::codec::AsyncEncodable;
 
 const ID_LENGTH: usize = 16;
 
+#[derive(Debug, PartialEq)]
 pub struct FilesystemId([u8; ID_LENGTH]);
 
 impl FilesystemId {
@@ -45,14 +46,47 @@ impl FilesystemId {
     }
 }
 
+impl From<[u8; ID_LENGTH]> for FilesystemId {
+    fn from(bytes: [u8; ID_LENGTH]) -> Self {
+        Self(bytes)
+    }
+}
+
 #[async_trait]
 impl AsyncEncodable for FilesystemId {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
-        start_pos: usize,
+        pos: usize,
     ) -> std::io::Result<usize> {
         writer.write_all(&self.0).await?;
-        Ok(start_pos + self.0.len())
+        Ok(pos + self.0.len())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use rand::Rng;
+
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::*;
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_round_trip() {
+        let mut rng = crate::utils::crypto_rng();
+
+        let raw_id: [u8; ID_LENGTH] = rng.gen();
+        let filesystem_id = FilesystemId::from(raw_id);
+
+        let mut encoded = Vec::new();
+        filesystem_id.encode(&mut encoded, 0).await.unwrap();
+        assert_eq!(raw_id, encoded.as_slice());
+
+        let (remaining, parsed) = FilesystemId::parse(&encoded).unwrap();
+        assert!(remaining.is_empty());
+        assert_eq!(filesystem_id, parsed);
     }
 }

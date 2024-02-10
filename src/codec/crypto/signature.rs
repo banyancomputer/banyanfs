@@ -36,11 +36,11 @@ impl AsyncEncodable for Signature {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
-        start_pos: usize,
+        pos: usize,
     ) -> std::io::Result<usize> {
         let byte_ref = self.inner.to_bytes();
         writer.write_all(byte_ref.as_slice()).await?;
-        Ok(start_pos + byte_ref.len())
+        Ok(pos + byte_ref.len())
     }
 }
 

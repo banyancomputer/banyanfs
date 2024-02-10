@@ -7,6 +7,7 @@ use nom::error::ErrorKind;
 use crate::codec::header::BANYAN_FS_MAGIC;
 use crate::codec::AsyncEncodable;
 
+#[derive(Debug, PartialEq)]
 pub struct IdentityHeader;
 
 impl IdentityHeader {
@@ -47,11 +48,37 @@ impl AsyncEncodable for IdentityHeader {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
-        start_pos: usize,
+        pos: usize,
     ) -> std::io::Result<usize> {
         writer.write_all(BANYAN_FS_MAGIC).await?;
         writer.write_all(&[0x01]).await?;
 
-        Ok(start_pos + BANYAN_FS_MAGIC.len() + 1)
+        Ok(pos + BANYAN_FS_MAGIC.len() + 1)
+    }
+}
+
+#[cfg(tests)]
+mod tests {
+    use super::*;
+
+    use rand::Rng;
+
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::*;
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_round_trip() {
+        // Manually construct a correct header according to the RFC
+        let mut source = BANYAN_FS_MAGIC.to_vec();
+        source.extend(&[0x01]);
+
+        let parsed = IdentityHeader::parse_with_magic(&source).unwrap();
+        assert_eq!(parsed, IdentityHeader);
+
+        let mut encoded = Vec::new();
+        parsed.encode(&mut encoded, 0).await.unwrap();
+
+        asssert_eq!(source, encoded);
     }
 }

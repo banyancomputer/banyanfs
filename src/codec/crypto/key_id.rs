@@ -25,10 +25,10 @@ impl AsyncEncodable for KeyId {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
-        start_pos: usize,
+        pos: usize,
     ) -> std::io::Result<usize> {
         writer.write_all(&self.0.to_le_bytes()).await?;
-        Ok(start_pos + 2)
+        Ok(pos + 2)
     }
 }
 

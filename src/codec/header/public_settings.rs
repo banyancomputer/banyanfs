@@ -12,6 +12,7 @@ const PRIVATE_BIT: u8 = 0x01;
 
 const RESERVED_BITS: u8 = 0xfc;
 
+#[derive(Debug, PartialEq)]
 pub struct PublicSettings {
     ecc_present: bool,
     private: bool,
@@ -58,7 +59,7 @@ impl AsyncEncodable for PublicSettings {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
-        start_pos: usize,
+        pos: usize,
     ) -> std::io::Result<usize> {
         let mut settings_byte = 0;
 
@@ -71,6 +72,96 @@ impl AsyncEncodable for PublicSettings {
         }
 
         writer.write_all(&[settings_byte]).await?;
-        Ok(start_pos + 1)
+        Ok(pos + 1)
+    }
+}
+
+#[cfg(tests)]
+mod tests {
+    use super::*;
+
+    use rand::Rng;
+
+    #[tokio::test]
+    async fn test_round_trip_public_noecc() {
+        // Manually construct a correct header according to the RFC
+        let mut source = vec![0b0000_0000];
+
+        let parsed = PublicSettings::parse(&source).unwrap();
+        assert_eq!(
+            parsed,
+            PublicSettings {
+                ecc_present: false,
+                private: false
+            }
+        );
+
+        let mut encoded = Vec::new();
+        parsed.encode(&mut encoded, 0).await.unwrap();
+        asssert_eq!(source, encoded);
+    }
+
+    #[tokio::test]
+    async fn test_round_trip_public_ecc() {
+        // Manually construct a correct header according to the RFC
+        let mut source = vec![0b0000_0010];
+
+        let parsed = PublicSettings::parse(&source).unwrap();
+        assert_eq!(
+            parsed,
+            PublicSettings {
+                ecc_present: true,
+                private: false
+            }
+        );
+
+        let mut encoded = Vec::new();
+        parsed.encode(&mut encoded, 0).await.unwrap();
+        asssert_eq!(source, encoded);
+    }
+
+    #[tokio::test]
+    async fn test_round_trip_private_noecc() {
+        // Manually construct a correct header according to the RFC
+        let mut source = vec![0b0000_0001];
+
+        let parsed = PublicSettings::parse(&source).unwrap();
+        assert_eq!(
+            parsed,
+            PublicSettings {
+                ecc_present: false,
+                private: true,
+            }
+        );
+
+        let mut encoded = Vec::new();
+        parsed.encode(&mut encoded, 0).await.unwrap();
+        asssert_eq!(source, encoded);
+    }
+
+    #[tokio::test]
+    async fn test_round_trip_private_ecc() {
+        // Manually construct a correct header according to the RFC
+        let mut source = vec![0b0000_0011];
+
+        let parsed = PublicSettings::parse(&source).unwrap();
+        assert_eq!(
+            parsed,
+            PublicSettings {
+                ecc_present: true,
+                private: true,
+            }
+        );
+
+        let mut encoded = Vec::new();
+        parsed.encode(&mut encoded, 0).await.unwrap();
+        asssert_eq!(source, encoded);
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "strict")]
+    async fn test_invalid() {
+        let mut source = vec![0b0100_0000];
+        assert!(PublicSettings::parse(&source).is_err());
     }
 }

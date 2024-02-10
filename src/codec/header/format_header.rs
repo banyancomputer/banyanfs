@@ -38,14 +38,14 @@ impl AsyncEncodable for FormatHeader {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
-        start_pos: usize,
+        pos: usize,
     ) -> std::io::Result<usize> {
-        let start_pos = IdentityHeader::encode(&IdentityHeader, writer, start_pos).await?;
-        let start_pos = self.filesystem_id.encode(writer, start_pos).await?;
+        let pos = IdentityHeader::encode(&IdentityHeader, writer, pos).await?;
+        let pos = self.filesystem_id.encode(writer, pos).await?;
 
         let settings = PublicSettings::new(self.ecc_present, self.private);
-        let start_pos = settings.encode(writer, start_pos).await?;
+        let pos = settings.encode(writer, pos).await?;
 
-        Ok(start_pos)
+        Ok(pos)
     }
 }

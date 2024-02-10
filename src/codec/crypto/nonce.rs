@@ -49,10 +49,10 @@ impl AsyncEncodable for Nonce {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
-        start_pos: usize,
+        pos: usize,
     ) -> std::io::Result<usize> {
         writer.write_all(&self.0).await?;
-        Ok(start_pos + self.0.len())
+        Ok(pos + self.0.len())
     }
 }
 

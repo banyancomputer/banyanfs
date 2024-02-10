@@ -58,7 +58,7 @@ impl AsyncEncodable for ContentOptions {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
-        start_pos: usize,
+        pos: usize,
     ) -> std::io::Result<usize> {
         let mut options: u8 = 0x00;
 
@@ -84,6 +84,6 @@ impl AsyncEncodable for ContentOptions {
 
         writer.write_all(&[options]).await?;
 
-        Ok(start_pos + 1)
+        Ok(pos + 1)
     }
 }

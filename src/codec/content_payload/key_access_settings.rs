@@ -99,7 +99,7 @@ impl AsyncEncodable for KeyAccessSettings {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
-        start_pos: usize,
+        pos: usize,
     ) -> std::io::Result<usize> {
         let mut settings: u8 = 0x00;
 
@@ -162,6 +162,6 @@ impl AsyncEncodable for KeyAccessSettings {
 
         writer.write_all(&[settings]).await?;
 
-        Ok(start_pos + 1)
+        Ok(pos + 1)
     }
 }

@@ -83,11 +83,11 @@ impl AsyncEncodable for VerifyingKey {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
-        start_pos: usize,
+        pos: usize,
     ) -> std::io::Result<usize> {
         let key_bytes = self.to_bytes();
         writer.write_all(&key_bytes).await?;
-        Ok(start_pos + key_bytes.len())
+        Ok(pos + key_bytes.len())
     }
 }
 
