@@ -28,7 +28,7 @@ pub struct ContentOptions {
 }
 
 impl ContentOptions {
-    pub fn parse<'a>(input: &'a [u8]) -> IResult<&'a [u8], Self> {
+    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
         let (input, byte) = le_u8(input)?;
 
         if cfg!(feature = "strict") && byte & CONTENT_OPTIONS_RESERVED_MASK != 0 {
