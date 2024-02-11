@@ -4,56 +4,35 @@ use nom::multi::count;
 use nom::sequence::tuple;
 use nom::{IResult, Needed};
 
-use crate::codec::crypto::{
-    AccessKey, AuthenticationTag, KeyId, Nonce, SigningKey, VerifyingKey, SYMMETRIC_KEY_LENGTH,
-};
+use crate::codec::crypto::{AccessKey, AuthenticationTag, KeyId, Nonce, SigningKey, VerifyingKey};
 
 const ACCESS_KEY_RECORD_LENGTH: usize = KeyId::size()
     + VerifyingKey::size()
     + Nonce::size()
-    + SYMMETRIC_KEY_LENGTH
+    + AccessKey::size()
     + AuthenticationTag::size();
 
-pub struct LockedAccessKey {
+pub struct AsymLockedAccessKey {
     pub(crate) key_id: KeyId,
     pub(crate) dh_exchange_key: VerifyingKey,
     pub(crate) nonce: Nonce,
-    pub(crate) cipher_text: [u8; SYMMETRIC_KEY_LENGTH],
+    pub(crate) cipher_text: [u8; AccessKey::size()],
     pub(crate) tag: AuthenticationTag,
 }
 
-impl LockedAccessKey {
-    pub(crate) fn unlock(
-        &self,
-        key: &SigningKey,
-    ) -> Result<AccessKey, LockedAccessKeyError<&[u8]>> {
-        if self.key_id != key.verifying_key().key_id() {
-            return Err(LockedAccessKeyError::IncorrectKey);
-        }
-
-        let shared_secret = key.dh_exchange(&self.dh_exchange_key);
-        let mut key_payload = self.cipher_text.to_vec();
-
-        XChaCha20Poly1305::new(ChaChaKey::from_slice(&shared_secret))
-            .decrypt_in_place_detached(&self.nonce, &[], &mut key_payload, &self.tag)
-            .map_err(|_| LockedAccessKeyError::CryptoFailure)?;
-
-        let mut key = [0u8; SYMMETRIC_KEY_LENGTH];
-        key.copy_from_slice(&key_payload);
-
-        Ok(AccessKey::from(key))
-    }
-
-    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+impl AsymLockedAccessKey {
+    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
         let (input, (key_id, dh_exchange_key, nonce, raw_cipher_text, tag)) = tuple((
             KeyId::parse,
             VerifyingKey::parse,
             Nonce::parse,
-            take(SYMMETRIC_KEY_LENGTH),
+            // This is NOT being parsed into the target data type yet as its still encrypted. We'll
+            // construct it when the contents are valid.
+            take(AccessKey::size()),
             AuthenticationTag::parse,
         ))(input)?;
 
-        let mut cipher_text = [0u8; SYMMETRIC_KEY_LENGTH];
+        let mut cipher_text = [0u8; AccessKey::size()];
         cipher_text.copy_from_slice(raw_cipher_text);
 
         let access_key = Self {
@@ -67,7 +46,7 @@ impl LockedAccessKey {
         Ok((input, access_key))
     }
 
-    pub(crate) fn parse_many(input: &[u8], key_count: u8) -> IResult<&[u8], Vec<Self>> {
+    pub fn parse_many(input: &[u8], key_count: u8) -> IResult<&[u8], Vec<Self>> {
         let (input, keys) = match count(Self::parse, key_count as usize)(input) {
             Ok(res) => res,
             Err(nom::Err::Incomplete(Needed::Size(_))) => {
@@ -81,22 +60,43 @@ impl LockedAccessKey {
 
         Ok((input, keys))
     }
+
+    pub fn unlock(&self, key: &SigningKey) -> Result<AccessKey, AsymLockedAccessKeyError<&[u8]>> {
+        if self.key_id != key.verifying_key().key_id() {
+            return Err(AsymLockedAccessKeyError::IncorrectKey);
+        }
+
+        let shared_secret = key.dh_exchange(&self.dh_exchange_key);
+        let mut key_payload = self.cipher_text.to_vec();
+
+        XChaCha20Poly1305::new(ChaChaKey::from_slice(&shared_secret)).decrypt_in_place_detached(
+            &self.nonce,
+            &[],
+            &mut key_payload,
+            &self.tag,
+        )?;
+
+        let mut key = [0u8; AccessKey::size()];
+        key.copy_from_slice(&key_payload);
+
+        Ok(AccessKey::from(key))
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum LockedAccessKeyError<I> {
+pub enum AsymLockedAccessKeyError<I> {
+    #[error("crypto error: {0}")]
+    CryptoFailure(String),
+
     #[error("decoding data failed: {0}")]
     FormatFailure(#[from] nom::Err<nom::error::Error<I>>),
-
-    #[error("unspecified crypto error")]
-    CryptoFailure,
 
     #[error("validation failed most likely due to the use of an incorrect key")]
     IncorrectKey,
 }
 
-impl<I> From<chacha20poly1305::Error> for LockedAccessKeyError<I> {
-    fn from(_: chacha20poly1305::Error) -> Self {
-        LockedAccessKeyError::CryptoFailure
+impl<I> From<chacha20poly1305::Error> for AsymLockedAccessKeyError<I> {
+    fn from(err: chacha20poly1305::Error) -> Self {
+        AsymLockedAccessKeyError::CryptoFailure(err.to_string())
     }
 }

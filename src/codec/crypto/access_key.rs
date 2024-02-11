@@ -4,11 +4,13 @@ use nom::AsBytes;
 use rand::Rng;
 
 use crate::codec::crypto::{
-    AuthenticationTag, LockedAccessKey, Nonce, VerifyingKey, SYMMETRIC_KEY_LENGTH,
+    AsymLockedAccessKey, AuthenticationTag, Nonce, SymLockedAccessKey, VerifyingKey,
 };
 
+const ACCESS_KEY_LENGTH: usize = 32;
+
 #[derive(Clone)]
-pub struct AccessKey([u8; SYMMETRIC_KEY_LENGTH]);
+pub struct AccessKey([u8; ACCESS_KEY_LENGTH]);
 
 impl AccessKey {
     #[allow(dead_code)]
@@ -24,10 +26,10 @@ impl AccessKey {
         &self,
         rng: &mut impl CryptoRngCore,
         verifying_key: &VerifyingKey,
-    ) -> Result<LockedAccessKey, AccessKeyError<&[u8]>> {
+    ) -> Result<AsymLockedAccessKey, AccessKeyError<&[u8]>> {
         let (dh_exchange_key, shared_secret) = verifying_key.ephemeral_dh_exchange(rng);
 
-        let mut key_payload = [0u8; SYMMETRIC_KEY_LENGTH];
+        let mut key_payload = [0u8; ACCESS_KEY_LENGTH];
         key_payload.copy_from_slice(&self.0);
 
         let chacha_key = ChaChaKey::from_slice(&shared_secret);
@@ -42,7 +44,7 @@ impl AccessKey {
 
         let key_id = verifying_key.key_id();
 
-        Ok(LockedAccessKey {
+        Ok(AsymLockedAccessKey {
             dh_exchange_key,
             nonce,
             cipher_text: key_payload,
@@ -50,10 +52,31 @@ impl AccessKey {
             key_id,
         })
     }
+
+    pub fn lock_with(
+        &self,
+        rng: &mut impl CryptoRngCore,
+        encrypion_key: &AccessKey,
+    ) -> Result<SymLockedAccessKey, AccessKeyError<&[u8]>> {
+        let mut key_payload = self.0;
+
+        let cipher = XChaCha20Poly1305::new(encrypion_key.chacha_key());
+        let nonce = Nonce::generate(rng);
+        let raw_tag = cipher.encrypt_in_place_detached(&nonce, &[], &mut key_payload)?;
+
+        let mut tag_bytes = [0u8; AuthenticationTag::size()];
+        tag_bytes.copy_from_slice(raw_tag.as_bytes());
+        let _tag = AuthenticationTag::from(tag_bytes);
+        unimplemented!()
+    }
+
+    pub const fn size() -> usize {
+        ACCESS_KEY_LENGTH
+    }
 }
 
-impl From<[u8; SYMMETRIC_KEY_LENGTH]> for AccessKey {
-    fn from(key: [u8; SYMMETRIC_KEY_LENGTH]) -> Self {
+impl From<[u8; ACCESS_KEY_LENGTH]> for AccessKey {
+    fn from(key: [u8; ACCESS_KEY_LENGTH]) -> Self {
         Self(key)
     }
 }

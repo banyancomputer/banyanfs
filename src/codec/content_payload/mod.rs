@@ -14,7 +14,7 @@ use nom::error::{Error as NomError, ErrorKind};
 use nom::number::streaming::le_u8;
 use nom::{Err, IResult};
 
-use crate::codec::crypto::{AccessKey, LockedAccessKey, SigningKey};
+use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, SigningKey};
 
 pub enum ContentPayload {
     Private { access_key: AccessKey },
@@ -24,7 +24,7 @@ pub enum ContentPayload {
 impl ContentPayload {
     pub fn parse_private<'a>(input: &'a [u8], key: &SigningKey) -> IResult<&'a [u8], Self> {
         let (input, key_count) = le_u8(input)?;
-        let (input, locked_keys) = LockedAccessKey::parse_many(input, key_count)?;
+        let (input, locked_keys) = AsymLockedAccessKey::parse_many(input, key_count)?;
 
         let key_id = key.key_id();
         let relevant_keys = locked_keys.into_iter().filter(|k| k.key_id == key_id);
@@ -42,7 +42,7 @@ impl ContentPayload {
             None => return Err(Err::Failure(NomError::new(input, ErrorKind::Verify))),
         };
 
-        // todo(sstelfox): implement the reset
+        // todo(sstelfox): implement the rest
 
         Ok((input, ContentPayload::Private { access_key }))
     }
