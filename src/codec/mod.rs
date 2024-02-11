@@ -1,5 +1,6 @@
 pub mod content_payload;
 pub mod crypto;
+pub mod filesystem;
 mod filesystem_id;
 pub mod header;
 
