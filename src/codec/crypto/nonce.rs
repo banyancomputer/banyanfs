@@ -68,7 +68,11 @@ impl Deref for Nonce {
 mod tests {
     use super::*;
 
-    #[test]
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn test_nonce_parsing() {
         let mut rng = rand::thread_rng();
         let input: [u8; NONCE_LENGTH + 4] = rng.gen();
@@ -81,7 +85,8 @@ mod tests {
         assert!(Nonce::parse_complete(&input[..NONCE_LENGTH]).is_ok());
     }
 
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn test_nonce_parsing_stream_too_short() {
         let input = [0u8; NONCE_LENGTH - 1];
         let result = Nonce::parse(&input);

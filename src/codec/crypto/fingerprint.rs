@@ -40,9 +40,13 @@ impl From<&VerifyingKey> for Fingerprint {
 pub mod tests {
     use super::*;
 
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test;
+
     const REFERENCE_FINGERPRINT_BYTES: &[u8; 32] = b"UUUUUUUUaaaaaaaaUUUUUUUUaaaaaaaa";
 
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn test_fingerprint_debug_fmt() {
         let fingerprint = Fingerprint::from(*REFERENCE_FINGERPRINT_BYTES);
         let fmt_str = format!("{:?}", fingerprint);
@@ -53,7 +57,8 @@ pub mod tests {
         );
     }
 
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn test_key_id_from_fingerprint() {
         let fingerprint = Fingerprint::from(*REFERENCE_FINGERPRINT_BYTES);
         let key_id = fingerprint.key_id();
