@@ -7,8 +7,6 @@ pub use nodes::*;
 use crate::codec::crypto::SigningKey;
 use crate::codec::FilesystemId;
 
-pub type ActorId = u16;
-
 pub struct Drive {
     _filesystem_id: FilesystemId,
     _root: DriveDirectory,

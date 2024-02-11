@@ -23,6 +23,12 @@ impl Cid {
     }
 }
 
+impl From<[u8; CID_LENGTH]> for Cid {
+    fn from(bytes: [u8; CID_LENGTH]) -> Self {
+        Self(bytes)
+    }
+}
+
 #[async_trait]
 impl AsyncEncodable for Cid {
     async fn encode<W: AsyncWrite + Unpin + Send>(

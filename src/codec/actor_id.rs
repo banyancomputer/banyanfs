@@ -1,0 +1,27 @@
+use async_trait::async_trait;
+use futures::AsyncWrite;
+
+use crate::codec::crypto::Fingerprint;
+use crate::codec::AsyncEncodable;
+
+// todo(sstelfox) likely need a vector clock here...
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ActorId(Fingerprint);
+
+impl ActorId {
+    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
+        let (remaining, fingerprint) = Fingerprint::parse(input)?;
+        Ok((remaining, ActorId(fingerprint)))
+    }
+}
+
+#[async_trait]
+impl AsyncEncodable for ActorId {
+    async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+        pos: usize,
+    ) -> std::io::Result<usize> {
+        self.0.encode(writer, pos).await
+    }
+}

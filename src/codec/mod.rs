@@ -1,3 +1,4 @@
+mod actor_id;
 mod cid;
 pub mod content_payload;
 pub mod crypto;
@@ -8,6 +9,7 @@ pub mod header;
 use async_trait::async_trait;
 use futures::AsyncWrite;
 
+pub use actor_id::ActorId;
 pub use cid::Cid;
 pub use filesystem_id::FilesystemId;
 
