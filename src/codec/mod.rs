@@ -1,3 +1,4 @@
+mod cid;
 pub mod content_payload;
 pub mod crypto;
 pub mod filesystem;
@@ -7,6 +8,7 @@ pub mod header;
 use async_trait::async_trait;
 use futures::AsyncWrite;
 
+pub use cid::Cid;
 pub use filesystem_id::FilesystemId;
 
 #[async_trait]

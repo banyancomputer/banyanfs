@@ -3,8 +3,8 @@ use futures::{AsyncWrite, AsyncWriteExt};
 use nom::number::streaming::le_u64;
 use nom::IResult;
 
-use crate::codec::content_payload::{Cid, ContentOptions};
-use crate::codec::AsyncEncodable;
+use crate::codec::content_payload::ContentOptions;
+use crate::codec::{AsyncEncodable, Cid};
 
 pub struct HistoryStart {
     // todo: replace with vector type when we have it

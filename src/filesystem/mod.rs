@@ -1,3 +1,11 @@
+mod content_reference;
+mod nodes;
+mod permissions;
+
+pub use content_reference::ContentReference;
+pub use nodes::*;
+pub use permissions::Permissions;
+
 use crate::codec::crypto::SigningKey;
 use crate::codec::FilesystemId;
 

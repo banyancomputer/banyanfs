@@ -1,4 +1,4 @@
-use crate::codec::content_payload::Cid;
+use crate::codec::Cid;
 
 pub struct HistoryEnd {
     // todo: replace with vector type when we have it
