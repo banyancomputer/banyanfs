@@ -1,3 +1,5 @@
+use std::io::{Error as IoError, ErrorKind as IoErrorKind};
+
 use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
@@ -42,13 +44,12 @@ impl Attribute {
 
         let parsed = match type_byte {
             ATTRIBUTE_CUSTOM_TYPE_ID => {
-                let (remaining, (key_len, value_len)) =
-                    nom::sequence::pair(le_u8, le_u8)(remaining)?;
-
+                let (remaining, key_len) = le_u8(remaining)?;
                 let (remaining, key_bytes) = take(key_len)(remaining)?;
                 let key = String::from_utf8(key_bytes.to_vec())
                     .map_err(|_| nom::Err::Failure(NomError::new(input, ErrorKind::Verify)))?;
 
+                let (remaining, value_len) = le_u8(remaining)?;
                 let (remaining, value_bytes) = take(value_len)(remaining)?;
                 let value = String::from_utf8(value_bytes.to_vec())
                     .map_err(|_| nom::Err::Failure(NomError::new(input, ErrorKind::Verify)))?;
@@ -86,12 +87,12 @@ impl Attribute {
             }
             ATTRIBUTE_MIME_TYPE_TYPE_ID => {
                 let (remaining, mime_len) = le_u8(remaining)?;
-
                 let (remaining, mime_bytes) = take(mime_len)(remaining)?;
-                let mime = String::from_utf8(mime_bytes.to_vec())
+
+                let mime_str = String::from_utf8(mime_bytes.to_vec())
                     .map_err(|_| nom::Err::Failure(NomError::new(input, ErrorKind::Verify)))?;
 
-                (remaining, Self::MimeType(mime))
+                (remaining, Self::MimeType(mime_str))
             }
             _ => return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Tag))),
         };
@@ -111,77 +112,75 @@ impl AsyncEncodable for Attribute {
 
         match self {
             Self::Custom { key, value } => {
+                writer.write_all(&[ATTRIBUTE_CUSTOM_TYPE_ID]).await?;
+                written_bytes += 1;
+
                 let key_bytes = key.as_bytes();
                 let key_len = key_bytes.len();
+
+                if key_len > 255 {
+                    return Err(IoError::new(
+                        IoErrorKind::InvalidInput,
+                        "attribute key longer than 255 bytes when encoded",
+                    ));
+                }
+
+                writer.write_all(&[key_len as u8]).await?;
+                writer.write_all(key_bytes).await?;
+                written_bytes += 1 + key_bytes.len();
 
                 let value_bytes = value.as_bytes();
                 let value_len = value_bytes.len();
 
-                if key_len > 255 || value_len > 255 {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
-                        "attribute key or value longer than 255 bytes when encoded",
+                if value_len > 255 {
+                    return Err(IoError::new(
+                        IoErrorKind::InvalidInput,
+                        "attribute value longer than 255 bytes when encoded",
                     ));
                 }
 
-                writer.write_all(&[ATTRIBUTE_CUSTOM_TYPE_ID]).await?;
-                written_bytes += 1;
-
-                writer.write_all(&[key_len as u8, value_len as u8]).await?;
-                written_bytes += 2;
-
-                writer.write_all(key_bytes).await?;
-                written_bytes += key_bytes.len();
-
                 writer.write_all(value_bytes).await?;
-                written_bytes += value_bytes.len();
+                written_bytes += 1 + value_bytes.len();
             }
             Self::Owner(actor_id) => {
                 writer.write_all(&[ATTRIBUTE_OWNER_TYPE_ID]).await?;
-                written_bytes += 1;
-
-                actor_id.encode(writer).await?;
+                written_bytes += 1 + actor_id.encode(writer).await?;
             }
             Self::Permissions(permissions) => {
                 writer.write_all(&[ATTRIBUTE_PERMISSIONS_TYPE_ID]).await?;
-                written_bytes += 1;
-
-                permissions.encode(writer).await?;
+                written_bytes += 1 + permissions.encode(writer).await?;
             }
             Self::CreatedAt(time) => {
-                writer.write_all(&[ATTRIBUTE_CREATED_AT_TYPE_ID]).await?;
-                written_bytes += 1;
-
                 let unix_milliseconds: u64 = (time.unix_timestamp_nanos() / 1_000_000) as u64;
                 let ts_bytes = unix_milliseconds.to_le_bytes();
+
+                writer.write_all(&[ATTRIBUTE_CREATED_AT_TYPE_ID]).await?;
                 writer.write_all(&ts_bytes).await?;
-                written_bytes += ts_bytes.len();
+                written_bytes += 1 + ts_bytes.len();
             }
             Self::ModifiedAt(time) => {
-                writer.write_all(&[ATTRIBUTE_MODIFIED_AT_TYPE_ID]).await?;
-                written_bytes += 1;
-
                 let unix_milliseconds: u64 = (time.unix_timestamp_nanos() / 1_000_000) as u64;
                 let ts_bytes = unix_milliseconds.to_le_bytes();
+
+                writer.write_all(&[ATTRIBUTE_MODIFIED_AT_TYPE_ID]).await?;
                 writer.write_all(&ts_bytes).await?;
-                written_bytes += ts_bytes.len();
+                written_bytes += 1 + ts_bytes.len();
             }
             Self::MimeType(mime) => {
                 let mime_bytes = mime.as_bytes();
                 let mime_len = mime_bytes.len();
 
                 if mime_len > 255 {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
+                    return Err(IoError::new(
+                        IoErrorKind::InvalidInput,
                         "mime type longer than 255 bytes when encoded",
                     ));
                 }
 
                 writer.write_all(&[ATTRIBUTE_MIME_TYPE_TYPE_ID]).await?;
-                written_bytes += 1;
-
                 writer.write_all(mime_bytes).await?;
-                written_bytes += mime_bytes.len();
+
+                written_bytes += 1 + mime_bytes.len();
             }
         }
 
