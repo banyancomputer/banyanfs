@@ -16,13 +16,13 @@ const PERMISSIONS_IMMUTABLE: u8 = 0b0000_0010;
 const PERMISSIONS_CREATOR_WRITE_ONLY: u8 = 0b0000_0001;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Permissions {
+pub struct FilesystemPermissions {
     creator_write_only: bool,
     executable: bool,
     immutable: bool,
 }
 
-impl Permissions {
+impl FilesystemPermissions {
     pub fn creator_write_only(&self) -> bool {
         self.creator_write_only
     }
@@ -36,7 +36,7 @@ impl Permissions {
     }
 }
 
-impl Permissions {
+impl FilesystemPermissions {
     pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
         let (input, byte) = le_u8(input)?;
 
@@ -48,7 +48,7 @@ impl Permissions {
         let executable = byte & PERMISSIONS_EXECUTABLE != 0;
         let immutable = byte & PERMISSIONS_IMMUTABLE != 0;
 
-        let permissions = Permissions {
+        let permissions = Self {
             creator_write_only,
             executable,
             immutable,
@@ -59,11 +59,11 @@ impl Permissions {
 }
 
 #[async_trait]
-impl AsyncEncodable for Permissions {
+impl AsyncEncodable for FilesystemPermissions {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
-        pos: usize,
+        _pos: usize,
     ) -> std::io::Result<usize> {
         let mut options: u8 = 0x00;
 
@@ -81,6 +81,6 @@ impl AsyncEncodable for Permissions {
 
         writer.write_all(&[options]).await?;
 
-        Ok(pos + 1)
+        Ok(1)
     }
 }

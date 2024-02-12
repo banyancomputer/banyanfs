@@ -5,13 +5,19 @@ use crate::codec::crypto::Fingerprint;
 use crate::codec::AsyncEncodable;
 
 // todo(sstelfox) likely need a vector clock here...
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ActorId(Fingerprint);
 
 impl ActorId {
     pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
         let (remaining, fingerprint) = Fingerprint::parse(input)?;
         Ok((remaining, ActorId(fingerprint)))
+    }
+}
+
+impl From<Fingerprint> for ActorId {
+    fn from(fingerprint: Fingerprint) -> Self {
+        Self(fingerprint)
     }
 }
 

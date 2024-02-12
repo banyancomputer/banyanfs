@@ -7,7 +7,7 @@ use nom::number::streaming::{le_u64, le_u8};
 use nom::IResult;
 use time::OffsetDateTime;
 
-use crate::codec::filesystem::Permissions;
+use crate::codec::filesystem::FilesystemPermissions;
 use crate::codec::ActorId;
 use crate::codec::AsyncEncodable;
 
@@ -25,7 +25,7 @@ const ATTRIBUTE_CUSTOM_TYPE_ID: u8 = 0xff;
 
 pub enum Attribute {
     Owner(ActorId),
-    Permissions(Permissions),
+    Permissions(FilesystemPermissions),
 
     CreatedAt(OffsetDateTime),
     ModifiedAt(OffsetDateTime),
@@ -60,8 +60,8 @@ impl Attribute {
                 (remaining, Self::Owner(actor_id))
             }
             ATTRIBUTE_PERMISSIONS_TYPE_ID => {
-                let (remaining, permissions) = Permissions::parse(remaining)?;
-                (remaining, Self::Permissions(permissions))
+                let (remaining, fs_perms) = FilesystemPermissions::parse(remaining)?;
+                (remaining, Self::Permissions(fs_perms))
             }
             ATTRIBUTE_CREATED_AT_TYPE_ID => {
                 let (remaining, unix_milliseconds) = le_u64(remaining)?;
