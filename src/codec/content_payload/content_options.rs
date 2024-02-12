@@ -51,6 +51,10 @@ impl ContentOptions {
 
         Ok((input, content_options))
     }
+
+    pub const fn size() -> usize {
+        1
+    }
 }
 
 #[async_trait]

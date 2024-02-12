@@ -12,13 +12,25 @@ use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
+use nom::bytes::streaming::take;
 use nom::error::{Error as NomError, ErrorKind};
 use nom::number::streaming::le_u8;
 use nom::{Err, IResult};
 
-use crate::codec::crypto::{AsymLockedAccessKey, SigningKey};
+use crate::codec::crypto::{
+    AccessKey, AsymLockedAccessKey, KeyId, Nonce, SigningKey, VerifyingKey,
+};
 use crate::codec::AsyncEncodable;
 use crate::filesystem::PrivateEncodingContext;
+
+use super::crypto::AuthenticationTag;
+
+const ENCRYPTED_PAYLOAD_SIZE: usize = KeyId::size()
+    + HistoryStart::size()
+    + VerifyingKey::size()
+    + Nonce::size()
+    + AccessKey::size()
+    + AuthenticationTag::size();
 
 pub enum ContentPayload {
     Private,
@@ -73,12 +85,15 @@ impl ContentPayload {
         let (input, locked_keys) = AsymLockedAccessKey::parse_many(input, key_count)?;
 
         let key_id = key.key_id();
-        let relevant_keys = locked_keys.into_iter().filter(|k| k.key_id == key_id);
+        let relevant_keys = locked_keys
+            .iter()
+            .enumerate()
+            .filter(|(_, k)| k.key_id == key_id);
 
         let mut key_access_key = None;
-        for potential_key in relevant_keys {
+        for (idx, potential_key) in relevant_keys {
             if let Ok(key) = potential_key.unlock(key) {
-                key_access_key = Some(key);
+                key_access_key = Some((key, idx));
                 break;
             }
         }
@@ -87,6 +102,10 @@ impl ContentPayload {
             Some(ak) => ak,
             None => return Err(Err::Failure(NomError::new(input, ErrorKind::Verify))),
         };
+
+        let (input, _chunk) = take(locked_keys.len() * ENCRYPTED_PAYLOAD_SIZE)(input)?;
+
+        // decrypt chunk, parse as a series of PermissionControl
 
         // todo(sstelfox): implement the rest
 

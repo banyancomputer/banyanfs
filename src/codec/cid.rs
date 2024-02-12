@@ -22,6 +22,10 @@ impl Cid {
 
         Ok((remaining, Self(bytes)))
     }
+
+    pub const fn size() -> usize {
+        CID_LENGTH
+    }
 }
 
 impl From<[u8; CID_LENGTH]> for Cid {

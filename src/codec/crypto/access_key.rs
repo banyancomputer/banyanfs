@@ -58,16 +58,21 @@ impl AccessKey {
         rng: &mut impl CryptoRngCore,
         encrypion_key: &AccessKey,
     ) -> Result<SymLockedAccessKey, AccessKeyError<&[u8]>> {
-        let mut key_payload = self.0;
-
         let cipher = XChaCha20Poly1305::new(encrypion_key.chacha_key());
         let nonce = Nonce::generate(rng);
-        let raw_tag = cipher.encrypt_in_place_detached(&nonce, &[], &mut key_payload)?;
+
+        let mut cipher_text = self.0;
+        let raw_tag = cipher.encrypt_in_place_detached(&nonce, &[], &mut cipher_text)?;
 
         let mut tag_bytes = [0u8; AuthenticationTag::size()];
         tag_bytes.copy_from_slice(raw_tag.as_bytes());
-        let _tag = AuthenticationTag::from(tag_bytes);
-        unimplemented!()
+        let tag = AuthenticationTag::from(tag_bytes);
+
+        Ok(SymLockedAccessKey {
+            nonce,
+            cipher_text,
+            tag,
+        })
     }
 
     pub const fn size() -> usize {

@@ -28,14 +28,15 @@ impl HistoryStart {
 
         Ok((input, history_start))
     }
+
+    pub const fn size() -> usize {
+        8 + Cid::size() + ContentOptions::size()
+    }
 }
 
 #[async_trait]
 impl AsyncEncodable for HistoryStart {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-    ) -> std::io::Result<usize> {
+    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
         let mut written_bytes = 0;
 
         let journal_start_vector_bytes = self.journal_start_vector.to_le_bytes();
