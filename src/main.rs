@@ -8,6 +8,7 @@ fn main() -> BanyanFsResult<()> {
 #[cfg(not(target_arch = "wasm32"))]
 #[tokio::main]
 async fn main() -> BanyanFsResult<()> {
+    use banyanfs::codec::filesystem::DirectoryPermissions;
     use tracing::Level;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
@@ -39,37 +40,62 @@ async fn main() -> BanyanFsResult<()> {
     tracing::info!("output_stream: {:02x?}", output_stream);
 
     let signing_key = SigningKey::generate(&mut rng);
-    let drive = Drive::initialize_private(&signing_key);
+    let actor_id = signing_key.actor_id();
+    let mut drive = Drive::initialize_private(&signing_key);
 
     if !drive.check_accessibility(&signing_key.verifying_key()) {
         tracing::error!("key doesn't have access to the drive");
         return Err(BanyanFsError("key doesn't have access to the drive"));
     }
 
-    //drive.unlock(key)?;
+    if drive.is_writable(&signing_key) {
+        let new_perms = DirectoryPermissions::default();
+        if let Err(err) = drive.mkdir(actor_id, &["testing", "paths"], new_perms, true) {
+            tracing::error!("failed to create directory: {}", err);
+            return Ok(());
+        }
 
-    //if drive.is_writable() {
-    //    drive.mkdir("/root/testing/deep/paths")?;
+        match drive.ls(&["testing"]) {
+            Ok(dir_contents) => {
+                let names: Vec<String> = dir_contents.into_iter().map(|(name, _)| name).collect();
+                tracing::info!("dir_contents: {names:?}");
+            }
+            Err(err) => {
+                tracing::error!("failed to list directory: {err}");
+                return Ok(());
+            }
+        }
 
-    //    let fh = drive.open("/root/testing/deep/paths/file.txt")?;
-    //    fh.write(b"hello world")?;
-    //    fh.close()?;
+        //    let fh = drive.open("/root/testing/deep/paths/file.txt")?;
+        //    fh.write(b"hello world")?;
+        //    fh.close()?;
 
-    //    let fh = drive.open("/root/testing/deep/paths/file.txt")?;
-    //    fh.seek(std::io::SeekFrom::Start(6))?;
-    //    let mut buf = [0u8; 5];
-    //    fh.read(&mut buf)?;
-    //    assert_eq!(&buf, b"world");
+        //    let fh = drive.open("/root/testing/deep/paths/file.txt")?;
+        //    fh.seek(std::io::SeekFrom::Start(6))?;
+        //    let mut buf = [0u8; 5];
+        //    fh.read(&mut buf)?;
+        //    assert_eq!(&buf, b"world");
 
-    //    drive.delete("/root/testing/deep/paths/file.txt")?;
+        //    drive.delete("/root/testing/deep/paths/file.txt")?;
 
-    //    let new_key: &[u8] = &[0x68, 0x55];
-    //    drive.authorize_key(new_key, Permission::StructureRead | Permission::DataRead)?;
+        //    let new_key: &[u8] = &[0x68, 0x55];
+        //    drive.authorize_key(new_key, Permission::StructureRead | Permission::DataRead)?;
 
-    //    drive.sync()?;
-    //}
+        //    drive.sync()?;
+    }
 
     //let dir_contents = drive.ls("/root/testing")?;
+    //tracing::info!("dir_contents: {dir_contents:?}");
+
+    //let mut fh = tokio::fs::File::open("fixtures/minimal.bfs").await?;
+    //drive.encode_with_key(&mut fh, &signing_key).await?;
+    //fh.close().await?;
+
+    //let mut fh = tokio::fs::File::open("fixtures/minimal.bfs").await?;
+    //let loaded_drive = Drive::load_with_key(&mut fh, &signing_key).await?;
+    //fh.close().await?;
+
+    //let dir_contents = loaded_drive.ls("/root/testing/deep/paths")?;
     //tracing::info!("dir_contents: {dir_contents:?}");
 
     Ok(())

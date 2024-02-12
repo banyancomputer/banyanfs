@@ -5,6 +5,7 @@ use nom::number::streaming::le_u32;
 
 use crate::codec::{AsyncEncodable, Cid};
 
+#[derive(Clone)]
 pub struct ContentReference {
     data_block_cid: Cid,
     offset: u32,

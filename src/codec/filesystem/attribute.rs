@@ -7,7 +7,7 @@ use nom::number::streaming::{le_u64, le_u8};
 use nom::IResult;
 use time::OffsetDateTime;
 
-use crate::codec::filesystem::FilesystemPermissions;
+use crate::codec::filesystem::FilePermissions;
 use crate::codec::ActorId;
 use crate::codec::AsyncEncodable;
 
@@ -25,7 +25,7 @@ const ATTRIBUTE_CUSTOM_TYPE_ID: u8 = 0xff;
 
 pub enum Attribute {
     Owner(ActorId),
-    Permissions(FilesystemPermissions),
+    Permissions(FilePermissions),
 
     CreatedAt(OffsetDateTime),
     ModifiedAt(OffsetDateTime),
@@ -60,7 +60,10 @@ impl Attribute {
                 (remaining, Self::Owner(actor_id))
             }
             ATTRIBUTE_PERMISSIONS_TYPE_ID => {
-                let (remaining, fs_perms) = FilesystemPermissions::parse(remaining)?;
+                // we should probably have a common filesystem permission type that can be
+                // specialized to the node type by the caller, but for now directories have fewer
+                // permissions so file can be the super set, we just loose a little validation
+                let (remaining, fs_perms) = FilePermissions::parse(remaining)?;
                 (remaining, Self::Permissions(fs_perms))
             }
             ATTRIBUTE_CREATED_AT_TYPE_ID => {

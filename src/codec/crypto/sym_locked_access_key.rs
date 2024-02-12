@@ -6,6 +6,7 @@ use nom::bytes::streaming::take;
 use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce};
 use crate::codec::AsyncEncodable;
 
+#[derive(Clone)]
 pub struct SymLockedAccessKey {
     pub(crate) nonce: Nonce,
     pub(crate) cipher_text: [u8; AccessKey::size()],

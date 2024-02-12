@@ -10,7 +10,7 @@ use crate::codec::AsyncEncodable;
 
 const ID_LENGTH: usize = 16;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FilesystemId([u8; ID_LENGTH]);
 
 impl FilesystemId {

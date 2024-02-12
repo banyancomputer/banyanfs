@@ -1,8 +1,9 @@
 mod attribute;
-mod filesystem_permissions;
+mod directory_permissions;
+mod file_permissions;
 mod node_type;
 
 pub use attribute::Attribute;
-pub use filesystem_permissions::FilesystemPermissions;
+pub use directory_permissions::DirectoryPermissions;
+pub use file_permissions::FilePermissions;
 pub use node_type::NodeType;
-

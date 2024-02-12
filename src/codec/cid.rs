@@ -6,6 +6,7 @@ use crate::codec::AsyncEncodable;
 
 const CID_LENGTH: usize = 32;
 
+#[derive(Clone)]
 pub struct Cid([u8; CID_LENGTH]);
 
 impl Cid {

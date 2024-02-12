@@ -7,16 +7,17 @@ use nom::error::ErrorKind;
 use nom::number::streaming::le_u8;
 use time::OffsetDateTime;
 
-use crate::codec::filesystem::{Attribute, FilesystemPermissions};
+use crate::codec::filesystem::{Attribute, FilePermissions};
 use crate::codec::{ActorId, AsyncEncodable, Cid};
 use crate::filesystem::FileContent;
 
 const MIME_TYPE_KEY: &str = "mime_type";
 
+#[derive(Clone)]
 pub struct File {
     owner: ActorId,
 
-    permissions: FilesystemPermissions,
+    permissions: FilePermissions,
     created_at: OffsetDateTime,
     modified_at: OffsetDateTime,
 
@@ -114,7 +115,7 @@ impl File {
         Ok((remaining, file))
     }
 
-    pub fn permissions(&self) -> FilesystemPermissions {
+    pub fn permissions(&self) -> FilePermissions {
         self.permissions
     }
 }
