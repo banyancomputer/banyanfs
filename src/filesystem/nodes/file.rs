@@ -5,7 +5,7 @@ use time::OffsetDateTime;
 
 use crate::codec::filesystem::{Attribute, Permissions};
 use crate::codec::{ActorId, AsyncEncodable, Cid};
-use crate::filesystem::ContentReference;
+use crate::filesystem::FileContent;
 
 pub struct File {
     owner: ActorId,
@@ -16,19 +16,15 @@ pub struct File {
 
     metadata: HashMap<String, String>,
 
-    content: Vec<ContentReference>,
+    content: FileContent,
 }
 
 impl File {
     pub async fn calculate_cid(&self) -> Result<Cid, FileError> {
         let mut cid_content = Vec::new();
 
-        for content in self.content.iter() {
-            content
-                .encode(&mut cid_content, 0)
-                .await
-                .map_err(FileError::CidEncodingError)?;
-        }
+        // todo:
+        //self.content.encode(&mut cid_content, 0).await?;
 
         let mut attributes = vec![
             Attribute::Owner(self.owner()),

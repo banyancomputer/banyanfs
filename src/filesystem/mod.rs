@@ -1,7 +1,9 @@
 mod content_reference;
+mod file_content;
 mod nodes;
 
 pub use content_reference::ContentReference;
+pub use file_content::FileContent;
 pub use nodes::*;
 
 use crate::codec::crypto::SigningKey;

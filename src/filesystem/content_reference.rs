@@ -25,6 +25,10 @@ impl ContentReference {
 
         Ok((remaining, content_reference))
     }
+
+    pub fn size(&self) -> u64 {
+        self.length as u64
+    }
 }
 
 #[async_trait]
