@@ -14,7 +14,7 @@ pub struct File {
     created_at: OffsetDateTime,
     modified_at: OffsetDateTime,
 
-    custom_metadata: HashMap<String, String>,
+    metadata: HashMap<String, String>,
 
     content: Vec<ContentReference>,
 }
@@ -30,21 +30,29 @@ impl File {
                 .map_err(FileError::CidEncodingError)?;
         }
 
-        let mut attributes: Vec<Attribute> = Vec::new();
+        let mut attributes = vec![
+            Attribute::Owner(self.owner()),
+            Attribute::Permissions(self.permissions()),
+            Attribute::CreatedAt(self.created_at()),
+            Attribute::ModifiedAt(self.modified_at()),
+        ];
 
-        attributes.push(Attribute::Owner(self.owner));
-        attributes.push(Attribute::Permissions(self.permissions));
-        attributes.push(Attribute::CreatedAt(self.created_at));
-        attributes.push(Attribute::ModifiedAt(self.modified_at));
-
-        for (key, value) in self.custom_metadata.iter() {
-            attributes.push(Attribute::Custom {
-                key: key.clone(),
-                value: value.clone(),
-            });
+        for (key, value) in self.metadata.iter() {
+            match key.as_str() {
+                // This is an optional named attribute that lives in the metadata and can be
+                // encoded a little more efficiently
+                "mime_type" => attributes.push(Attribute::MimeType(value.clone())),
+                _ => {
+                    attributes.push(Attribute::Custom {
+                        key: key.clone(),
+                        value: value.clone(),
+                    });
+                }
+            }
         }
 
-        // Sort lexigraphically by the bytes strings as the RFC specifies
+        // Encode our attributes into their final byte strings. We wait here to add them into the
+        // overall encoding as they may be in any order at this point
         let mut attribute_bytes = Vec::new();
         for attribute in attributes.into_iter() {
             let mut encoded_attributes = Vec::new();
@@ -52,6 +60,7 @@ impl File {
             attribute_bytes.push(encoded_attributes);
         }
 
+        // Sort lexigraphically by the bytes strings as the RFC specifies
         attribute_bytes.sort_unstable();
         for attribute in attribute_bytes.into_iter() {
             cid_content.extend(attribute);
@@ -60,6 +69,22 @@ impl File {
         let hash: [u8; 32] = blake3::hash(cid_content.as_bytes()).into();
 
         Ok(Cid::from(hash))
+    }
+
+    pub fn created_at(&self) -> OffsetDateTime {
+        self.created_at
+    }
+
+    pub fn modified_at(&self) -> OffsetDateTime {
+        self.modified_at
+    }
+
+    pub fn owner(&self) -> ActorId {
+        self.owner
+    }
+
+    pub fn permissions(&self) -> Permissions {
+        self.permissions
     }
 }
 
