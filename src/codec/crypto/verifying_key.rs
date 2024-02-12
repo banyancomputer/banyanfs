@@ -10,6 +10,7 @@ use p384::ecdh::EphemeralSecret;
 use p384::NistP384;
 
 use crate::codec::crypto::{Fingerprint, KeyId};
+use crate::codec::ActorId;
 use crate::codec::AsyncEncodable;
 
 const KEY_SIZE: usize = 49;
@@ -20,6 +21,10 @@ pub struct VerifyingKey {
 }
 
 impl VerifyingKey {
+    pub fn actor_id(&self) -> ActorId {
+        ActorId::from(self.fingerprint())
+    }
+
     #[allow(dead_code)]
     pub(crate) fn ephemeral_dh_exchange(&self, rng: &mut impl CryptoRngCore) -> (Self, [u8; 32]) {
         let eph_secret: EphemeralSecret = EphemeralSecret::random(rng);

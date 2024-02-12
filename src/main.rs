@@ -39,12 +39,12 @@ async fn main() -> BanyanFsResult<()> {
     tracing::info!("output_stream: {:02x?}", output_stream);
 
     let signing_key = SigningKey::generate(&mut rng);
-    let _drive = Drive::initialize_private(&signing_key);
+    let drive = Drive::initialize_private(&signing_key);
 
-    //if !drive.check_accessibility(key) {
-    //    tracing::error!("key doesn't have access to the drive");
-    //    return Err(BanyanFsError("key doesn't have access to the drive"));
-    //}
+    if !drive.check_accessibility(&signing_key.verifying_key()) {
+        tracing::error!("key doesn't have access to the drive");
+        return Err(BanyanFsError("key doesn't have access to the drive"));
+    }
 
     //drive.unlock(key)?;
 

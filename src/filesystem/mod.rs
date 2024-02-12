@@ -14,16 +14,29 @@ use crate::codec::{ActorId, FilesystemId};
 
 pub struct Drive {
     _filesystem_id: FilesystemId,
-    _keys: HashMap<ActorId, (VerifyingKey, KeyAccessSettings)>,
+    keys: HashMap<ActorId, (VerifyingKey, KeyAccessSettings)>,
 }
 
 impl Drive {
+    pub fn check_accessibility(&self, key: &VerifyingKey) -> bool {
+        match self.keys.get(&key.actor_id()) {
+            Some((_, kas)) => match kas {
+                KeyAccessSettings::Public { historical, .. } => !historical,
+                KeyAccessSettings::Private {
+                    historical,
+                    realized_key_present,
+                    ..
+                } => !historical && *realized_key_present,
+            },
+            None => false,
+        }
+    }
+
     pub fn initialize_private(signing_key: &SigningKey) -> Self {
         let mut rng = crate::utils::crypto_rng();
 
         let verifying_key = signing_key.verifying_key();
-        let fingerprint = signing_key.fingerprint();
-        let actor_id = ActorId::from(fingerprint);
+        let actor_id = signing_key.actor_id();
 
         let kas = KeyAccessSettings::Private {
             protected: true,
@@ -41,7 +54,7 @@ impl Drive {
 
         Self {
             _filesystem_id: FilesystemId::generate(&mut rng),
-            _keys: keys,
+            keys,
         }
     }
 }

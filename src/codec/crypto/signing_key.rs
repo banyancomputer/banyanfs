@@ -3,6 +3,7 @@ use ecdsa::signature::RandomizedDigestSigner;
 use p384::NistP384;
 
 use crate::codec::crypto::{Fingerprint, KeyId, Signature, VerifyingKey};
+use crate::codec::ActorId;
 
 const KEY_SIZE: usize = 48;
 
@@ -11,6 +12,10 @@ pub struct SigningKey {
 }
 
 impl SigningKey {
+    pub fn actor_id(&self) -> ActorId {
+        self.verifying_key().actor_id()
+    }
+
     #[allow(dead_code)]
     pub(crate) fn dh_exchange(&self, other_pubkey: &VerifyingKey) -> [u8; 32] {
         let shared_secret = elliptic_curve::ecdh::diffie_hellman(
@@ -37,8 +42,7 @@ impl SigningKey {
         Self { inner }
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn key_id(&self) -> KeyId {
+    pub fn key_id(&self) -> KeyId {
         self.verifying_key().key_id()
     }
 
@@ -52,7 +56,7 @@ impl SigningKey {
         private_key
     }
 
-    pub(crate) fn verifying_key(&self) -> VerifyingKey {
+    pub fn verifying_key(&self) -> VerifyingKey {
         VerifyingKey::from(*self.inner.verifying_key())
     }
 }
