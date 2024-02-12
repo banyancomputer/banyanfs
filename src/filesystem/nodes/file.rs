@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
+use nom::bytes::streaming::take;
 use nom::error::Error as NomError;
 use nom::error::ErrorKind;
 use nom::number::streaming::le_u8;
@@ -15,6 +16,7 @@ const MIME_TYPE_KEY: &str = "mime_type";
 
 #[derive(Clone)]
 pub struct File {
+    id: [u8; 16],
     owner: ActorId,
 
     permissions: FilePermissions,
@@ -47,7 +49,12 @@ impl File {
     }
 
     pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
-        let (remaining, attribute_count) = le_u8(input)?;
+        let (remaining, id_bytes) = take(16u8)(input)?;
+
+        let mut id = [0u8; 16];
+        id.copy_from_slice(id_bytes);
+
+        let (remaining, attribute_count) = le_u8(remaining)?;
 
         let mut owner = None;
         let mut permissions = None;
@@ -104,6 +111,7 @@ impl File {
         let (remaining, content) = FileContent::parse(remaining)?;
 
         let file = Self {
+            id,
             owner,
             permissions,
             created_at,
@@ -125,8 +133,13 @@ impl AsyncEncodable for File {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
-        mut pos: usize,
+        _pos: usize,
     ) -> std::io::Result<usize> {
+        let mut written_bytes = 0;
+
+        writer.write_all(&self.id).await?;
+        written_bytes += self.id.len();
+
         let attribute_count = 4 + self.metadata.len();
         if attribute_count > 255 {
             return Err(std::io::Error::new(
@@ -136,20 +149,20 @@ impl AsyncEncodable for File {
         }
 
         writer.write_all(&[attribute_count as u8]).await?;
-        pos += 1;
+        written_bytes += 1;
 
         // We know we need to order everything based on the byte, but since these have reserved
         // types we know they'll sort before any of the other attribtues. We can take a shortcut
         // and just encode themn directly in the order we know they'll appear.
-        pos = Attribute::Owner(self.owner()).encode(writer, pos).await?;
-        pos = Attribute::Permissions(self.permissions())
-            .encode(writer, pos)
+        written_bytes += Attribute::Owner(self.owner()).encode(writer, 0).await?;
+        written_bytes += Attribute::Permissions(self.permissions())
+            .encode(writer, 0)
             .await?;
-        pos = Attribute::CreatedAt(self.created_at())
-            .encode(writer, pos)
+        written_bytes += Attribute::CreatedAt(self.created_at())
+            .encode(writer, 0)
             .await?;
-        pos = Attribute::ModifiedAt(self.modified_at())
-            .encode(writer, pos)
+        written_bytes += Attribute::ModifiedAt(self.modified_at())
+            .encode(writer, 0)
             .await?;
 
         let mut attributes = Vec::new();
@@ -180,12 +193,12 @@ impl AsyncEncodable for File {
         attribute_bytes.sort_unstable();
         for attribute in attribute_bytes.into_iter() {
             writer.write_all(&attribute).await?;
-            pos += attribute.len();
+            written_bytes += attribute.len();
         }
 
-        pos = self.content.encode(writer, pos).await?;
+        written_bytes += self.content.encode(writer, 0).await?;
 
-        Ok(pos)
+        Ok(written_bytes)
     }
 }
 

@@ -86,7 +86,7 @@ impl Drive {
         Self {
             filesystem_id: FilesystemId::generate(rng),
             keys,
-            root: Directory::new(actor_id),
+            root: Directory::new(rng, actor_id),
         }
     }
 

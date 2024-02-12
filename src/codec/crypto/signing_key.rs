@@ -46,8 +46,7 @@ impl SigningKey {
         self.verifying_key().key_id()
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn to_private_bytes(&self) -> [u8; KEY_SIZE] {
+    pub fn to_private_bytes(&self) -> [u8; KEY_SIZE] {
         let private_key_bytes = self.inner.to_bytes();
 
         let mut private_key = [0u8; KEY_SIZE];

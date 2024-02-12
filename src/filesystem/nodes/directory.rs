@@ -1,13 +1,17 @@
 use std::collections::HashMap;
 
+use ecdsa::signature::rand_core::CryptoRngCore;
+use rand::Rng;
+use time::OffsetDateTime;
+
 use crate::codec::filesystem::DirectoryPermissions;
 use crate::codec::ActorId;
 use crate::filesystem::nodes::file::File;
 
-use time::OffsetDateTime;
-
 #[derive(Clone)]
 pub struct Directory {
+    #[allow(dead_code)]
+    id: [u8; 16],
     owner: ActorId,
 
     permissions: DirectoryPermissions,
@@ -51,6 +55,7 @@ impl Directory {
 
     pub fn mkdir(
         &mut self,
+        rng: &mut impl CryptoRngCore,
         owner: ActorId,
         path: &[&str],
         permissions: DirectoryPermissions,
@@ -63,7 +68,7 @@ impl Directory {
         let (name, next_path) = path.split_at(1);
         if next_path.is_empty() {
             let key = name[0].to_string();
-            let mut dir = Directory::new(owner);
+            let mut dir = Directory::new(rng, owner);
             dir.permissions = permissions;
 
             self.children.insert(key, DirectoryEntry::Directory(dir));
@@ -73,7 +78,7 @@ impl Directory {
 
         match self.children.get_mut(name[0]) {
             Some(DirectoryEntry::Directory(dir)) => {
-                dir.mkdir(owner, next_path, permissions, recursive)?;
+                dir.mkdir(rng, owner, next_path, permissions, recursive)?;
             }
             Some(DirectoryEntry::File(_)) => return Err(DirectoryError::NonDirectoryTraversal),
             None => {
@@ -81,9 +86,9 @@ impl Directory {
                     return Err(DirectoryError::NotFound);
                 }
 
-                let mut dir = Directory::new(owner);
+                let mut dir = Directory::new(rng, owner);
                 dir.permissions = permissions;
-                dir.mkdir(owner, next_path, permissions, recursive)?;
+                dir.mkdir(rng, owner, next_path, permissions, recursive)?;
 
                 let key = name[0].to_string();
                 self.children.insert(key, DirectoryEntry::Directory(dir));
@@ -97,8 +102,11 @@ impl Directory {
         self.modified_at
     }
 
-    pub fn new(owner: ActorId) -> Self {
+    pub fn new(rng: &mut impl CryptoRngCore, owner: ActorId) -> Self {
+        let id: [u8; 16] = rng.gen();
+
         Directory {
+            id,
             owner,
 
             permissions: DirectoryPermissions::default(),

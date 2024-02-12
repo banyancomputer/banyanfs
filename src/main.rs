@@ -42,7 +42,7 @@ async fn main() -> BanyanFsResult<()> {
         let actor_id = signing_key.actor_id();
         let new_perms = DirectoryPermissions::default();
 
-        if let Err(err) = drive.mkdir(actor_id, &["testing", "paths"], new_perms, true) {
+        if let Err(err) = drive.mkdir(&mut rng, actor_id, &["testing", "paths"], new_perms, true) {
             tracing::error!("failed to create directory: {}", err);
             return Ok(());
         }
