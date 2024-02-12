@@ -11,6 +11,8 @@ use crate::codec::filesystem::{Attribute, Permissions};
 use crate::codec::{ActorId, AsyncEncodable, Cid};
 use crate::filesystem::FileContent;
 
+const MIME_TYPE_KEY: &str = "mime_type";
+
 pub struct File {
     owner: ActorId,
 
@@ -52,16 +54,51 @@ impl File {
         let mut modified_at = None;
         let mut metadata = HashMap::new();
 
-        let (remaining, attributes) = Attribute::parse_many(input, attribute_count)?;
+        let (remaining, attributes) = Attribute::parse_many(remaining, attribute_count)?;
+
+        for attribute in attributes.into_iter() {
+            match attribute {
+                Attribute::Owner(actor_id) => {
+                    owner = Some(actor_id);
+                }
+                Attribute::Permissions(perms) => {
+                    permissions = Some(perms);
+                }
+                Attribute::CreatedAt(time) => {
+                    created_at = Some(time);
+                }
+                Attribute::ModifiedAt(time) => {
+                    modified_at = Some(time);
+                }
+                Attribute::MimeType(mime) => {
+                    metadata.insert(MIME_TYPE_KEY.to_string(), mime);
+                }
+                Attribute::Custom { key, value } => {
+                    metadata.insert(key, value);
+                }
+            }
+        }
 
         // Validate that we have all the required attributes
-        let owner = owner.ok_or(nom::Err::Failure(NomError::new(input, ErrorKind::Verify)))?;
-        let permissions =
-            permissions.ok_or(nom::Err::Failure(NomError::new(input, ErrorKind::Verify)))?;
-        let created_at =
-            created_at.ok_or(nom::Err::Failure(NomError::new(input, ErrorKind::Verify)))?;
-        let modified_at =
-            modified_at.ok_or(nom::Err::Failure(NomError::new(input, ErrorKind::Verify)))?;
+        let owner = owner.ok_or(nom::Err::Failure(NomError::new(
+            remaining,
+            ErrorKind::Verify,
+        )))?;
+
+        let permissions = permissions.ok_or(nom::Err::Failure(NomError::new(
+            remaining,
+            ErrorKind::Verify,
+        )))?;
+
+        let created_at = created_at.ok_or(nom::Err::Failure(NomError::new(
+            remaining,
+            ErrorKind::Verify,
+        )))?;
+
+        let modified_at = modified_at.ok_or(nom::Err::Failure(NomError::new(
+            remaining,
+            ErrorKind::Verify,
+        )))?;
 
         let (remaining, content) = FileContent::parse(remaining)?;
 

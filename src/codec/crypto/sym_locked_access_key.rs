@@ -1,9 +1,7 @@
 use async_trait::async_trait;
 use chacha20poly1305::{AeadInPlace, KeyInit, XChaCha20Poly1305};
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::error::Error as NomError;
-use nom::error::ErrorKind;
-use nom::number::streaming::{le_u64, le_u8};
+use nom::bytes::streaming::take;
 
 use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce};
 use crate::codec::AsyncEncodable;
@@ -15,8 +13,22 @@ pub struct SymLockedAccessKey {
 }
 
 impl SymLockedAccessKey {
-    pub fn parse(_input: &[u8]) -> nom::IResult<&[u8], Self> {
-        todo!()
+    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
+        let (remaining, nonce) = Nonce::parse(input)?;
+
+        let (remaining, cipher_text) = take(AccessKey::size())(remaining)?;
+        let mut fixed_cipher_text = [0u8; AccessKey::size()];
+        fixed_cipher_text.copy_from_slice(cipher_text);
+
+        let (remaining, tag) = AuthenticationTag::parse(remaining)?;
+
+        let parsed = Self {
+            nonce,
+            cipher_text: fixed_cipher_text,
+            tag,
+        };
+
+        Ok((remaining, parsed))
     }
 
     pub fn unlock(
@@ -39,7 +51,12 @@ impl AsyncEncodable for SymLockedAccessKey {
         writer: &mut W,
         mut pos: usize,
     ) -> std::io::Result<usize> {
-        todo!()
+        pos = self.nonce.encode(writer, pos).await?;
+
+        writer.write_all(&self.cipher_text).await?;
+        pos += self.cipher_text.len();
+
+        self.tag.encode(writer, pos).await
     }
 }
 

@@ -79,8 +79,58 @@ impl AsyncEncodable for FileContent {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
-        mut pos: usize,
+        _pos: usize,
     ) -> std::io::Result<usize> {
-        todo!()
+        let mut written_bytes = 0;
+
+        match self {
+            Self::Encrypted {
+                access_key,
+                content,
+            } => {
+                writer.write_all(&[FILE_CONTENT_TYPE_PUBLIC]).await?;
+                written_bytes += 1;
+
+                written_bytes += access_key.encode(writer, 0).await?;
+                written_bytes += encode_content_list(writer, content).await?;
+            }
+            Self::Public { content } => {
+                writer.write_all(&[FILE_CONTENT_TYPE_PUBLIC]).await?;
+                written_bytes += 1;
+
+                written_bytes += encode_content_list(writer, content).await?;
+            }
+            Self::Stub { size } => {
+                writer.write_all(&[FILE_CONTENT_TYPE_STUB]).await?;
+                written_bytes += 1;
+
+                let size_bytes = size.to_le_bytes();
+                writer.write_all(&size_bytes).await?;
+                written_bytes += size_bytes.len();
+            }
+        }
+
+        Ok(written_bytes)
     }
+}
+
+async fn encode_content_list<W: AsyncWrite + Unpin + Send>(
+    writer: &mut W,
+    content: &[ContentReference],
+) -> std::io::Result<usize> {
+    let mut written_bytes = 0;
+
+    let ref_count = content.len();
+    if ref_count > u8::MAX as usize {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "too many content references for a single file, redirect block required",
+        ));
+    }
+
+    for c in content {
+        written_bytes += c.encode(writer, 0).await?;
+    }
+
+    Ok(written_bytes)
 }

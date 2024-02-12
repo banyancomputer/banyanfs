@@ -11,8 +11,6 @@ use crate::codec::filesystem::Permissions;
 use crate::codec::ActorId;
 use crate::codec::AsyncEncodable;
 
-const ATTRIBUTE_CUSTOM_TYPE_ID: u8 = 0x00;
-
 const ATTRIBUTE_OWNER_TYPE_ID: u8 = 0x01;
 
 const ATTRIBUTE_PERMISSIONS_TYPE_ID: u8 = 0x02;
@@ -23,10 +21,9 @@ const ATTRIBUTE_MODIFIED_AT_TYPE_ID: u8 = 0x04;
 
 const ATTRIBUTE_MIME_TYPE_TYPE_ID: u8 = 0x05;
 
-pub enum Attribute {
-    // Note: key and value both must encode to fewer than 255 bytes each
-    Custom { key: String, value: String },
+const ATTRIBUTE_CUSTOM_TYPE_ID: u8 = 0xff;
 
+pub enum Attribute {
     Owner(ActorId),
     Permissions(Permissions),
 
@@ -34,6 +31,9 @@ pub enum Attribute {
     ModifiedAt(OffsetDateTime),
 
     MimeType(String),
+
+    // Note: key and value both must encode to fewer than 255 bytes each
+    Custom { key: String, value: String },
 }
 
 impl Attribute {
