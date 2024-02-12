@@ -91,7 +91,7 @@ async fn main() -> BanyanFsResult<()> {
     };
 
     drive
-        .encode_with_key(&mut fh, &mut rng, &signing_key)
+        .encode_private(&mut fh, &mut rng, &signing_key)
         .await
         .unwrap();
 

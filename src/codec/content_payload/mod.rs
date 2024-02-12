@@ -8,21 +8,34 @@ pub use history_end::HistoryEnd;
 pub use history_start::HistoryStart;
 pub use key_access_settings::KeyAccessSettings;
 
-use async_trait::async_trait;
+use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::AsyncWrite;
 use nom::error::{Error as NomError, ErrorKind};
 use nom::number::streaming::le_u8;
 use nom::{Err, IResult};
 
-use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, SigningKey};
-use crate::codec::AsyncEncodable;
+use crate::codec::crypto::{AsymLockedAccessKey, SigningKey};
 
 pub enum ContentPayload {
-    Private { access_key: AccessKey },
+    Private,
     Public,
 }
 
 impl ContentPayload {
+    pub async fn encode_private<W: AsyncWrite + Unpin + Send>(
+        &self,
+        _rng: &mut impl CryptoRngCore,
+        _writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let _written_bytes = 0;
+
+        //todo: it may make sense to still allow private data encryption in public filesystems...
+
+        todo!();
+
+        //Ok(written_bytes)
+    }
+
     pub fn parse_private<'a>(input: &'a [u8], key: &SigningKey) -> IResult<&'a [u8], Self> {
         let (input, key_count) = le_u8(input)?;
         let (input, locked_keys) = AsymLockedAccessKey::parse_many(input, key_count)?;
@@ -30,39 +43,25 @@ impl ContentPayload {
         let key_id = key.key_id();
         let relevant_keys = locked_keys.into_iter().filter(|k| k.key_id == key_id);
 
-        let mut access_key = None;
+        let mut key_access_key = None;
         for potential_key in relevant_keys {
             if let Ok(key) = potential_key.unlock(key) {
-                access_key = Some(key);
+                key_access_key = Some(key);
                 break;
             }
         }
 
-        let access_key = match access_key {
+        let _key_access_key = match key_access_key {
             Some(ak) => ak,
             None => return Err(Err::Failure(NomError::new(input, ErrorKind::Verify))),
         };
 
         // todo(sstelfox): implement the rest
 
-        Ok((input, ContentPayload::Private { access_key }))
+        Ok((input, ContentPayload::Private))
     }
 
     pub fn parse_public(_input: &[u8]) -> IResult<&[u8], Self> {
         todo!()
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for ContentPayload {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        _writer: &mut W,
-    ) -> std::io::Result<usize> {
-        let _written_bytes = 0;
-
-        todo!();
-
-        //Ok(written_bytes)
     }
 }

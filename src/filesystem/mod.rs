@@ -15,12 +15,55 @@ use futures::AsyncWrite;
 use crate::codec::content_payload::{ContentPayload, KeyAccessSettings};
 use crate::codec::crypto::{AccessKey, SigningKey, VerifyingKey};
 use crate::codec::header::{IdentityHeader, PublicSettings};
-use crate::codec::{ActorId, AsyncEncodable, FilesystemId};
+use crate::codec::{ActorId, AsyncEncodable, Cid, FilesystemId};
+
+pub type KeyMap = HashMap<ActorId, (VerifyingKey, KeyAccessSettings)>;
 
 pub struct Drive {
     filesystem_id: FilesystemId,
-    keys: HashMap<ActorId, (VerifyingKey, KeyAccessSettings)>,
+    keys: KeyMap,
     root: Directory,
+}
+
+pub(crate) struct PrivateEncodingContext {
+    pub(crate) registered_keys: KeyMap,
+
+    pub(crate) key_access_key: AccessKey,
+
+    pub(crate) realized_view_key: AccessKey,
+    pub(crate) journal_key: AccessKey,
+    pub(crate) maintenance_key: AccessKey,
+    pub(crate) data_key: AccessKey,
+
+    pub(crate) journal_vector_range: (u64, u64),
+    pub(crate) merkle_root_range: (Cid, Cid),
+}
+
+impl PrivateEncodingContext {
+    pub fn new(
+        rng: &mut impl CryptoRngCore,
+        registered_keys: KeyMap,
+        journal_vector_range: (u64, u64),
+        merkle_root_range: (Cid, Cid),
+    ) -> Self {
+        let key_access_key = AccessKey::generate(rng);
+
+        let realized_view_key = AccessKey::generate(rng);
+        let journal_key = AccessKey::generate(rng);
+        let maintenance_key = AccessKey::generate(rng);
+        let data_key = AccessKey::generate(rng);
+
+        Self {
+            registered_keys,
+            key_access_key,
+            realized_view_key,
+            journal_key,
+            maintenance_key,
+            data_key,
+            journal_vector_range,
+            merkle_root_range,
+        }
+    }
 }
 
 impl Drive {
@@ -38,7 +81,7 @@ impl Drive {
         }
     }
 
-    pub async fn encode_with_key<W: AsyncWrite + Unpin + Send>(
+    pub async fn encode_private<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
         rng: &mut impl CryptoRngCore,
@@ -49,14 +92,18 @@ impl Drive {
         written_bytes += IdentityHeader::encode(&IdentityHeader, writer).await?;
         written_bytes += self.filesystem_id.encode(writer).await?;
 
-        // only doing private ones for now
+        // Don't support ECC yet
         written_bytes += PublicSettings::new(false, true).encode(writer).await?;
 
-        let content_payload = ContentPayload::Private {
-            access_key: AccessKey::generate(rng),
-        };
+        let encoding_context = PrivateEncodingContext::new(
+            rng,
+            self.keys.clone(),
+            (0, 0),
+            (Cid::from([0u8; 32]), Cid::from([0u8; 32])),
+        );
 
-        written_bytes += content_payload.encode(writer).await?;
+        let content_payload = ContentPayload::Private;
+        written_bytes += content_payload.encode_private(rng, writer).await?;
 
         Ok(written_bytes)
     }
