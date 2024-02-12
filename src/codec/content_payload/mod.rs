@@ -8,13 +8,17 @@ pub use history_end::HistoryEnd;
 pub use history_start::HistoryStart;
 pub use key_access_settings::KeyAccessSettings;
 
+use std::io::{Error as IoError, ErrorKind as IoErrorKind};
+
 use ecdsa::signature::rand_core::CryptoRngCore;
-use futures::AsyncWrite;
+use futures::{AsyncWrite, AsyncWriteExt};
 use nom::error::{Error as NomError, ErrorKind};
 use nom::number::streaming::le_u8;
 use nom::{Err, IResult};
 
 use crate::codec::crypto::{AsymLockedAccessKey, SigningKey};
+use crate::codec::AsyncEncodable;
+use crate::filesystem::PrivateEncodingContext;
 
 pub enum ContentPayload {
     Private,
@@ -24,16 +28,44 @@ pub enum ContentPayload {
 impl ContentPayload {
     pub async fn encode_private<W: AsyncWrite + Unpin + Send>(
         &self,
-        _rng: &mut impl CryptoRngCore,
-        _writer: &mut W,
+        rng: &mut impl CryptoRngCore,
+        context: &PrivateEncodingContext,
+        writer: &mut W,
     ) -> std::io::Result<usize> {
-        let _written_bytes = 0;
+        let mut written_bytes = 0;
 
-        //todo: it may make sense to still allow private data encryption in public filesystems...
+        let mut keys = context
+            .registered_keys
+            .clone()
+            .into_values()
+            .collect::<Vec<_>>();
 
-        todo!();
+        keys.sort_by_key(|(pub_key, _)| pub_key.key_id());
 
-        //Ok(written_bytes)
+        let keys_count = keys.len();
+        if keys_count > 255 {
+            return Err(IoError::new(
+                IoErrorKind::InvalidInput,
+                "too many keys in one filesystem to encode",
+            ));
+        }
+
+        writer.write_all(&[keys_count as u8]).await?;
+        written_bytes += 1;
+
+        for (verifying_key, _) in keys.into_iter() {
+            let escrowed_key = match context.key_access_key.lock_for(rng, &verifying_key) {
+                Ok(vk) => vk,
+                Err(err) => {
+                    tracing::error!("failed to lock key for encoding: {}", err);
+                    return Err(IoError::new(IoErrorKind::Other, "failed to lock key"));
+                }
+            };
+
+            written_bytes += escrowed_key.encode(writer).await?;
+        }
+
+        Ok(written_bytes)
     }
 
     pub fn parse_private<'a>(input: &'a [u8], key: &SigningKey) -> IResult<&'a [u8], Self> {

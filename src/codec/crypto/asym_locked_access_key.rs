@@ -1,10 +1,13 @@
+use async_trait::async_trait;
 use chacha20poly1305::{AeadInPlace, Key as ChaChaKey, KeyInit, XChaCha20Poly1305};
+use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 use nom::multi::count;
 use nom::sequence::tuple;
 use nom::{IResult, Needed};
 
 use crate::codec::crypto::{AccessKey, AuthenticationTag, KeyId, Nonce, SigningKey, VerifyingKey};
+use crate::codec::AsyncEncodable;
 
 const ACCESS_KEY_RECORD_LENGTH: usize = KeyId::size()
     + VerifyingKey::size()
@@ -80,6 +83,24 @@ impl AsymLockedAccessKey {
         key.copy_from_slice(&key_payload);
 
         Ok(AccessKey::from(key))
+    }
+}
+
+#[async_trait]
+impl AsyncEncodable for AsymLockedAccessKey {
+    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
+        let mut written_bytes = 0;
+
+        written_bytes += self.key_id.encode(writer).await?;
+        written_bytes += self.dh_exchange_key.encode(writer).await?;
+        written_bytes += self.nonce.encode(writer).await?;
+
+        writer.write_all(&self.cipher_text).await?;
+        written_bytes += self.cipher_text.len();
+
+        written_bytes += self.tag.encode(writer).await?;
+
+        Ok(written_bytes)
     }
 }
 

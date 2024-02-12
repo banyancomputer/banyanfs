@@ -1,10 +1,12 @@
 mod content_reference;
 mod file_content;
 mod nodes;
+mod private_encoding_context;
 
 pub use content_reference::ContentReference;
 pub use file_content::FileContent;
 pub use nodes::*;
+pub(crate) use private_encoding_context::PrivateEncodingContext;
 
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
@@ -13,57 +15,16 @@ use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::AsyncWrite;
 
 use crate::codec::content_payload::{ContentPayload, KeyAccessSettings};
-use crate::codec::crypto::{AccessKey, SigningKey, VerifyingKey};
+use crate::codec::crypto::{SigningKey, VerifyingKey};
 use crate::codec::header::{IdentityHeader, PublicSettings};
 use crate::codec::{ActorId, AsyncEncodable, Cid, FilesystemId};
 
-pub type KeyMap = HashMap<ActorId, (VerifyingKey, KeyAccessSettings)>;
+pub(crate) type KeyMap = HashMap<ActorId, (VerifyingKey, KeyAccessSettings)>;
 
 pub struct Drive {
     filesystem_id: FilesystemId,
     keys: KeyMap,
     root: Directory,
-}
-
-pub(crate) struct PrivateEncodingContext {
-    pub(crate) registered_keys: KeyMap,
-
-    pub(crate) key_access_key: AccessKey,
-
-    pub(crate) realized_view_key: AccessKey,
-    pub(crate) journal_key: AccessKey,
-    pub(crate) maintenance_key: AccessKey,
-    pub(crate) data_key: AccessKey,
-
-    pub(crate) journal_vector_range: (u64, u64),
-    pub(crate) merkle_root_range: (Cid, Cid),
-}
-
-impl PrivateEncodingContext {
-    pub fn new(
-        rng: &mut impl CryptoRngCore,
-        registered_keys: KeyMap,
-        journal_vector_range: (u64, u64),
-        merkle_root_range: (Cid, Cid),
-    ) -> Self {
-        let key_access_key = AccessKey::generate(rng);
-
-        let realized_view_key = AccessKey::generate(rng);
-        let journal_key = AccessKey::generate(rng);
-        let maintenance_key = AccessKey::generate(rng);
-        let data_key = AccessKey::generate(rng);
-
-        Self {
-            registered_keys,
-            key_access_key,
-            realized_view_key,
-            journal_key,
-            maintenance_key,
-            data_key,
-            journal_vector_range,
-            merkle_root_range,
-        }
-    }
 }
 
 impl Drive {
@@ -83,8 +44,8 @@ impl Drive {
 
     pub async fn encode_private<W: AsyncWrite + Unpin + Send>(
         &self,
-        writer: &mut W,
         rng: &mut impl CryptoRngCore,
+        writer: &mut W,
         _signing_key: &SigningKey,
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
@@ -103,7 +64,9 @@ impl Drive {
         );
 
         let content_payload = ContentPayload::Private;
-        written_bytes += content_payload.encode_private(rng, writer).await?;
+        written_bytes += content_payload
+            .encode_private(rng, &encoding_context, writer)
+            .await?;
 
         Ok(written_bytes)
     }

@@ -6,7 +6,7 @@ use nom::IResult;
 
 use crate::codec::AsyncEncodable;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub struct KeyId(u16);
 
 impl KeyId {

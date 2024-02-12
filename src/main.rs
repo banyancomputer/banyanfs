@@ -9,7 +9,7 @@ fn main() -> BanyanFsResult<()> {
 #[tokio::main]
 async fn main() -> BanyanFsResult<()> {
     use banyanfs::codec::filesystem::DirectoryPermissions;
-    use tokio_util::compat::TokioAsyncReadCompatExt;
+    //use tokio_util::compat::TokioAsyncReadCompatExt;
     use tracing::Level;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
@@ -76,24 +76,36 @@ async fn main() -> BanyanFsResult<()> {
         }
     }
 
-    let mut file_opts = tokio::fs::OpenOptions::new();
+    //let mut file_opts = tokio::fs::OpenOptions::new();
 
-    file_opts.write(true);
-    file_opts.create(true);
-    file_opts.truncate(true);
+    //file_opts.write(true);
+    //file_opts.create(true);
+    //file_opts.truncate(true);
 
-    let mut fh = match file_opts.open("fixtures/minimal.bfs").await {
-        Ok(fh) => fh.compat(),
-        Err(err) => {
-            tracing::error!("failed to open file: {err}");
-            return Ok(());
-        }
-    };
+    //let mut fh = match file_opts.open("fixtures/minimal.bfs").await {
+    //    Ok(fh) => fh.compat(),
+    //    Err(err) => {
+    //        tracing::error!("failed to open file: {err}");
+    //        return Ok(());
+    //    }
+    //};
 
-    drive
-        .encode_private(&mut fh, &mut rng, &signing_key)
+    //drive
+    //    .encode_private(&mut fh, &mut rng, &signing_key)
+    //    .await
+    //    .unwrap();
+
+    let mut encoded_drive = Vec::new();
+    if let Err(err) = drive
+        .encode_private(&mut rng, &mut encoded_drive, &signing_key)
         .await
-        .unwrap();
+    {
+        tracing::error!("failed to encode drive: {err}");
+        return Ok(());
+    }
+
+    tracing::info!("encoded_drive: {} bytes", encoded_drive.len());
+    tracing::debug!("encoded_drive: {encoded_drive:02x?}");
 
     //let mut fh = tokio::fs::File::open("fixtures/minimal.bfs").await?;
     //let loaded_drive = Drive::load_with_key(&mut fh, &signing_key).await?;
