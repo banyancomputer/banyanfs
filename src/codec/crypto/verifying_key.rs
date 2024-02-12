@@ -9,7 +9,7 @@ use nom::{Err, IResult};
 use p384::ecdh::EphemeralSecret;
 use p384::NistP384;
 
-use crate::codec::crypto::{Fingerprint, KeyId};
+use crate::codec::crypto::{AccessKey, Fingerprint, KeyId};
 use crate::codec::ActorId;
 use crate::codec::AsyncEncodable;
 
@@ -25,8 +25,7 @@ impl VerifyingKey {
         ActorId::from(self.fingerprint())
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn ephemeral_dh_exchange(&self, rng: &mut impl CryptoRngCore) -> (Self, [u8; 32]) {
+    pub(crate) fn ephemeral_dh_exchange(&self, rng: &mut impl CryptoRngCore) -> (Self, AccessKey) {
         let eph_secret: EphemeralSecret = EphemeralSecret::random(rng);
 
         let pub_key = Self {
@@ -41,7 +40,7 @@ impl VerifyingKey {
             unreachable!("secret_bytes will always have the correct length");
         }
 
-        (pub_key, secret_bytes)
+        (pub_key, AccessKey::from(secret_bytes))
     }
 
     pub fn fingerprint(&self) -> Fingerprint {

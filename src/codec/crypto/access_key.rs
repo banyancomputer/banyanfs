@@ -13,9 +13,41 @@ const ACCESS_KEY_LENGTH: usize = 32;
 pub struct AccessKey([u8; ACCESS_KEY_LENGTH]);
 
 impl AccessKey {
-    #[allow(dead_code)]
     pub(crate) fn chacha_key(&self) -> &ChaChaKey {
         ChaChaKey::from_slice(&self.0)
+    }
+
+    pub fn decrypt_buffer(
+        &self,
+        nonce: Nonce,
+        buffer: &mut [u8],
+        tag: AuthenticationTag,
+    ) -> Result<(), AccessKeyError<&[u8]>> {
+        XChaCha20Poly1305::new(self.chacha_key()).decrypt_in_place_detached(
+            &nonce,
+            &[],
+            buffer,
+            &tag,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn encrypt_buffer(
+        &self,
+        rng: &mut impl CryptoRngCore,
+        buffer: &mut [u8],
+    ) -> Result<(Nonce, AuthenticationTag), AccessKeyError<&[u8]>> {
+        let cipher = XChaCha20Poly1305::new(self.chacha_key());
+
+        let nonce = Nonce::generate(rng);
+        let raw_tag = cipher.encrypt_in_place_detached(&nonce, &[], buffer)?;
+
+        let mut tag_bytes = [0u8; AuthenticationTag::size()];
+        tag_bytes.copy_from_slice(raw_tag.as_bytes());
+        let tag = AuthenticationTag::from(tag_bytes);
+
+        Ok((nonce, tag))
     }
 
     pub fn generate(rng: &mut impl CryptoRngCore) -> Self {
@@ -29,25 +61,17 @@ impl AccessKey {
     ) -> Result<AsymLockedAccessKey, AccessKeyError<&[u8]>> {
         let (dh_exchange_key, shared_secret) = verifying_key.ephemeral_dh_exchange(rng);
 
-        let mut key_payload = [0u8; ACCESS_KEY_LENGTH];
-        key_payload.copy_from_slice(&self.0);
-
-        let chacha_key = ChaChaKey::from_slice(&shared_secret);
-        let cipher = XChaCha20Poly1305::new(chacha_key);
-
-        let nonce = Nonce::generate(rng);
-        let raw_tag = cipher.encrypt_in_place_detached(&nonce, &[], &mut key_payload)?;
-
-        let mut tag_bytes = [0u8; AuthenticationTag::size()];
-        tag_bytes.copy_from_slice(raw_tag.as_bytes());
-        let tag = AuthenticationTag::from(tag_bytes);
+        let mut payload = self.0;
+        let (nonce, tag) = shared_secret
+            .encrypt_buffer(rng, &mut payload)
+            .map_err(|_| AccessKeyError::CryptoFailure)?;
 
         let key_id = verifying_key.key_id();
 
         Ok(AsymLockedAccessKey {
             dh_exchange_key,
             nonce,
-            cipher_text: key_payload,
+            cipher_text: payload,
             tag,
             key_id,
         })
@@ -56,21 +80,17 @@ impl AccessKey {
     pub fn lock_with(
         &self,
         rng: &mut impl CryptoRngCore,
-        encrypion_key: &AccessKey,
+        encryption_key: &AccessKey,
     ) -> Result<SymLockedAccessKey, AccessKeyError<&[u8]>> {
-        let cipher = XChaCha20Poly1305::new(encrypion_key.chacha_key());
-        let nonce = Nonce::generate(rng);
+        let mut payload = self.0;
 
-        let mut cipher_text = self.0;
-        let raw_tag = cipher.encrypt_in_place_detached(&nonce, &[], &mut cipher_text)?;
-
-        let mut tag_bytes = [0u8; AuthenticationTag::size()];
-        tag_bytes.copy_from_slice(raw_tag.as_bytes());
-        let tag = AuthenticationTag::from(tag_bytes);
+        let (nonce, tag) = encryption_key
+            .encrypt_buffer(rng, &mut payload)
+            .map_err(|_| AccessKeyError::CryptoFailure)?;
 
         Ok(SymLockedAccessKey {
             nonce,
-            cipher_text,
+            cipher_text: payload,
             tag,
         })
     }

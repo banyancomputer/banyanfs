@@ -2,7 +2,7 @@ use ecdsa::signature::rand_core::CryptoRngCore;
 use ecdsa::signature::RandomizedDigestSigner;
 use p384::NistP384;
 
-use crate::codec::crypto::{Fingerprint, KeyId, Signature, VerifyingKey};
+use crate::codec::crypto::{AccessKey, Fingerprint, KeyId, Signature, VerifyingKey};
 use crate::codec::ActorId;
 
 const KEY_SIZE: usize = 48;
@@ -16,21 +16,19 @@ impl SigningKey {
         self.verifying_key().actor_id()
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn dh_exchange(&self, other_pubkey: &VerifyingKey) -> [u8; 32] {
+    pub(crate) fn dh_exchange(&self, other_pubkey: &VerifyingKey) -> AccessKey {
         let shared_secret = elliptic_curve::ecdh::diffie_hellman(
             self.inner.as_nonzero_scalar(),
             other_pubkey.as_affine(),
         );
 
+        let mut secret_bytes = [0u8; AccessKey::size()];
         let secret_expansion = shared_secret.extract::<sha2::Sha384>(None);
-
-        let mut secret_bytes = [0u8; 32];
         if secret_expansion.expand(&[], &mut secret_bytes).is_err() {
             unreachable!("secret_bytes will always have the correct length");
         }
 
-        secret_bytes
+        AccessKey::from(secret_bytes)
     }
 
     pub fn fingerprint(&self) -> Fingerprint {

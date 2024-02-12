@@ -9,7 +9,7 @@ fn main() -> BanyanFsResult<()> {
 #[tokio::main]
 async fn main() -> BanyanFsResult<()> {
     use banyanfs::codec::filesystem::DirectoryPermissions;
-    //use tokio_util::compat::TokioAsyncReadCompatExt;
+    use tokio_util::compat::TokioAsyncReadCompatExt;
     use tracing::Level;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
@@ -76,43 +76,51 @@ async fn main() -> BanyanFsResult<()> {
         }
     }
 
-    //let mut file_opts = tokio::fs::OpenOptions::new();
+    let mut file_opts = tokio::fs::OpenOptions::new();
 
-    //file_opts.write(true);
-    //file_opts.create(true);
-    //file_opts.truncate(true);
+    file_opts.write(true);
+    file_opts.create(true);
+    file_opts.truncate(true);
 
-    //let mut fh = match file_opts.open("fixtures/minimal.bfs").await {
-    //    Ok(fh) => fh.compat(),
-    //    Err(err) => {
-    //        tracing::error!("failed to open file: {err}");
-    //        return Ok(());
-    //    }
-    //};
+    let mut fh = match file_opts.open("fixtures/minimal.bfs").await {
+        Ok(fh) => fh.compat(),
+        Err(err) => {
+            tracing::error!("failed to open file: {err}");
+            return Ok(());
+        }
+    };
 
-    //drive
-    //    .encode_private(&mut fh, &mut rng, &signing_key)
-    //    .await
-    //    .unwrap();
-
-    let mut encoded_drive = Vec::new();
-    if let Err(err) = drive
-        .encode_private(&mut rng, &mut encoded_drive, &signing_key)
-        .await
-    {
+    if let Err(err) = drive.encode_private(&mut rng, &mut fh, &signing_key).await {
         tracing::error!("failed to encode drive: {err}");
         return Ok(());
     }
 
-    tracing::info!("encoded_drive: {} bytes", encoded_drive.len());
-    tracing::debug!("encoded_drive: {encoded_drive:02x?}");
+    let _fh = match tokio::fs::File::open("fixtures/minimal.bfs").await {
+        Ok(fh) => fh.compat(),
+        Err(err) => {
+            tracing::error!("failed to open file: {err}");
+            return Ok(());
+        }
+    };
 
-    //let mut fh = tokio::fs::File::open("fixtures/minimal.bfs").await?;
-    //let loaded_drive = Drive::load_with_key(&mut fh, &signing_key).await?;
-    //fh.close().await?;
+    //let loaded_drive = match Drive::load_with_key(&mut fh, &signing_key) {
+    //    Ok(d) => d,
+    //    Err(err) => {
+    //        tracing::error!("failed to load saved drive: {err}");
+    //        return Ok(());
+    //    }
+    //};
 
-    //let dir_contents = loaded_drive.ls("/root/testing/deep/paths")?;
-    //tracing::info!("dir_contents: {dir_contents:?}");
+    //match loaded_drive.ls(&["testing"]) {
+    //    Ok(dir_contents) => {
+    //        let names: Vec<String> = dir_contents.into_iter().map(|(name, _)| name).collect();
+    //        tracing::info!("dir_contents: {names:?}");
+    //    }
+    //    Err(err) => {
+    //        tracing::error!("failed to list directory: {err}");
+    //        return Ok(());
+    //    }
+    //}
 
     Ok(())
 }

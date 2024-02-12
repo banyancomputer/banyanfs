@@ -2,11 +2,13 @@ mod content_options;
 mod history_end;
 mod history_start;
 mod key_access_settings;
+mod permission_control;
 
 pub use content_options::ContentOptions;
 pub use history_end::HistoryEnd;
 pub use history_start::HistoryStart;
 pub use key_access_settings::KeyAccessSettings;
+pub use permission_control::PermissionControl;
 
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 
@@ -25,8 +27,7 @@ use crate::filesystem::PrivateEncodingContext;
 
 use super::crypto::AuthenticationTag;
 
-const ENCRYPTED_PAYLOAD_SIZE: usize = KeyId::size()
-    + HistoryStart::size()
+const ENCRYPTED_KEY_PAYLOAD_SIZE: usize = KeyId::size()
     + VerifyingKey::size()
     + Nonce::size()
     + AccessKey::size()
@@ -77,6 +78,8 @@ impl ContentPayload {
             written_bytes += escrowed_key.encode(writer).await?;
         }
 
+        // We need to build this part up and encrypt it before we write it out
+
         Ok(written_bytes)
     }
 
@@ -85,27 +88,34 @@ impl ContentPayload {
         let (input, locked_keys) = AsymLockedAccessKey::parse_many(input, key_count)?;
 
         let key_id = key.key_id();
-        let relevant_keys = locked_keys
-            .iter()
-            .enumerate()
-            .filter(|(_, k)| k.key_id == key_id);
+        let relevant_keys = locked_keys.iter().filter(|k| k.key_id == key_id);
 
         let mut key_access_key = None;
-        for (idx, potential_key) in relevant_keys {
+        for potential_key in relevant_keys {
             if let Ok(key) = potential_key.unlock(key) {
-                key_access_key = Some((key, idx));
+                key_access_key = Some(key);
                 break;
             }
         }
 
-        let _key_access_key = match key_access_key {
+        let key_access_key = match key_access_key {
             Some(ak) => ak,
             None => return Err(Err::Failure(NomError::new(input, ErrorKind::Verify))),
         };
 
-        let (input, _chunk) = take(locked_keys.len() * ENCRYPTED_PAYLOAD_SIZE)(input)?;
+        let key_chunk_length = locked_keys.len() * ENCRYPTED_KEY_PAYLOAD_SIZE;
+        let encrypted_chunk_length = HistoryStart::size() + key_chunk_length;
 
-        // decrypt chunk, parse as a series of PermissionControl
+        let (input, nonce) = Nonce::parse(input)?;
+        let (input, chunk) = take(encrypted_chunk_length)(input)?;
+        let (input, tag) = AuthenticationTag::parse(input)?;
+
+        let mut chunk = chunk.to_vec();
+        key_access_key
+            .decrypt_buffer(nonce, &mut chunk, tag)
+            .map_err(|_| Err::Failure(NomError::new(input, ErrorKind::Verify)))?;
+
+        // parse as a series of PermissionControl
 
         // todo(sstelfox): implement the rest
 

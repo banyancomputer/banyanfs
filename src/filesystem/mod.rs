@@ -42,6 +42,17 @@ impl Drive {
         }
     }
 
+    pub fn load_with_key(input: &[u8], signing_key: &SigningKey) -> Result<Self, DriveError> {
+        let (input, _) =
+            IdentityHeader::parse_with_magic(input).map_err(|_| DriveError::HeaderReadFailure)?;
+        let (input, filesystem_id) =
+            FilesystemId::parse(input).map_err(|_| DriveError::HeaderReadFailure)?;
+        let (input, public_settings) =
+            PublicSettings::parse(input).map_err(|_| DriveError::HeaderReadFailure)?;
+
+        todo!()
+    }
+
     pub async fn encode_private<W: AsyncWrite + Unpin + Send>(
         &self,
         rng: &mut impl CryptoRngCore,
@@ -134,4 +145,10 @@ impl DerefMut for Drive {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.root
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum DriveError {
+    #[error("failed to parse drive data, is this a banyanfs file?")]
+    HeaderReadFailure,
 }

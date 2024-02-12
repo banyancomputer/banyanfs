@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use chacha20poly1305::{AeadInPlace, Key as ChaChaKey, KeyInit, XChaCha20Poly1305};
+use chacha20poly1305::{AeadInPlace, KeyInit, XChaCha20Poly1305};
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 use nom::multi::count;
@@ -70,19 +70,16 @@ impl AsymLockedAccessKey {
         }
 
         let shared_secret = key.dh_exchange(&self.dh_exchange_key);
-        let mut key_payload = self.cipher_text.to_vec();
+        let mut key_payload = self.cipher_text;
 
-        XChaCha20Poly1305::new(ChaChaKey::from_slice(&shared_secret)).decrypt_in_place_detached(
+        XChaCha20Poly1305::new(shared_secret.chacha_key()).decrypt_in_place_detached(
             &self.nonce,
             &[],
             &mut key_payload,
             &self.tag,
         )?;
 
-        let mut key = [0u8; AccessKey::size()];
-        key.copy_from_slice(&key_payload);
-
-        Ok(AccessKey::from(key))
+        Ok(AccessKey::from(key_payload))
     }
 }
 
