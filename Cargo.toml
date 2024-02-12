@@ -34,6 +34,7 @@ crdts = { version = "^7", default-features = false, features = [
   "num",
 ] }
 time = "^0.3"
+tokio-util = { version = "^0.7", features = ["compat", "io"] }
 
 [[bin]]
 name = "banyanfs"

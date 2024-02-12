@@ -9,9 +9,13 @@ pub use nodes::*;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
-use crate::codec::content_payload::KeyAccessSettings;
-use crate::codec::crypto::{SigningKey, VerifyingKey};
-use crate::codec::{ActorId, FilesystemId};
+use ecdsa::signature::rand_core::CryptoRngCore;
+use futures::AsyncWrite;
+
+use crate::codec::content_payload::{ContentPayload, KeyAccessSettings};
+use crate::codec::crypto::{AccessKey, SigningKey, VerifyingKey};
+use crate::codec::header::{IdentityHeader, PublicSettings};
+use crate::codec::{ActorId, AsyncEncodable, FilesystemId};
 
 pub struct Drive {
     filesystem_id: FilesystemId,
@@ -34,13 +38,34 @@ impl Drive {
         }
     }
 
+    pub async fn encode_with_key<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+        rng: &mut impl CryptoRngCore,
+        _signing_key: &SigningKey,
+    ) -> std::io::Result<usize> {
+        let mut written_bytes = 0;
+
+        written_bytes += IdentityHeader::encode(&IdentityHeader, writer, 0).await?;
+        written_bytes += self.filesystem_id.encode(writer, 0).await?;
+
+        // only doing private ones for now
+        written_bytes += PublicSettings::new(false, true).encode(writer, 0).await?;
+
+        let content_payload = ContentPayload::Private {
+            access_key: AccessKey::generate(rng),
+        };
+
+        written_bytes += content_payload.encode(writer, 0).await?;
+
+        Ok(written_bytes)
+    }
+
     pub fn id(&self) -> FilesystemId {
         self.filesystem_id
     }
 
-    pub fn initialize_private(signing_key: &SigningKey) -> Self {
-        let mut rng = crate::utils::crypto_rng();
-
+    pub fn initialize_private(rng: &mut impl CryptoRngCore, signing_key: &SigningKey) -> Self {
         let verifying_key = signing_key.verifying_key();
         let actor_id = signing_key.actor_id();
 
@@ -59,7 +84,7 @@ impl Drive {
         keys.insert(actor_id, (verifying_key, kas));
 
         Self {
-            filesystem_id: FilesystemId::generate(&mut rng),
+            filesystem_id: FilesystemId::generate(rng),
             keys,
             root: Directory::new(actor_id),
         }

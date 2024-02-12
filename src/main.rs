@@ -9,6 +9,7 @@ fn main() -> BanyanFsResult<()> {
 #[tokio::main]
 async fn main() -> BanyanFsResult<()> {
     use banyanfs::codec::filesystem::DirectoryPermissions;
+    use tokio_util::compat::TokioAsyncReadCompatExt;
     use tracing::Level;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
@@ -28,20 +29,9 @@ async fn main() -> BanyanFsResult<()> {
     tracing::debug!("running banyanfs {}", version());
 
     let mut rng = banyanfs::utils::crypto_rng();
-
-    let header = FormatHeader {
-        ecc_present: false,
-        private: false,
-        filesystem_id: FilesystemId::generate(&mut rng),
-    };
-
-    let mut output_stream = Vec::new();
-    header.encode(&mut output_stream, 0).await.unwrap();
-    tracing::info!("output_stream: {:02x?}", output_stream);
-
     let signing_key = SigningKey::generate(&mut rng);
-    let actor_id = signing_key.actor_id();
-    let mut drive = Drive::initialize_private(&signing_key);
+
+    let mut drive = Drive::initialize_private(&mut rng, &signing_key);
 
     if !drive.check_accessibility(&signing_key.verifying_key()) {
         tracing::error!("key doesn't have access to the drive");
@@ -49,21 +39,12 @@ async fn main() -> BanyanFsResult<()> {
     }
 
     if drive.is_writable(&signing_key) {
+        let actor_id = signing_key.actor_id();
         let new_perms = DirectoryPermissions::default();
+
         if let Err(err) = drive.mkdir(actor_id, &["testing", "paths"], new_perms, true) {
             tracing::error!("failed to create directory: {}", err);
             return Ok(());
-        }
-
-        match drive.ls(&["testing"]) {
-            Ok(dir_contents) => {
-                let names: Vec<String> = dir_contents.into_iter().map(|(name, _)| name).collect();
-                tracing::info!("dir_contents: {names:?}");
-            }
-            Err(err) => {
-                tracing::error!("failed to list directory: {err}");
-                return Ok(());
-            }
         }
 
         //    let fh = drive.open("/root/testing/deep/paths/file.txt")?;
@@ -84,12 +65,35 @@ async fn main() -> BanyanFsResult<()> {
         //    drive.sync()?;
     }
 
-    //let dir_contents = drive.ls("/root/testing")?;
-    //tracing::info!("dir_contents: {dir_contents:?}");
+    match drive.ls(&["testing"]) {
+        Ok(dir_contents) => {
+            let names: Vec<String> = dir_contents.into_iter().map(|(name, _)| name).collect();
+            tracing::info!("dir_contents: {names:?}");
+        }
+        Err(err) => {
+            tracing::error!("failed to list directory: {err}");
+            return Ok(());
+        }
+    }
 
-    //let mut fh = tokio::fs::File::open("fixtures/minimal.bfs").await?;
-    //drive.encode_with_key(&mut fh, &signing_key).await?;
-    //fh.close().await?;
+    let mut file_opts = tokio::fs::OpenOptions::new();
+
+    file_opts.write(true);
+    file_opts.create(true);
+    file_opts.truncate(true);
+
+    let mut fh = match file_opts.open("fixtures/minimal.bfs").await {
+        Ok(fh) => fh.compat(),
+        Err(err) => {
+            tracing::error!("failed to open file: {err}");
+            return Ok(());
+        }
+    };
+
+    drive
+        .encode_with_key(&mut fh, &mut rng, &signing_key)
+        .await
+        .unwrap();
 
     //let mut fh = tokio::fs::File::open("fixtures/minimal.bfs").await?;
     //let loaded_drive = Drive::load_with_key(&mut fh, &signing_key).await?;
