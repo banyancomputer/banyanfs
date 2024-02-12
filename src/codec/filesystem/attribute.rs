@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 use nom::error::{Error as NomError, ErrorKind};
+use nom::multi::count;
 use nom::number::streaming::{le_u64, le_u8};
 use nom::IResult;
 use time::OffsetDateTime;
@@ -93,6 +94,10 @@ impl Attribute {
         };
 
         Ok(parsed)
+    }
+
+    pub fn parse_many(input: &[u8], attribute_count: u8) -> IResult<&[u8], Vec<Self>> {
+        count(Self::parse, attribute_count as usize)(input)
     }
 }
 

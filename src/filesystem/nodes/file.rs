@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 
-use nom::AsBytes;
+use async_trait::async_trait;
+use futures::{AsyncWrite, AsyncWriteExt};
+use nom::error::Error as NomError;
+use nom::error::ErrorKind;
+use nom::number::streaming::le_u8;
 use time::OffsetDateTime;
 
 use crate::codec::filesystem::{Attribute, Permissions};
@@ -22,17 +26,96 @@ pub struct File {
 impl File {
     pub async fn calculate_cid(&self) -> Result<Cid, FileError> {
         let mut cid_content = Vec::new();
+        self.encode(&mut cid_content, 0).await?;
+        let hash: [u8; 32] = blake3::hash(&cid_content).into();
 
-        // todo:
-        //self.content.encode(&mut cid_content, 0).await?;
+        Ok(Cid::from(hash))
+    }
 
-        let mut attributes = vec![
-            Attribute::Owner(self.owner()),
-            Attribute::Permissions(self.permissions()),
-            Attribute::CreatedAt(self.created_at()),
-            Attribute::ModifiedAt(self.modified_at()),
-        ];
+    pub fn created_at(&self) -> OffsetDateTime {
+        self.created_at
+    }
 
+    pub fn modified_at(&self) -> OffsetDateTime {
+        self.modified_at
+    }
+
+    pub fn owner(&self) -> ActorId {
+        self.owner
+    }
+
+    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
+        let (remaining, attribute_count) = le_u8(input)?;
+
+        let mut owner = None;
+        let mut permissions = None;
+        let mut created_at = None;
+        let mut modified_at = None;
+        let mut metadata = HashMap::new();
+
+        let (remaining, attributes) = Attribute::parse_many(input, attribute_count)?;
+
+        // Validate that we have all the required attributes
+        let owner = owner.ok_or(nom::Err::Failure(NomError::new(input, ErrorKind::Verify)))?;
+        let permissions =
+            permissions.ok_or(nom::Err::Failure(NomError::new(input, ErrorKind::Verify)))?;
+        let created_at =
+            created_at.ok_or(nom::Err::Failure(NomError::new(input, ErrorKind::Verify)))?;
+        let modified_at =
+            modified_at.ok_or(nom::Err::Failure(NomError::new(input, ErrorKind::Verify)))?;
+
+        let (remaining, content) = FileContent::parse(remaining)?;
+
+        let file = Self {
+            owner,
+            permissions,
+            created_at,
+            modified_at,
+            metadata,
+            content,
+        };
+
+        Ok((remaining, file))
+    }
+
+    pub fn permissions(&self) -> Permissions {
+        self.permissions
+    }
+}
+
+#[async_trait]
+impl AsyncEncodable for File {
+    async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+        mut pos: usize,
+    ) -> std::io::Result<usize> {
+        let attribute_count = 4 + self.metadata.len();
+        if attribute_count > 255 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "metadata has too many entries to encode in the file",
+            ));
+        }
+
+        writer.write_all(&[attribute_count as u8]).await?;
+        pos += 1;
+
+        // We know we need to order everything based on the byte, but since these have reserved
+        // types we know they'll sort before any of the other attribtues. We can take a shortcut
+        // and just encode themn directly in the order we know they'll appear.
+        pos = Attribute::Owner(self.owner()).encode(writer, pos).await?;
+        pos = Attribute::Permissions(self.permissions())
+            .encode(writer, pos)
+            .await?;
+        pos = Attribute::CreatedAt(self.created_at())
+            .encode(writer, pos)
+            .await?;
+        pos = Attribute::ModifiedAt(self.modified_at())
+            .encode(writer, pos)
+            .await?;
+
+        let mut attributes = Vec::new();
         for (key, value) in self.metadata.iter() {
             match key.as_str() {
                 // This is an optional named attribute that lives in the metadata and can be
@@ -59,28 +142,13 @@ impl File {
         // Sort lexigraphically by the bytes strings as the RFC specifies
         attribute_bytes.sort_unstable();
         for attribute in attribute_bytes.into_iter() {
-            cid_content.extend(attribute);
+            writer.write_all(&attribute).await?;
+            pos += attribute.len();
         }
 
-        let hash: [u8; 32] = blake3::hash(cid_content.as_bytes()).into();
+        pos = self.content.encode(writer, pos).await?;
 
-        Ok(Cid::from(hash))
-    }
-
-    pub fn created_at(&self) -> OffsetDateTime {
-        self.created_at
-    }
-
-    pub fn modified_at(&self) -> OffsetDateTime {
-        self.modified_at
-    }
-
-    pub fn owner(&self) -> ActorId {
-        self.owner
-    }
-
-    pub fn permissions(&self) -> Permissions {
-        self.permissions
+        Ok(pos)
     }
 }
 
