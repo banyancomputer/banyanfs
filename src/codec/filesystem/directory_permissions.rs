@@ -49,11 +49,7 @@ impl DirectoryPermissions {
 
 #[async_trait]
 impl AsyncEncodable for DirectoryPermissions {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-        _pos: usize,
-    ) -> std::io::Result<usize> {
+    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
         let mut options: u8 = 0x00;
 
         if self.owner_write_only {

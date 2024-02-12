@@ -36,18 +36,16 @@ impl FormatHeader {
 
 #[async_trait]
 impl AsyncEncodable for FormatHeader {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-        pos: usize,
-    ) -> std::io::Result<usize> {
-        let pos = IdentityHeader::encode(&IdentityHeader, writer, pos).await?;
-        let pos = self.filesystem_id.encode(writer, pos).await?;
+    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
+        let mut written_bytes = 0;
+
+        written_bytes += IdentityHeader::encode(&IdentityHeader, writer).await?;
+        written_bytes += self.filesystem_id.encode(writer).await?;
 
         let settings = PublicSettings::new(self.ecc_present, self.private);
-        let pos = settings.encode(writer, pos).await?;
+        written_bytes += settings.encode(writer).await?;
 
-        Ok(pos)
+        Ok(written_bytes)
     }
 }
 
@@ -89,8 +87,9 @@ mod tests {
         );
 
         let mut encoded = Vec::new();
-        parsed.encode(&mut encoded, 0).await.unwrap();
+        let size = parsed.encode(&mut encoded).await.unwrap();
 
         assert_eq!(source, encoded);
+        assert_eq!(source.len(), size);
     }
 }

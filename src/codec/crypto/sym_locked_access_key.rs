@@ -47,17 +47,15 @@ impl SymLockedAccessKey {
 
 #[async_trait]
 impl AsyncEncodable for SymLockedAccessKey {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-        mut pos: usize,
-    ) -> std::io::Result<usize> {
-        pos = self.nonce.encode(writer, pos).await?;
+    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
+        let mut written_bytes = self.nonce.encode(writer).await?;
 
         writer.write_all(&self.cipher_text).await?;
-        pos += self.cipher_text.len();
+        written_bytes += self.cipher_text.len();
 
-        self.tag.encode(writer, pos).await
+        written_bytes += self.tag.encode(writer).await?;
+
+        Ok(written_bytes)
     }
 }
 

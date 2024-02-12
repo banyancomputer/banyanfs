@@ -77,11 +77,7 @@ impl FileContent {
 
 #[async_trait]
 impl AsyncEncodable for FileContent {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-        _pos: usize,
-    ) -> std::io::Result<usize> {
+    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
         let mut written_bytes = 0;
 
         match self {
@@ -92,7 +88,7 @@ impl AsyncEncodable for FileContent {
                 writer.write_all(&[FILE_CONTENT_TYPE_PUBLIC]).await?;
                 written_bytes += 1;
 
-                written_bytes += access_key.encode(writer, 0).await?;
+                written_bytes += access_key.encode(writer).await?;
                 written_bytes += encode_content_list(writer, content).await?;
             }
             Self::Public { content } => {
@@ -130,7 +126,7 @@ async fn encode_content_list<W: AsyncWrite + Unpin + Send>(
     }
 
     for c in content {
-        written_bytes += c.encode(writer, 0).await?;
+        written_bytes += c.encode(writer).await?;
     }
 
     Ok(written_bytes)

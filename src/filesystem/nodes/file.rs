@@ -31,7 +31,7 @@ pub struct File {
 impl File {
     pub async fn calculate_cid(&self) -> Result<Cid, FileError> {
         let mut cid_content = Vec::new();
-        self.encode(&mut cid_content, 0).await?;
+        self.encode(&mut cid_content).await?;
         let hash: [u8; 32] = blake3::hash(&cid_content).into();
         Ok(Cid::from(hash))
     }
@@ -130,11 +130,7 @@ impl File {
 
 #[async_trait]
 impl AsyncEncodable for File {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-        _pos: usize,
-    ) -> std::io::Result<usize> {
+    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
         let mut written_bytes = 0;
 
         writer.write_all(&self.id).await?;
@@ -154,15 +150,15 @@ impl AsyncEncodable for File {
         // We know we need to order everything based on the byte, but since these have reserved
         // types we know they'll sort before any of the other attribtues. We can take a shortcut
         // and just encode themn directly in the order we know they'll appear.
-        written_bytes += Attribute::Owner(self.owner()).encode(writer, 0).await?;
+        written_bytes += Attribute::Owner(self.owner()).encode(writer).await?;
         written_bytes += Attribute::Permissions(self.permissions())
-            .encode(writer, 0)
+            .encode(writer)
             .await?;
         written_bytes += Attribute::CreatedAt(self.created_at())
-            .encode(writer, 0)
+            .encode(writer)
             .await?;
         written_bytes += Attribute::ModifiedAt(self.modified_at())
-            .encode(writer, 0)
+            .encode(writer)
             .await?;
 
         let mut attributes = Vec::new();
@@ -185,7 +181,7 @@ impl AsyncEncodable for File {
         let mut attribute_bytes = Vec::new();
         for attribute in attributes.into_iter() {
             let mut encoded_attributes = Vec::new();
-            attribute.encode(&mut encoded_attributes, 0).await?;
+            attribute.encode(&mut encoded_attributes).await?;
             attribute_bytes.push(encoded_attributes);
         }
 
@@ -196,7 +192,7 @@ impl AsyncEncodable for File {
             written_bytes += attribute.len();
         }
 
-        written_bytes += self.content.encode(writer, 0).await?;
+        written_bytes += self.content.encode(writer).await?;
 
         Ok(written_bytes)
     }

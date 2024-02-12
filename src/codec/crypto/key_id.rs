@@ -22,13 +22,10 @@ impl KeyId {
 
 #[async_trait::async_trait]
 impl AsyncEncodable for KeyId {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-        pos: usize,
-    ) -> std::io::Result<usize> {
-        writer.write_all(&self.0.to_le_bytes()).await?;
-        Ok(pos + 2)
+    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
+        let key_id_bytes = self.0.to_le_bytes();
+        writer.write_all(&key_id_bytes).await?;
+        Ok(key_id_bytes.len())
     }
 }
 

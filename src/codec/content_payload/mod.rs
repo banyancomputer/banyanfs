@@ -48,9 +48,8 @@ impl ContentPayload {
         Ok((input, ContentPayload::Private { access_key }))
     }
 
-    pub fn parse_public(input: &[u8]) -> IResult<&[u8], Self> {
-        // todo(sstelfox): implement
-        Ok((input, ContentPayload::Public))
+    pub fn parse_public(_input: &[u8]) -> IResult<&[u8], Self> {
+        todo!()
     }
 }
 
@@ -59,7 +58,6 @@ impl AsyncEncodable for ContentPayload {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         _writer: &mut W,
-        _pos: usize,
     ) -> std::io::Result<usize> {
         let _written_bytes = 0;
 

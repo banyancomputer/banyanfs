@@ -2,13 +2,17 @@ use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 use nom::error::Error as NomError;
-use nom::error::ErrorKind;
 
 use crate::codec::AsyncEncodable;
 
 #[derive(Debug, PartialEq)]
 pub enum NodeType {
     File,
+    AssociatedData,
+    Directory,
+    InternalLink,
+    NativeMount,
+    Unknown(u8),
 }
 
 impl NodeType {
@@ -18,7 +22,12 @@ impl NodeType {
 
         let parsed_type = match node_type {
             0x00 => Self::File,
-            _ => return Err(nom::Err::Error(NomError::new(input, ErrorKind::Tag))),
+            0x01 => Self::AssociatedData,
+            0x02 => Self::Directory,
+            0x03 => Self::InternalLink,
+            0x04 => Self::NativeMount,
+
+            num => Self::Unknown(num),
         };
 
         Ok((input, parsed_type))
@@ -27,17 +36,19 @@ impl NodeType {
 
 #[async_trait]
 impl AsyncEncodable for NodeType {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-        pos: usize,
-    ) -> std::io::Result<usize> {
+    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
         let type_byte = match self {
             Self::File => 0x00,
+            Self::AssociatedData => 0x01,
+            Self::Directory => 0x02,
+            Self::InternalLink => 0x03,
+            Self::NativeMount => 0x04,
+            Self::Unknown(num) => *num,
         };
 
         writer.write_all(&[type_byte]).await?;
-        Ok(pos + 1)
+
+        Ok(1)
     }
 }
 
@@ -52,14 +63,17 @@ mod tests {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_round_trip_file() {
         let node_type = NodeType::File;
-        let raw_bytes = [0x00];
+        let source_bytes = [0x00];
 
-        let mut encoded = Vec::new();
-        node_type.encode(&mut encoded, 0).await.unwrap();
-        assert_eq!(raw_bytes, encoded.as_slice());
+        let (remaining, parsed) = NodeType::parse(&source_bytes).unwrap();
 
-        let (remaining, parsed) = NodeType::parse(&raw_bytes).unwrap();
         assert!(remaining.is_empty());
         assert_eq!(node_type, parsed);
+
+        let mut encoded = Vec::new();
+        let size = node_type.encode(&mut encoded).await.unwrap();
+
+        assert_eq!(source_bytes.len(), size);
+        assert_eq!(source_bytes, encoded.as_slice());
     }
 }

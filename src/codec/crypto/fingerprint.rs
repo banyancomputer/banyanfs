@@ -29,13 +29,9 @@ impl Fingerprint {
 
 #[async_trait]
 impl AsyncEncodable for Fingerprint {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-        pos: usize,
-    ) -> std::io::Result<usize> {
+    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
         writer.write_all(&self.0).await?;
-        Ok(pos + self.0.len())
+        Ok(self.0.len())
     }
 }
 

@@ -35,15 +35,16 @@ impl AsyncEncodable for HistoryStart {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
-        mut pos: usize,
     ) -> std::io::Result<usize> {
+        let mut written_bytes = 0;
+
         let journal_start_vector_bytes = self.journal_start_vector.to_le_bytes();
         writer.write_all(&journal_start_vector_bytes).await?;
-        pos += journal_start_vector_bytes.len();
+        written_bytes += journal_start_vector_bytes.len();
 
-        let pos = self.merkle_root_cid.encode(writer, pos).await?;
-        let pos = self.content_options.encode(writer, pos).await?;
+        written_bytes += self.merkle_root_cid.encode(writer).await?;
+        written_bytes += self.content_options.encode(writer).await?;
 
-        Ok(pos)
+        Ok(written_bytes)
     }
 }

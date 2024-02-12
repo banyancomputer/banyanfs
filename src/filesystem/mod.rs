@@ -46,17 +46,17 @@ impl Drive {
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
 
-        written_bytes += IdentityHeader::encode(&IdentityHeader, writer, 0).await?;
-        written_bytes += self.filesystem_id.encode(writer, 0).await?;
+        written_bytes += IdentityHeader::encode(&IdentityHeader, writer).await?;
+        written_bytes += self.filesystem_id.encode(writer).await?;
 
         // only doing private ones for now
-        written_bytes += PublicSettings::new(false, true).encode(writer, 0).await?;
+        written_bytes += PublicSettings::new(false, true).encode(writer).await?;
 
         let content_payload = ContentPayload::Private {
             access_key: AccessKey::generate(rng),
         };
 
-        written_bytes += content_payload.encode(writer, 0).await?;
+        written_bytes += content_payload.encode(writer).await?;
 
         Ok(written_bytes)
     }

@@ -23,11 +23,7 @@ impl From<Fingerprint> for ActorId {
 
 #[async_trait]
 impl AsyncEncodable for ActorId {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-        pos: usize,
-    ) -> std::io::Result<usize> {
-        self.0.encode(writer, pos).await
+    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
+        self.0.encode(writer).await
     }
 }

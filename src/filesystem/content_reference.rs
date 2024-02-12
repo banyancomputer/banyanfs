@@ -39,16 +39,15 @@ impl ContentReference {
 
 #[async_trait]
 impl AsyncEncodable for ContentReference {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-        pos: usize,
-    ) -> std::io::Result<usize> {
-        let pos = self.data_block_cid.encode(writer, pos).await?;
+    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
+        let mut written_bytes = self.data_block_cid.encode(writer).await?;
 
         writer.write_all(&self.offset.to_le_bytes()).await?;
-        writer.write_all(&self.length.to_le_bytes()).await?;
+        written_bytes += 4;
 
-        Ok(pos + 8)
+        writer.write_all(&self.length.to_le_bytes()).await?;
+        written_bytes += 4;
+
+        Ok(written_bytes)
     }
 }

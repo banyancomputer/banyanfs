@@ -15,9 +15,5 @@ pub use filesystem_id::FilesystemId;
 
 #[async_trait]
 pub trait AsyncEncodable {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-        pos: usize,
-    ) -> std::io::Result<usize>;
+    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize>;
 }

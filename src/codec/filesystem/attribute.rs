@@ -106,11 +106,9 @@ impl Attribute {
 
 #[async_trait]
 impl AsyncEncodable for Attribute {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-        pos: usize,
-    ) -> std::io::Result<usize> {
+    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
+        let mut written_bytes = 0;
+
         match self {
             Self::Custom { key, value } => {
                 let key_bytes = key.as_bytes();
@@ -127,37 +125,46 @@ impl AsyncEncodable for Attribute {
                 }
 
                 writer.write_all(&[ATTRIBUTE_CUSTOM_TYPE_ID]).await?;
-                writer.write_all(&[key_len as u8, value_len as u8]).await?;
-                writer.write_all(key_bytes).await?;
-                writer.write_all(value_bytes).await?;
+                written_bytes += 1;
 
-                Ok(pos + 1 + 2 + key_len + value_len)
+                writer.write_all(&[key_len as u8, value_len as u8]).await?;
+                written_bytes += 2;
+
+                writer.write_all(key_bytes).await?;
+                written_bytes += key_bytes.len();
+
+                writer.write_all(value_bytes).await?;
+                written_bytes += value_bytes.len();
             }
             Self::Owner(actor_id) => {
                 writer.write_all(&[ATTRIBUTE_OWNER_TYPE_ID]).await?;
-                actor_id.encode(writer, pos + 1).await
+                written_bytes += 1;
+
+                actor_id.encode(writer).await?;
             }
             Self::Permissions(permissions) => {
                 writer.write_all(&[ATTRIBUTE_PERMISSIONS_TYPE_ID]).await?;
-                permissions.encode(writer, pos + 1).await
+                written_bytes += 1;
+
+                permissions.encode(writer).await?;
             }
             Self::CreatedAt(time) => {
                 writer.write_all(&[ATTRIBUTE_CREATED_AT_TYPE_ID]).await?;
+                written_bytes += 1;
 
                 let unix_milliseconds: u64 = (time.unix_timestamp_nanos() / 1_000_000) as u64;
                 let ts_bytes = unix_milliseconds.to_le_bytes();
                 writer.write_all(&ts_bytes).await?;
-
-                Ok(pos + 1 + 8)
+                written_bytes += ts_bytes.len();
             }
             Self::ModifiedAt(time) => {
                 writer.write_all(&[ATTRIBUTE_MODIFIED_AT_TYPE_ID]).await?;
+                written_bytes += 1;
 
                 let unix_milliseconds: u64 = (time.unix_timestamp_nanos() / 1_000_000) as u64;
                 let ts_bytes = unix_milliseconds.to_le_bytes();
                 writer.write_all(&ts_bytes).await?;
-
-                Ok(pos + 1 + 8)
+                written_bytes += ts_bytes.len();
             }
             Self::MimeType(mime) => {
                 let mime_bytes = mime.as_bytes();
@@ -171,10 +178,13 @@ impl AsyncEncodable for Attribute {
                 }
 
                 writer.write_all(&[ATTRIBUTE_MIME_TYPE_TYPE_ID]).await?;
-                writer.write_all(mime_bytes).await?;
+                written_bytes += 1;
 
-                Ok(pos + 1 + mime_len)
+                writer.write_all(mime_bytes).await?;
+                written_bytes += mime_bytes.len();
             }
         }
+
+        Ok(written_bytes)
     }
 }

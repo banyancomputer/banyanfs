@@ -55,11 +55,7 @@ impl ContentOptions {
 
 #[async_trait]
 impl AsyncEncodable for ContentOptions {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-        pos: usize,
-    ) -> std::io::Result<usize> {
+    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
         let mut options: u8 = 0x00;
 
         if self.realized_view {
@@ -84,6 +80,6 @@ impl AsyncEncodable for ContentOptions {
 
         writer.write_all(&[options]).await?;
 
-        Ok(pos + 1)
+        Ok(1)
     }
 }

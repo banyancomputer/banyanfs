@@ -54,13 +54,9 @@ impl From<[u8; ID_LENGTH]> for FilesystemId {
 
 #[async_trait]
 impl AsyncEncodable for FilesystemId {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-        pos: usize,
-    ) -> std::io::Result<usize> {
+    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
         writer.write_all(&self.0).await?;
-        Ok(pos + self.0.len())
+        Ok(self.0.len())
     }
 }
 
@@ -82,7 +78,7 @@ mod tests {
         let filesystem_id = FilesystemId::from(raw_id);
 
         let mut encoded = Vec::new();
-        filesystem_id.encode(&mut encoded, 0).await.unwrap();
+        filesystem_id.encode(&mut encoded).await.unwrap();
         assert_eq!(raw_id, encoded.as_slice());
 
         let (remaining, parsed) = FilesystemId::parse(&encoded).unwrap();

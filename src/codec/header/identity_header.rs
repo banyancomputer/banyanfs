@@ -45,15 +45,11 @@ fn version_field(input: &[u8]) -> nom::IResult<&[u8], u8> {
 
 #[async_trait]
 impl AsyncEncodable for IdentityHeader {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-        pos: usize,
-    ) -> std::io::Result<usize> {
+    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
         writer.write_all(BANYAN_FS_MAGIC).await?;
         writer.write_all(&[0x01]).await?;
 
-        Ok(pos + BANYAN_FS_MAGIC.len() + 1)
+        Ok(BANYAN_FS_MAGIC.len() + 1)
     }
 }
 
@@ -76,8 +72,9 @@ mod tests {
         assert_eq!(parsed, IdentityHeader);
 
         let mut encoded = Vec::new();
-        parsed.encode(&mut encoded, 0).await.unwrap();
+        let size = parsed.encode(&mut encoded).await.unwrap();
 
         assert_eq!(source, encoded);
+        assert_eq!(source.len(), size);
     }
 }

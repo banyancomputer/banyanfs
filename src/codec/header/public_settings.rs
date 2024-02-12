@@ -56,11 +56,7 @@ impl PublicSettings {
 
 #[async_trait]
 impl AsyncEncodable for PublicSettings {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-        pos: usize,
-    ) -> std::io::Result<usize> {
+    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
         let mut settings_byte = 0;
 
         if self.ecc_present {
@@ -72,7 +68,8 @@ impl AsyncEncodable for PublicSettings {
         }
 
         writer.write_all(&[settings_byte]).await?;
-        Ok(pos + 1)
+
+        Ok(1)
     }
 }
 
@@ -100,7 +97,7 @@ mod tests {
         );
 
         let mut encoded = Vec::new();
-        parsed.encode(&mut encoded, 0).await.unwrap();
+        parsed.encode(&mut encoded).await.unwrap();
         assert_eq!(source, encoded);
     }
 
@@ -121,7 +118,7 @@ mod tests {
         );
 
         let mut encoded = Vec::new();
-        parsed.encode(&mut encoded, 0).await.unwrap();
+        parsed.encode(&mut encoded).await.unwrap();
         assert_eq!(source, encoded);
     }
 
@@ -142,7 +139,7 @@ mod tests {
         );
 
         let mut encoded = Vec::new();
-        parsed.encode(&mut encoded, 0).await.unwrap();
+        parsed.encode(&mut encoded).await.unwrap();
         assert_eq!(source, encoded);
     }
 
@@ -163,7 +160,7 @@ mod tests {
         );
 
         let mut encoded = Vec::new();
-        parsed.encode(&mut encoded, 0).await.unwrap();
+        parsed.encode(&mut encoded).await.unwrap();
         assert_eq!(source, encoded);
     }
 
