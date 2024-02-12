@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
+use nom::multi::count;
 use nom::number::streaming::le_u32;
 
 use crate::codec::{AsyncEncodable, Cid};
@@ -24,6 +25,10 @@ impl ContentReference {
         };
 
         Ok((remaining, content_reference))
+    }
+
+    pub fn parse_many(input: &[u8], ref_count: u8) -> nom::IResult<&[u8], Vec<Self>> {
+        count(Self::parse, ref_count as usize)(input)
     }
 
     pub fn size(&self) -> u64 {

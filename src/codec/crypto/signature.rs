@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
+use nom::bytes::streaming::take;
 use nom::IResult;
 use p384::NistP384;
 
@@ -17,17 +18,19 @@ impl Signature {
         Ok(Self { inner })
     }
 
-    pub fn parse(_input: &[u8]) -> IResult<&[u8], Self> {
-        todo!()
-    }
+    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+        let (remaining, signature_bytes) = take(SIGNATURE_SIZE)(input)?;
+        let signature = match Signature::from_slice(signature_bytes) {
+            Ok(signature) => signature,
+            Err(_) => {
+                return Err(nom::Err::Failure(nom::error::Error::new(
+                    input,
+                    nom::error::ErrorKind::Verify,
+                )))
+            }
+        };
 
-    pub fn to_bytes(&self) -> [u8; SIGNATURE_SIZE] {
-        let signature_bytes = self.inner.to_bytes();
-
-        let mut signature = [0u8; SIGNATURE_SIZE];
-        signature.copy_from_slice(&signature_bytes);
-
-        signature
+        Ok((remaining, signature))
     }
 }
 

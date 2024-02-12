@@ -28,7 +28,6 @@ impl File {
         let mut cid_content = Vec::new();
         self.encode(&mut cid_content, 0).await?;
         let hash: [u8; 32] = blake3::hash(&cid_content).into();
-
         Ok(Cid::from(hash))
     }
 
