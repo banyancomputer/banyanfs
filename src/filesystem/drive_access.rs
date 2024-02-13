@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::codec::crypto::VerifyingKey;
+use crate::codec::header::KeyAccessSettings;
 use crate::codec::ActorId;
-use crate::filesystem::KeyAccessSettings;
 
 #[derive(Debug)]
 pub struct DriveAccess {

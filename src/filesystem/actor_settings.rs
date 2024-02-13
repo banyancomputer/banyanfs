@@ -1,5 +1,5 @@
 use crate::codec::crypto::VerifyingKey;
-use crate::filesystem::KeyAccessSettings;
+use crate::codec::header::KeyAccessSettings;
 
 #[derive(Debug)]
 pub struct ActorSettings {

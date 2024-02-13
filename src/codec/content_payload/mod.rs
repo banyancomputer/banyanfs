@@ -1,40 +1,8 @@
-mod content_options;
 mod history_end;
 mod history_start;
-mod key_access_settings;
-mod permission_control;
 
-pub use content_options::ContentOptions;
 pub use history_end::HistoryEnd;
 pub use history_start::HistoryStart;
-pub use key_access_settings::KeyAccessSettings;
-pub use permission_control::PermissionControl;
-
-use std::io::{Error as IoError, ErrorKind as IoErrorKind};
-
-use ecdsa::signature::rand_core::CryptoRngCore;
-use futures::{AsyncWrite, AsyncWriteExt};
-use nom::number::streaming::le_u8;
-use nom::IResult;
-
-use crate::codec::crypto::{AccessKey, KeyId, Nonce, SigningKey, VerifyingKey};
-use crate::codec::AsyncEncodable;
-
-use super::crypto::AuthenticationTag;
-
-const ENCRYPTED_KEY_PAYLOAD_SIZE: usize = KeyId::size()
-    + VerifyingKey::size()
-    + Nonce::size()
-    + AccessKey::size()
-    + AuthenticationTag::size();
-
-pub struct EncryptedContentPayloadEntry;
-
-impl EncryptedContentPayloadEntry {
-    pub fn parse(input: &[u8]) -> IResult<&[u8], Vec<PermissionControl>> {
-        todo!()
-    }
-}
 
 //impl ContentPayload {
 //    pub async fn encode_private<W: AsyncWrite + Unpin + Send>(

@@ -3,7 +3,7 @@ use futures::{AsyncWrite, AsyncWriteExt};
 use nom::number::streaming::le_u64;
 use nom::IResult;
 
-use crate::codec::content_payload::ContentOptions;
+use crate::codec::header::ContentOptions;
 use crate::codec::{AsyncEncodable, Cid};
 
 pub struct HistoryStart {

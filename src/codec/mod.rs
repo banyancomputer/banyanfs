@@ -5,6 +5,7 @@ pub mod crypto;
 pub mod filesystem;
 mod filesystem_id;
 pub mod header;
+mod journal_checkpoint;
 mod segment_streamer;
 
 use async_trait::async_trait;
@@ -13,6 +14,7 @@ use futures::AsyncWrite;
 pub use actor_id::ActorId;
 pub use cid::Cid;
 pub use filesystem_id::FilesystemId;
+pub use journal_checkpoint::JournalCheckpoint;
 pub use segment_streamer::*;
 
 pub trait Parser: Sized {

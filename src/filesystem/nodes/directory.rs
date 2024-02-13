@@ -10,7 +10,7 @@ use crate::filesystem::nodes::file::File;
 
 #[derive(Clone, Debug)]
 pub struct Directory {
-    id: [u8; 16],
+    _id: [u8; 16],
     owner: ActorId,
 
     permissions: DirectoryPermissions,
@@ -105,7 +105,7 @@ impl Directory {
         let id: [u8; 16] = rng.gen();
 
         Directory {
-            id,
+            _id: id,
             owner,
 
             permissions: DirectoryPermissions::default(),

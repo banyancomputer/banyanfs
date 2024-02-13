@@ -8,7 +8,7 @@ fn main() -> BanyanFsResult<()> {
 #[cfg(not(target_arch = "wasm32"))]
 #[tokio::main]
 async fn main() -> BanyanFsResult<()> {
-    use banyanfs::codec::filesystem::DirectoryPermissions;
+    //use banyanfs::codec::filesystem::DirectoryPermissions;
     use tokio_util::compat::TokioAsyncReadCompatExt;
     use tracing::Level;
     use tracing_subscriber::layer::SubscriberExt;
@@ -104,7 +104,7 @@ async fn main() -> BanyanFsResult<()> {
     };
 
     let drive_loader = DriveLoader::new(&signing_key);
-    let loaded_drive = match drive_loader.load_from_reader(&mut fh).await {
+    let _loaded_drive = match drive_loader.load_from_reader(&mut fh).await {
         Ok(d) => d,
         Err(err) => {
             tracing::error!("failed to load saved drive: {err}");

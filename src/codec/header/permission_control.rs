@@ -1,5 +1,5 @@
-use crate::codec::content_payload::KeyAccessSettings;
 use crate::codec::crypto::{AccessKey, KeyId, VerifyingKey};
+use crate::codec::header::KeyAccessSettings;
 
 #[derive(Debug)]
 pub struct PermissionControl {
