@@ -14,6 +14,8 @@ const KEY_ACCESS_SETTINGS_HISTORICAL_BIT: u8 = 0b0010_0000;
 
 const KEY_ACCESS_SETTINGS_PUBLIC_RESERVED_MASK: u8 = 0b0001_1111;
 
+const KEY_ACCESS_SETTINGS_PRIVATE_ONLY_MASK: u8 = 0b0000_1111;
+
 const KEY_ACCESS_SETTINGS_PRIVATE_RESERVED_MASK: u8 = 0b0001_0000;
 
 const KEY_ACCESS_SETTINGS_REALIZED_KEY_PRESENT_BIT: u8 = 0b0000_1000;
@@ -22,7 +24,60 @@ const KEY_ACCESS_SETTINGS_DATA_KEY_PRESENT_BIT: u8 = 0b0100_0100;
 
 const KEY_ACCESS_SETTINGS_JOURNAL_KEY_PRESENT_BIT: u8 = 0b0000_0010;
 
-const KEY_ACCESS_SETTINGS_MAINTENANCE_KEY_PRESENT_BIT: u8 = 0b0000_0001;
+const KEY_ACCESS_SETTINGS_MAINT_KEY_PRESENT_BIT: u8 = 0b0000_0001;
+
+pub struct KeyAccessSettingsBuilder {
+    bits: u8,
+    private: bool,
+}
+
+impl KeyAccessSettingsBuilder {
+    pub fn set_owner(mut self) -> Self {
+        self.bits |= KEY_ACCESS_SETTINGS_OWNER_BIT;
+        self
+    }
+
+    pub fn set_protected(mut self) -> Self {
+        self.bits |= KEY_ACCESS_SETTINGS_PROTECTED_BIT;
+        self
+    }
+
+    pub fn private() -> Self {
+        Self {
+            bits: 0,
+            private: true,
+        }
+    }
+
+    pub fn public() -> Self {
+        Self {
+            bits: 0,
+            private: false,
+        }
+    }
+
+    pub fn build(self) -> KeyAccessSettings {
+        if self.private {
+            KeyAccessSettings::Private {
+                protected: self.bits & KEY_ACCESS_SETTINGS_PROTECTED_BIT != 0,
+                owner: self.bits & KEY_ACCESS_SETTINGS_OWNER_BIT != 0,
+                historical: self.bits & KEY_ACCESS_SETTINGS_HISTORICAL_BIT != 0,
+
+                realized_key_present: self.bits & KEY_ACCESS_SETTINGS_REALIZED_KEY_PRESENT_BIT != 0,
+                data_key_present: self.bits & KEY_ACCESS_SETTINGS_DATA_KEY_PRESENT_BIT != 0,
+                journal_key_present: self.bits & KEY_ACCESS_SETTINGS_JOURNAL_KEY_PRESENT_BIT != 0,
+                maintenance_key_present: self.bits & KEY_ACCESS_SETTINGS_MAINT_KEY_PRESENT_BIT != 0,
+            }
+        } else {
+            KeyAccessSettings::Public {
+                protected: self.bits & KEY_ACCESS_SETTINGS_PROTECTED_BIT != 0,
+                owner: self.bits & KEY_ACCESS_SETTINGS_OWNER_BIT != 0,
+                historical: self.bits & KEY_ACCESS_SETTINGS_HISTORICAL_BIT != 0,
+                extra: self.bits & KEY_ACCESS_SETTINGS_PRIVATE_ONLY_MASK,
+            }
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub enum KeyAccessSettings {
@@ -30,6 +85,8 @@ pub enum KeyAccessSettings {
         protected: bool,
         owner: bool,
         historical: bool,
+
+        extra: u8,
     },
     Private {
         protected: bool,
@@ -51,6 +108,20 @@ impl KeyAccessSettings {
         }
     }
 
+    pub fn is_owner(&self) -> bool {
+        match self {
+            KeyAccessSettings::Public { owner, .. } => *owner,
+            KeyAccessSettings::Private { owner, .. } => *owner,
+        }
+    }
+
+    pub fn is_protected(&self) -> bool {
+        match self {
+            KeyAccessSettings::Public { protected, .. } => *protected,
+            KeyAccessSettings::Private { protected, .. } => *protected,
+        }
+    }
+
     pub fn parse_private(input: &[u8]) -> nom::IResult<&[u8], Self> {
         let (input, byte) = le_u8(input)?;
 
@@ -65,7 +136,7 @@ impl KeyAccessSettings {
         let realized_key_present = byte & KEY_ACCESS_SETTINGS_REALIZED_KEY_PRESENT_BIT != 0;
         let data_key_present = byte & KEY_ACCESS_SETTINGS_DATA_KEY_PRESENT_BIT != 0;
         let journal_key_present = byte & KEY_ACCESS_SETTINGS_JOURNAL_KEY_PRESENT_BIT != 0;
-        let maintenance_key_present = byte & KEY_ACCESS_SETTINGS_MAINTENANCE_KEY_PRESENT_BIT != 0;
+        let maintenance_key_present = byte & KEY_ACCESS_SETTINGS_MAINT_KEY_PRESENT_BIT != 0;
 
         let settings = Self::Private {
             protected,
@@ -91,11 +162,13 @@ impl KeyAccessSettings {
         let protected = byte & KEY_ACCESS_SETTINGS_PROTECTED_BIT != 0;
         let owner = byte & KEY_ACCESS_SETTINGS_OWNER_BIT != 0;
         let historical = byte & KEY_ACCESS_SETTINGS_HISTORICAL_BIT != 0;
+        let extra = byte & KEY_ACCESS_SETTINGS_PRIVATE_ONLY_MASK;
 
         let settings = Self::Public {
             protected,
             owner,
             historical,
+            extra,
         };
 
         Ok((input, settings))
@@ -112,6 +185,7 @@ impl AsyncEncodable for KeyAccessSettings {
                 protected,
                 owner,
                 historical,
+                extra,
             } => {
                 if *protected {
                     settings |= KEY_ACCESS_SETTINGS_PROTECTED_BIT;
@@ -124,6 +198,8 @@ impl AsyncEncodable for KeyAccessSettings {
                 if *historical {
                     settings |= KEY_ACCESS_SETTINGS_HISTORICAL_BIT;
                 }
+
+                settings |= *extra & KEY_ACCESS_SETTINGS_PRIVATE_ONLY_MASK;
             }
             Self::Private {
                 protected,
@@ -159,7 +235,7 @@ impl AsyncEncodable for KeyAccessSettings {
                 }
 
                 if *maintenance_key_present {
-                    settings |= KEY_ACCESS_SETTINGS_MAINTENANCE_KEY_PRESENT_BIT;
+                    settings |= KEY_ACCESS_SETTINGS_MAINT_KEY_PRESENT_BIT;
                 }
             }
         }

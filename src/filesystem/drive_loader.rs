@@ -55,25 +55,6 @@ impl<'a> DriveLoader<'a> {
     }
 }
 
-#[derive(Debug)]
-enum DriveLoaderState {
-    IdentityHeader,
-    FilesystemId,
-    PublicSettings,
-
-    KeyCount,
-
-    EscrowedAccessKeys(KeyCount),
-    EncryptedPermissions(KeyCount, AccessKey),
-    PrivateContentPayload(ContentContext),
-
-    PublicAccessKeys(KeyCount),
-    PublicContentPayload(ContentContext),
-
-    Signature,
-    ErrorCorrection,
-}
-
 impl ParserStateMachine<Drive> for DriveLoader<'_> {
     type Error = DriveLoaderError;
 
@@ -217,4 +198,23 @@ impl<E> From<nom::Err<E>> for DriveLoaderError {
             ),
         }
     }
+}
+
+#[derive(Debug)]
+enum DriveLoaderState {
+    IdentityHeader,
+    FilesystemId,
+    PublicSettings,
+
+    KeyCount,
+
+    EscrowedAccessKeys(KeyCount),
+    EncryptedPermissions(KeyCount, AccessKey),
+    PrivateContentPayload(ContentContext),
+
+    PublicAccessKeys(KeyCount),
+    PublicContentPayload(ContentContext),
+
+    Signature,
+    ErrorCorrection,
 }

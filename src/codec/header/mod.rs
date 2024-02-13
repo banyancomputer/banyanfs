@@ -13,7 +13,7 @@ pub use data_header::DataHeader;
 pub use encrypted_content_payload_entry::EncryptedContentPayloadEntry;
 pub use format_header::FormatHeader;
 pub use identity_header::IdentityHeader;
-pub use key_access_settings::KeyAccessSettings;
+pub use key_access_settings::{KeyAccessSettings, KeyAccessSettingsBuilder};
 pub use key_count::KeyCount;
 pub use permission_control::PermissionControl;
 pub use public_settings::PublicSettings;

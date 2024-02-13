@@ -1,29 +1,20 @@
-mod actor_settings;
 mod content_reference;
 mod drive;
 mod drive_access;
 mod drive_loader;
+mod entry;
+mod entry_builder;
 mod file_content;
-mod nodes;
 mod vector_clock;
 
-pub use actor_settings::ActorSettings;
-pub use content_reference::ContentReference;
+pub(crate) mod nodes;
+
+pub(crate) use content_reference::ContentReference;
+pub(crate) use entry::{Entry, EntryId, PermanentEntryId};
+pub(crate) use entry_builder::EntryBuilder;
+pub(crate) use file_content::FileContent;
+pub(crate) use vector_clock::VectorClock;
+
 pub use drive::Drive;
 pub use drive_access::DriveAccess;
 pub use drive_loader::DriveLoader;
-pub use file_content::FileContent;
-pub use nodes::*;
-pub use vector_clock::VectorClock;
-
-#[derive(Debug)]
-pub struct FilesystemEntry {
-    //parent_id: Optioon<EntryId>,
-    node: FilesystemNode,
-}
-
-#[derive(Debug)]
-pub enum FilesystemNode {
-    File(File),
-    Directory(Directory),
-}

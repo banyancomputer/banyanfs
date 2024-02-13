@@ -1,26 +1,26 @@
+use elliptic_curve::rand_core::CryptoRngCore;
 use slab::Slab;
-use std::collections::HashMap;
 
-use crate::codec::crypto::VerifyingKey;
-use crate::codec::FilesystemId;
-use crate::filesystem::DriveAccess;
-use crate::filesystem::FilesystemEntry;
+use crate::codec::crypto::SigningKey;
+use crate::codec::header::KeyAccessSettingsBuilder;
+use crate::codec::meta::{ActorId, FilesystemId};
+use crate::filesystem::{DriveAccess, Entry, EntryBuilder, EntryId};
 
 pub struct Drive {
     filesystem_id: FilesystemId,
     access: DriveAccess,
 
-    nodes: Slab<FilesystemEntry>,
-    id_map: HashMap<[u8; 16], EntryId>,
-
-    root: EntryId,
+    nodes: Slab<Entry>,
+    root_entry_id: EntryId,
 }
 
-type EntryId = usize;
-
 impl Drive {
-    pub fn has_write_access(&self, key: &VerifyingKey) -> bool {
-        self.access.has_write_access(key.actor_id())
+    pub fn has_realized_view_access(&self, actor_id: ActorId) -> bool {
+        self.access.has_realized_view_access(actor_id)
+    }
+
+    pub fn has_write_access(&self, actor_id: ActorId) -> bool {
+        self.access.has_write_access(actor_id)
     }
 
     //pub async fn encode_private<W: AsyncWrite + Unpin + Send>(
@@ -56,30 +56,34 @@ impl Drive {
         self.filesystem_id
     }
 
-    //pub fn initialize_private(rng: &mut impl CryptoRngCore, signing_key: &SigningKey) -> Self {
-    //    let verifying_key = signing_key.verifying_key();
-    //    let actor_id = signing_key.actor_id();
+    pub fn initialize_private(rng: &mut impl CryptoRngCore, signing_key: &SigningKey) -> Self {
+        let verifying_key = signing_key.verifying_key();
+        let actor_id = verifying_key.actor_id();
 
-    //    let kas = KeyAccessSettings::Private {
-    //        protected: true,
-    //        owner: true,
-    //        historical: false,
+        let kas = KeyAccessSettingsBuilder::private()
+            .set_owner()
+            .set_protected()
+            .build();
 
-    //        realized_key_present: true,
-    //        data_key_present: true,
-    //        journal_key_present: true,
-    //        maintenance_key_present: true,
-    //    };
+        let mut access = DriveAccess::default();
+        access.register_actor(verifying_key, kas);
 
-    //    let mut keys = HashMap::new();
-    //    keys.insert(actor_id, (verifying_key, kas));
+        let mut nodes = Slab::with_capacity(32);
 
-    //    Self {
-    //        filesystem_id: FilesystemId::generate(rng),
-    //        keys,
-    //        root: Directory::new(rng, actor_id),
-    //    }
-    //}
+        let root_entry = nodes.vacant_entry();
+        let root_entry_id = root_entry.key();
+
+        let directory = EntryBuilder::directory(root_entry_id, actor_id).build(rng);
+        root_entry.insert(directory);
+
+        Self {
+            filesystem_id: FilesystemId::generate(rng),
+            access,
+
+            nodes,
+            root_entry_id,
+        }
+    }
 }
 
 //impl Deref for Drive {

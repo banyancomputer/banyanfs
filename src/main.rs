@@ -29,14 +29,17 @@ async fn main() -> BanyanFsResult<()> {
     tracing::debug!("running banyanfs {}", version());
 
     let mut rng = banyanfs::utils::crypto_rng();
+
     let signing_key = SigningKey::generate(&mut rng);
+    let verifying_key = signing_key.verifying_key();
+    let actor_id = verifying_key.actor_id();
 
-    //let mut drive = Drive::initialize_private(&mut rng, &signing_key);
+    let drive = Drive::initialize_private(&mut rng, &signing_key);
 
-    //if !drive.check_accessibility(&signing_key.verifying_key()) {
-    //    tracing::error!("key doesn't have access to the drive");
-    //    return Err(BanyanFsError("key doesn't have access to the drive"));
-    //}
+    if !drive.has_realized_view_access(actor_id) {
+        tracing::error!("key doesn't have access to the drive");
+        return Err(BanyanFsError("key doesn't have access to the drive"));
+    }
 
     //if drive.is_writable(&signing_key) {
     //    let actor_id = signing_key.actor_id();
