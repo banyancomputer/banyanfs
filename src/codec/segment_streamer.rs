@@ -1,4 +1,6 @@
 use bytes::{Bytes, BytesMut};
+use futures::stream::Stream;
+use futures::FutureExt;
 
 pub trait StateError {
     fn needed_data(&self) -> Option<usize>;
@@ -12,10 +14,11 @@ pub trait ParserStateMachine<T> {
     fn parse(&mut self, buffer: &[u8]) -> StateResult<T, Self::Error>;
 }
 
-pub enum StateResult<T, E> {
+pub type StateResult<T, E> = Result<ProgressType<T>, E>;
+
+pub enum ProgressType<T> {
     Ready(usize, T),
     Advance(usize),
-    Error(E),
 }
 
 pub struct SegmentStreamer<T, S: ParserStateMachine<T>> {
@@ -48,7 +51,7 @@ impl<T: Unpin, S: ParserStateMachine<T>> SegmentStreamer<T, S> {
     pub async fn next(&mut self) -> Option<Result<([u8; 32], T), S::Error>> {
         loop {
             match self.state_machine.parse(&self.buffer) {
-                StateResult::Ready(byte_count, val) => {
+                Ok(ProgressType::Ready(byte_count, val)) => {
                     let read_data = self.buffer.split_to(byte_count);
 
                     self.hasher.update(&read_data);
@@ -58,19 +61,16 @@ impl<T: Unpin, S: ParserStateMachine<T>> SegmentStreamer<T, S> {
 
                     return Some(Ok((byte_hash, val)));
                 }
-                StateResult::Advance(byte_count) => {
+                Ok(ProgressType::Advance(byte_count)) => {
                     let read_data = self.buffer.split_to(byte_count);
                     self.hasher.update(&read_data);
                 }
-                StateResult::Error(err) if err.needs_more_data() => return None,
-                StateResult::Error(err) => return Some(Err(err)),
+                Err(err) if err.needs_more_data() => return None,
+                Err(err) => return Some(Err(err)),
             }
         }
     }
 }
-
-use futures::stream::Stream;
-use futures::FutureExt;
 
 impl<T: Unpin, S: ParserStateMachine<T> + Unpin> Stream for SegmentStreamer<T, S> {
     type Item = Result<([u8; 32], T), S::Error>;

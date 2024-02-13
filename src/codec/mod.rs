@@ -8,7 +8,7 @@ pub mod header;
 mod segment_streamer;
 
 use async_trait::async_trait;
-use futures::{AsyncRead, AsyncReadExt, AsyncWrite};
+use futures::AsyncWrite;
 
 pub use actor_id::ActorId;
 pub use cid::Cid;
@@ -41,8 +41,8 @@ pub type ParserResult<'a, T> = nom::IResult<&'a [u8], T>;
 
 #[async_trait]
 pub trait AsyncParse<'a>: Parser + Sized {
-    async fn next(mut input: &'a [u8], ctx: &'a Self::Context) -> ParserResult<'a, Option<Self>> {
-        match Self::parse(&input, ctx) {
+    async fn next(input: &'a [u8], ctx: &'a Self::Context) -> ParserResult<'a, Option<Self>> {
+        match Self::parse(input, ctx) {
             Ok((remaining, parsed)) => Ok((remaining, Some(parsed))),
             Err(nom::Err::Incomplete(_)) => Ok((input, None)),
             Err(err) => Err(err),

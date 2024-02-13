@@ -95,8 +95,8 @@ async fn main() -> BanyanFsResult<()> {
         return Ok(());
     }
 
-    let _fh = match tokio::fs::File::open("fixtures/minimal.bfs").await {
-        Ok(fh) => fh,
+    let mut fh = match tokio::fs::File::open("fixtures/minimal.bfs").await {
+        Ok(fh) => fh.compat(),
         Err(err) => {
             tracing::error!("failed to open file: {err}");
             return Ok(());
@@ -112,16 +112,16 @@ async fn main() -> BanyanFsResult<()> {
         }
     };
 
-    //match loaded_drive.ls(&["testing"]) {
-    //    Ok(dir_contents) => {
-    //        let names: Vec<String> = dir_contents.into_iter().map(|(name, _)| name).collect();
-    //        tracing::info!("dir_contents: {names:?}");
-    //    }
-    //    Err(err) => {
-    //        tracing::error!("failed to list directory: {err}");
-    //        return Ok(());
-    //    }
-    //}
+    match loaded_drive.ls(&["testing"]) {
+        Ok(dir_contents) => {
+            let names: Vec<String> = dir_contents.into_iter().map(|(name, _)| name).collect();
+            tracing::info!("dir_contents: {names:?}");
+        }
+        Err(err) => {
+            tracing::error!("failed to list directory: {err}");
+            return Ok(());
+        }
+    }
 
     Ok(())
 }
