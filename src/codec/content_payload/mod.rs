@@ -14,18 +14,14 @@ use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
-use nom::error::{Error as NomError, ErrorKind};
 use nom::number::streaming::le_u8;
-use nom::{Err, IResult};
+use nom::IResult;
 
-use crate::codec::crypto::{
-    AccessKey, AsymLockedAccessKey, KeyId, Nonce, SigningKey, VerifyingKey,
-};
+use crate::codec::crypto::{AccessKey, KeyId, Nonce, SigningKey, VerifyingKey};
 use crate::codec::AsyncEncodable;
 use crate::filesystem::PrivateEncodingContext;
 
-use super::crypto::{AuthenticationTag, SymLockedAccessKey};
+use super::crypto::AuthenticationTag;
 
 const ENCRYPTED_KEY_PAYLOAD_SIZE: usize = KeyId::size()
     + VerifyingKey::size()
@@ -33,9 +29,12 @@ const ENCRYPTED_KEY_PAYLOAD_SIZE: usize = KeyId::size()
     + AccessKey::size()
     + AuthenticationTag::size();
 
-pub enum ContentPayload {
-    Private,
-    Public,
+pub struct EncryptedContentPayloadEntry;
+
+impl EncryptedContentPayloadEntry {
+    pub fn parse(input: &[u8]) -> IResult<&[u8], Vec<PermissionControl>> {
+        todo!()
+    }
 }
 
 impl ContentPayload {

@@ -10,7 +10,7 @@ use crate::codec::AsyncEncodable;
 
 const ID_LENGTH: usize = 16;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct FilesystemId([u8; ID_LENGTH]);
 
 impl FilesystemId {
@@ -57,6 +57,17 @@ impl AsyncEncodable for FilesystemId {
     async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
         writer.write_all(&self.0).await?;
         Ok(self.0.len())
+    }
+}
+
+impl std::fmt::Debug for FilesystemId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let filesystem_id_str: String = self
+            .0
+            .iter()
+            .fold(String::new(), |acc, &b| format!("{acc}{:02x}", b));
+
+        write!(f, "{{0x{filesystem_id_str}}}")
     }
 }
 

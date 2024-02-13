@@ -6,7 +6,7 @@ use nom::IResult;
 
 use crate::codec::AsyncEncodable;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
 pub struct KeyId(u16);
 
 impl KeyId {
@@ -26,6 +26,12 @@ impl AsyncEncodable for KeyId {
         let key_id_bytes = self.0.to_le_bytes();
         writer.write_all(&key_id_bytes).await?;
         Ok(key_id_bytes.len())
+    }
+}
+
+impl std::fmt::Debug for KeyId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "KeyId(0x{:04x?})", self.0)
     }
 }
 

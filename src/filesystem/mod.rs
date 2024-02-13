@@ -309,26 +309,30 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 let key_id = self.signing_key.key_id();
                 tracing::debug!(bytes_read, signing_key_id = ?key_id, ?locked_keys, "drive_loader::escrowed_access_keys");
 
-                let relevant_keys = locked_keys.iter().filter(|k| k.key_id == key_id);
-                tracing::debug!(?relevant_keys, "drive_loader::escrowed_access_keys");
-
                 let mut key_access_key = None;
+                let relevant_keys = locked_keys.iter().filter(|k| k.key_id == key_id);
+
                 for potential_key in relevant_keys {
+                    tracing::debug!(matching_key = ?potential_key, "drive_loader::escrowed_access_keys");
+
                     if let Ok(key) = potential_key.unlock(self.signing_key) {
                         key_access_key = Some(key);
                         break;
                     }
                 }
 
-                tracing::debug!(unlocked_key = ?key_access_key, "drive_loader::escrowed_access_keys");
                 let key_access_key = match key_access_key {
                     Some(ak) => ak,
                     None => return Err(DriveLoaderError::AccessUnavailable),
                 };
+                tracing::debug!(unlocked_key = ?key_access_key, "drive_loader::escrowed_access_keys");
 
                 self.state = DriveLoaderState::EncryptedContentPayloadEntry(key_access_key);
 
                 Ok(ProgressType::Advance(bytes_read))
+            }
+            DriveLoaderState::EncryptedContentPayloadEntry(access_key) => {
+                todo!()
             }
             remaining => {
                 unimplemented!("parsing for state {remaining:?}");
