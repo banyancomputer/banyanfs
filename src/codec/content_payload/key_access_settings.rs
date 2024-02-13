@@ -44,6 +44,13 @@ pub enum KeyAccessSettings {
 }
 
 impl KeyAccessSettings {
+    pub fn is_historical(&self) -> bool {
+        match self {
+            KeyAccessSettings::Public { historical, .. } => historical,
+            KeyAccessSettings::Private { historical, .. } => historical,
+        }
+    }
+
     pub fn parse_private(input: &[u8]) -> nom::IResult<&[u8], Self> {
         let (input, byte) = le_u8(input)?;
 

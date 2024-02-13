@@ -37,76 +37,76 @@ impl EncryptedContentPayloadEntry {
     }
 }
 
-impl ContentPayload {
-    pub async fn encode_private<W: AsyncWrite + Unpin + Send>(
-        &self,
-        rng: &mut impl CryptoRngCore,
-        context: &PrivateEncodingContext,
-        writer: &mut W,
-    ) -> std::io::Result<usize> {
-        let mut written_bytes = 0;
-
-        let mut keys = context
-            .registered_keys
-            .clone()
-            .into_values()
-            .collect::<Vec<_>>();
-
-        keys.sort_by_key(|(pub_key, _)| pub_key.key_id());
-
-        let keys_count = keys.len();
-        if keys_count > 255 {
-            return Err(IoError::new(
-                IoErrorKind::InvalidInput,
-                "too many keys in one filesystem to encode",
-            ));
-        }
-
-        writer.write_all(&[keys_count as u8]).await?;
-        written_bytes += 1;
-
-        for (verifying_key, _) in keys.into_iter() {
-            let escrowed_key = match context.key_access_key.lock_for(rng, &verifying_key) {
-                Ok(vk) => vk,
-                Err(err) => {
-                    tracing::error!("failed to lock key for encoding: {}", err);
-                    return Err(IoError::new(IoErrorKind::Other, "failed to lock key"));
-                }
-            };
-
-            written_bytes += escrowed_key.encode(writer).await?;
-        }
-
-        // We need to build this part up and encrypt it before we write it out
-
-        Ok(written_bytes)
-    }
-
-    pub fn parse_private<'a>(input: &'a [u8], key: &SigningKey) -> IResult<&'a [u8], Self> {
-        let (input, key_count) = le_u8(input)?;
-
-        todo!()
-
-        //let key_chunk_length = locked_keys.len() * ENCRYPTED_KEY_PAYLOAD_SIZE;
-        //let encrypted_chunk_length = HistoryStart::size() + key_chunk_length;
-
-        //let (input, nonce) = Nonce::parse(input)?;
-        //let (input, chunk) = take(encrypted_chunk_length)(input)?;
-        //let (input, tag) = AuthenticationTag::parse(input)?;
-
-        //let mut chunk = chunk.to_vec();
-        //key_access_key
-        //    .decrypt_buffer(nonce, &mut chunk, tag)
-        //    .map_err(|_| Err::Failure(NomError::new(input, ErrorKind::Verify)))?;
-
-        //// parse as a series of PermissionControl
-
-        //// todo(sstelfox): implement the rest
-
-        //Ok((input, ContentPayload::Private))
-    }
-
-    pub fn parse_public(_input: &[u8]) -> IResult<&[u8], Self> {
-        todo!()
-    }
-}
+//impl ContentPayload {
+//    pub async fn encode_private<W: AsyncWrite + Unpin + Send>(
+//        &self,
+//        rng: &mut impl CryptoRngCore,
+//        context: &PrivateEncodingContext,
+//        writer: &mut W,
+//    ) -> std::io::Result<usize> {
+//        let mut written_bytes = 0;
+//
+//        let mut keys = context
+//            .registered_keys
+//            .clone()
+//            .into_values()
+//            .collect::<Vec<_>>();
+//
+//        keys.sort_by_key(|(pub_key, _)| pub_key.key_id());
+//
+//        let keys_count = keys.len();
+//        if keys_count > 255 {
+//            return Err(IoError::new(
+//                IoErrorKind::InvalidInput,
+//                "too many keys in one filesystem to encode",
+//            ));
+//        }
+//
+//        writer.write_all(&[keys_count as u8]).await?;
+//        written_bytes += 1;
+//
+//        for (verifying_key, _) in keys.into_iter() {
+//            let escrowed_key = match context.key_access_key.lock_for(rng, &verifying_key) {
+//                Ok(vk) => vk,
+//                Err(err) => {
+//                    tracing::error!("failed to lock key for encoding: {}", err);
+//                    return Err(IoError::new(IoErrorKind::Other, "failed to lock key"));
+//                }
+//            };
+//
+//            written_bytes += escrowed_key.encode(writer).await?;
+//        }
+//
+//        // We need to build this part up and encrypt it before we write it out
+//
+//        Ok(written_bytes)
+//    }
+//
+//    pub fn parse_private<'a>(input: &'a [u8], key: &SigningKey) -> IResult<&'a [u8], Self> {
+//        let (input, key_count) = le_u8(input)?;
+//
+//        todo!()
+//
+//        //let key_chunk_length = locked_keys.len() * ENCRYPTED_KEY_PAYLOAD_SIZE;
+//        //let encrypted_chunk_length = HistoryStart::size() + key_chunk_length;
+//
+//        //let (input, nonce) = Nonce::parse(input)?;
+//        //let (input, chunk) = take(encrypted_chunk_length)(input)?;
+//        //let (input, tag) = AuthenticationTag::parse(input)?;
+//
+//        //let mut chunk = chunk.to_vec();
+//        //key_access_key
+//        //    .decrypt_buffer(nonce, &mut chunk, tag)
+//        //    .map_err(|_| Err::Failure(NomError::new(input, ErrorKind::Verify)))?;
+//
+//        //// parse as a series of PermissionControl
+//
+//        //// todo(sstelfox): implement the rest
+//
+//        //Ok((input, ContentPayload::Private))
+//    }
+//
+//    pub fn parse_public(_input: &[u8]) -> IResult<&[u8], Self> {
+//        todo!()
+//    }
+//}

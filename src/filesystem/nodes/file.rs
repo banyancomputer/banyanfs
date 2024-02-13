@@ -14,7 +14,7 @@ use crate::filesystem::FileContent;
 
 const MIME_TYPE_KEY: &str = "mime_type";
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct File {
     id: [u8; 16],
     owner: ActorId,

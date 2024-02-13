@@ -8,9 +8,8 @@ use crate::codec::filesystem::DirectoryPermissions;
 use crate::codec::ActorId;
 use crate::filesystem::nodes::file::File;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Directory {
-    #[allow(dead_code)]
     id: [u8; 16],
     owner: ActorId,
 
@@ -133,7 +132,7 @@ impl Directory {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum DirectoryEntry {
     Directory(Directory),
     File(File),

@@ -14,7 +14,7 @@ const FILE_CONTENT_TYPE_PUBLIC: u8 = 0x02;
 
 const FILE_CONTENT_TYPE_ENCRYPTED: u8 = 0x03;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum FileContent {
     Encrypted {
         access_key: SymLockedAccessKey,
