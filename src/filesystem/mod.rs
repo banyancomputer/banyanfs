@@ -251,7 +251,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 let (input, id_header) = IdentityHeader::parse_with_magic(buffer)?;
                 let bytes_read = buffer.len() - input.len();
 
-                tracing::debug!(?id_header, "drive_loader");
+                tracing::debug!(bytes_read, ?id_header, "drive_loader::identity_header");
 
                 self.state = DriveLoaderState::FilesystemId;
 
@@ -261,7 +261,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 let (input, filesystem_id) = FilesystemId::parse(buffer)?;
                 let bytes_read = buffer.len() - input.len();
 
-                tracing::debug!(?filesystem_id, "drive_loader");
+                tracing::debug!(bytes_read, ?filesystem_id, "drive_loader::filesystem_id");
 
                 self.filesystem_id = Some(filesystem_id);
                 self.state = DriveLoaderState::PublicSettings;
@@ -272,7 +272,11 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 let (input, public_settings) = PublicSettings::parse(buffer)?;
                 let bytes_read = buffer.len() - input.len();
 
-                tracing::debug!(?public_settings, "drive_loader");
+                tracing::debug!(
+                    bytes_read,
+                    ?public_settings,
+                    "drive_loader::public_settings"
+                );
 
                 self.public_settings = Some(public_settings);
                 self.state = DriveLoaderState::KeyCount;
@@ -283,7 +287,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 let (input, key_count) = KeyCount::parse(buffer)?;
                 let bytes_read = buffer.len() - input.len();
 
-                tracing::debug!(?key_count, "drive_loader");
+                tracing::debug!(bytes_read, ?key_count, "drive_loader::key_count");
 
                 if self
                     .public_settings
@@ -302,9 +306,29 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 let (input, locked_keys) = AsymLockedAccessKey::parse_many(buffer, **key_count)?;
                 let bytes_read = buffer.len() - input.len();
 
-                tracing::debug!(?locked_keys, "drive_loader");
+                let key_id = self.signing_key.key_id();
+                tracing::debug!(bytes_read, signing_key_id = ?key_id, ?locked_keys, "drive_loader::escrowed_access_keys");
 
-                todo!()
+                let relevant_keys = locked_keys.iter().filter(|k| k.key_id == key_id);
+                tracing::debug!(?relevant_keys, "drive_loader::escrowed_access_keys");
+
+                let mut key_access_key = None;
+                for potential_key in relevant_keys {
+                    if let Ok(key) = potential_key.unlock(self.signing_key) {
+                        key_access_key = Some(key);
+                        break;
+                    }
+                }
+
+                tracing::debug!(unlocked_key = ?key_access_key, "drive_loader::escrowed_access_keys");
+                let key_access_key = match key_access_key {
+                    Some(ak) => ak,
+                    None => return Err(DriveLoaderError::AccessUnavailable),
+                };
+
+                self.state = DriveLoaderState::EncryptedContentPayloadEntry(key_access_key);
+
+                Ok(ProgressType::Advance(bytes_read))
             }
             remaining => {
                 unimplemented!("parsing for state {remaining:?}");
@@ -320,6 +344,9 @@ pub enum DriveLoaderError {
 
     #[error("an I/O error occurred: {0}")]
     IoError(#[from] std::io::Error),
+
+    #[error("the provided signing key does not have access to this encrypted filesystem")]
+    AccessUnavailable,
 
     #[error("failed to parse drive data: {0}")]
     ParserFailure(String),

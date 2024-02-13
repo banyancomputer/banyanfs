@@ -88,22 +88,6 @@ impl ContentPayload {
 
         todo!()
 
-        //let key_id = key.key_id();
-        //let relevant_keys = locked_keys.iter().filter(|k| k.key_id == key_id);
-
-        //let mut key_access_key = None;
-        //for potential_key in relevant_keys {
-        //    if let Ok(key) = potential_key.unlock(key) {
-        //        key_access_key = Some(key);
-        //        break;
-        //    }
-        //}
-
-        //let key_access_key = match key_access_key {
-        //    Some(ak) => ak,
-        //    None => return Err(Err::Failure(NomError::new(input, ErrorKind::Verify))),
-        //};
-
         //let key_chunk_length = locked_keys.len() * ENCRYPTED_KEY_PAYLOAD_SIZE;
         //let encrypted_chunk_length = HistoryStart::size() + key_chunk_length;
 
