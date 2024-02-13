@@ -145,19 +145,19 @@ pub enum DriveError {
     HeaderReadFailure,
 }
 
-pub struct DriverLoader<'a> {
+pub struct DriveLoader<'a> {
     signing_key: &'a SigningKey,
-    state: DriverLoaderState,
+    state: DriveLoaderState,
 
     filesystem_id: Option<FilesystemId>,
     public_settings: Option<PublicSettings>,
 }
 
-impl<'a> DriverLoader<'a> {
+impl<'a> DriveLoader<'a> {
     pub fn new(signing_key: &'a SigningKey) -> Self {
         Self {
             signing_key,
-            state: DriverLoaderState::IdentityHeader,
+            state: DriveLoaderState::IdentityHeader,
 
             filesystem_id: None,
             public_settings: None,
@@ -193,7 +193,7 @@ impl<'a> DriverLoader<'a> {
 }
 
 #[derive(Debug)]
-enum DriverLoaderState {
+enum DriveLoaderState {
     IdentityHeader,
     FilesystemId,
     PublicSettings,
@@ -205,48 +205,48 @@ enum DriverLoaderState {
     PrivateContentPayload(KeyCount),
 }
 
-impl ParserStateMachine<Drive> for DriverLoader<'_> {
+impl ParserStateMachine<Drive> for DriveLoader<'_> {
     type Error = DriveLoaderError;
 
     fn parse(&mut self, buffer: &[u8]) -> StateResult<Drive, Self::Error> {
         match &self.state {
-            DriverLoaderState::IdentityHeader => {
-                let (input, _) = IdentityHeader::parse_with_magic(buffer)?;
+            DriveLoaderState::IdentityHeader => {
+                let (input, id_header) = IdentityHeader::parse_with_magic(buffer)?;
                 let bytes_read = buffer.len() - input.len();
 
-                tracing::debug!("parsed identity header");
+                tracing::debug!(?id_header, "drive_loader");
 
-                self.state = DriverLoaderState::FilesystemId;
+                self.state = DriveLoaderState::FilesystemId;
 
                 Ok(ProgressType::Advance(bytes_read))
             }
-            DriverLoaderState::FilesystemId => {
+            DriveLoaderState::FilesystemId => {
                 let (input, filesystem_id) = FilesystemId::parse(buffer)?;
                 let bytes_read = buffer.len() - input.len();
 
-                tracing::debug!("parsed filesystem id: {filesystem_id:02x?}");
+                tracing::debug!(?filesystem_id, "drive_loader");
 
                 self.filesystem_id = Some(filesystem_id);
-                self.state = DriverLoaderState::PublicSettings;
+                self.state = DriveLoaderState::PublicSettings;
 
                 Ok(ProgressType::Advance(bytes_read))
             }
-            DriverLoaderState::PublicSettings => {
+            DriveLoaderState::PublicSettings => {
                 let (input, public_settings) = PublicSettings::parse(buffer)?;
                 let bytes_read = buffer.len() - input.len();
 
-                tracing::debug!("parsed public settings: {public_settings:?}");
+                tracing::debug!(?public_settings, "drive_loader");
 
                 self.public_settings = Some(public_settings);
-                self.state = DriverLoaderState::KeyCount;
+                self.state = DriveLoaderState::KeyCount;
 
                 Ok(ProgressType::Advance(bytes_read))
             }
-            DriverLoaderState::KeyCount => {
+            DriveLoaderState::KeyCount => {
                 let (input, key_count) = KeyCount::parse(buffer)?;
                 let bytes_read = buffer.len() - input.len();
 
-                tracing::debug!("parsed key count: {key_count:?}");
+                tracing::debug!(?key_count, "drive_loader");
 
                 if self
                     .public_settings
@@ -254,9 +254,9 @@ impl ParserStateMachine<Drive> for DriverLoader<'_> {
                     .expect("to have been set")
                     .private()
                 {
-                    self.state = DriverLoaderState::EscrowedAccessKeys(key_count);
+                    self.state = DriveLoaderState::EscrowedAccessKeys(key_count);
                 } else {
-                    self.state = DriverLoaderState::PublicContentPayload(key_count);
+                    self.state = DriveLoaderState::PublicContentPayload(key_count);
                 }
 
                 Ok(ProgressType::Advance(bytes_read))
