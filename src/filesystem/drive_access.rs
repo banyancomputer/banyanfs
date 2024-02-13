@@ -11,11 +11,13 @@ pub struct DriveAccess {
 
 impl DriveAccess {
     pub fn access_settings(&self, actor_id: ActorId) -> Option<KeyAccessSettings> {
-        self.actor_settings.get(&actor_id).map(|(_, kas)| *kas)
+        self.actor_settings
+            .get(&actor_id)
+            .map(|(_, kas)| kas.clone())
     }
 
     pub fn has_write_access(&self, actor_id: ActorId) -> bool {
-        let settings = match self.actor_settings.get(&actor_id) {
+        let (_pub_key, settings) = match self.actor_settings.get(&actor_id) {
             Some(s) => s,
             None => return false,
         };

@@ -89,7 +89,7 @@ impl AsymLockedAccessKey {
 
 impl std::fmt::Debug for AsymLockedAccessKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{{AsymLockedKey({:?})}}", self.key_id())
+        write!(f, "AsymLockedAccessKey({:?})", self.key_id())
     }
 }
 

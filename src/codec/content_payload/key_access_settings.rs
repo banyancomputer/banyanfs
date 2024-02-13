@@ -46,8 +46,8 @@ pub enum KeyAccessSettings {
 impl KeyAccessSettings {
     pub fn is_historical(&self) -> bool {
         match self {
-            KeyAccessSettings::Public { historical, .. } => historical,
-            KeyAccessSettings::Private { historical, .. } => historical,
+            KeyAccessSettings::Public { historical, .. } => *historical,
+            KeyAccessSettings::Private { historical, .. } => *historical,
         }
     }
 

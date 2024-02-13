@@ -59,6 +59,12 @@ impl AsyncEncodable for SymLockedAccessKey {
     }
 }
 
+impl std::fmt::Debug for SymLockedAccessKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SymLockedAccessKey(*redacted*)")
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum SymLockedAccessKeyError<I> {
     #[error("crypto error: {0}")]

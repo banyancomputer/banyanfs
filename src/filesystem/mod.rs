@@ -4,7 +4,6 @@ mod drive;
 mod drive_access;
 mod file_content;
 mod nodes;
-mod private_encoding_context;
 
 pub use actor_settings::ActorSettings;
 pub use content_reference::ContentReference;
@@ -12,7 +11,6 @@ pub use drive::Drive;
 pub use drive_access::DriveAccess;
 pub use file_content::FileContent;
 pub use nodes::*;
-pub(crate) use private_encoding_context::PrivateEncodingContext;
 
 use futures::{AsyncRead, AsyncReadExt};
 use nom::number::streaming::le_u64;

@@ -19,7 +19,6 @@ use nom::IResult;
 
 use crate::codec::crypto::{AccessKey, KeyId, Nonce, SigningKey, VerifyingKey};
 use crate::codec::AsyncEncodable;
-use crate::filesystem::PrivateEncodingContext;
 
 use super::crypto::AuthenticationTag;
 
