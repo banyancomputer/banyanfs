@@ -96,20 +96,21 @@ async fn main() -> BanyanFsResult<()> {
     }
 
     let _fh = match tokio::fs::File::open("fixtures/minimal.bfs").await {
-        Ok(fh) => fh.compat(),
+        Ok(fh) => fh,
         Err(err) => {
             tracing::error!("failed to open file: {err}");
             return Ok(());
         }
     };
 
-    //let loaded_drive = match Drive::load_with_key(&mut fh, &signing_key) {
-    //    Ok(d) => d,
-    //    Err(err) => {
-    //        tracing::error!("failed to load saved drive: {err}");
-    //        return Ok(());
-    //    }
-    //};
+    let drive_loader = DriverLoader::new(&signing_key);
+    let loaded_drive = match drive_loader.load_from_reader(&mut fh).await {
+        Ok(d) => d,
+        Err(err) => {
+            tracing::error!("failed to load saved drive: {err}");
+            return Ok(());
+        }
+    };
 
     //match loaded_drive.ls(&["testing"]) {
     //    Ok(dir_contents) => {

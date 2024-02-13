@@ -5,6 +5,7 @@ pub mod crypto;
 pub mod filesystem;
 mod filesystem_id;
 pub mod header;
+mod segment_streamer;
 
 use async_trait::async_trait;
 use futures::{AsyncRead, AsyncReadExt, AsyncWrite};
@@ -12,6 +13,7 @@ use futures::{AsyncRead, AsyncReadExt, AsyncWrite};
 pub use actor_id::ActorId;
 pub use cid::Cid;
 pub use filesystem_id::FilesystemId;
+pub use segment_streamer::*;
 
 pub trait Parser: Sized {
     type Context: Send + Sync;
@@ -37,47 +39,16 @@ pub trait Parser: Sized {
 
 pub type ParserResult<'a, T> = nom::IResult<&'a [u8], T>;
 
-//use bytes::BufMut;
-//
-//#[async_trait]
-//pub trait AsyncParse<'a>: Parser + Sized {
-//    async fn async_parse<R: AsyncRead + AsyncReadExt + Unpin + Send>(
-//        reader: &mut R,
-//        ctx: &'a Self::Context,
-//    ) -> ParserResult<Self> {
-//        let mut buffer = bytes::BytesMut::with_capacity(1024); // Adjust initial capacity as needed
-//        let mut needed = 0;
-//
-//        loop {
-//            if buffer.len() < needed {
-//                let bytes_read = match reader.read(&mut buffer).await {
-//                    Ok(bytes_read) => bytes_read,
-//                    Err(err) => {
-//                        tracing::error!("encountered an i/o error: {err}");
-//                        return Err(nom::Err::Error(nom::error::Error::new(
-//                            buffer.as_ref(),
-//                            nom::error::ErrorKind::Eof,
-//                        )));
-//                    }
-//                };
-//
-//                if bytes_read == 0 {
-//                    return Err(nom::Err::Error(nom::error::Error::new(
-//                        buffer.as_ref(),
-//                        nom::error::ErrorKind::Eof,
-//                    )));
-//                }
-//            }
-//
-//            match Self::parse(&buffer, ctx) {
-//                Ok(parsed) => return Ok(parsed),
-//                Err(nom::Err::Incomplete(nom::Needed::Size(n))) => needed = buffer.len() + n.get(),
-//                Err(nom::Err::Incomplete(_)) => needed += 1,
-//                Err(err) => return Err(err),
-//            }
-//        }
-//    }
-//}
+#[async_trait]
+pub trait AsyncParse<'a>: Parser + Sized {
+    async fn next(mut input: &'a [u8], ctx: &'a Self::Context) -> ParserResult<'a, Option<Self>> {
+        match Self::parse(&input, ctx) {
+            Ok((remaining, parsed)) => Ok((remaining, Some(parsed))),
+            Err(nom::Err::Incomplete(_)) => Ok((input, None)),
+            Err(err) => Err(err),
+        }
+    }
+}
 
 #[async_trait]
 pub trait AsyncEncodable {

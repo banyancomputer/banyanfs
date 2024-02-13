@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
 use ecdsa::signature::rand_core::CryptoRngCore;
-use futures::AsyncWrite;
+use futures::{AsyncRead, AsyncReadExt, AsyncWrite, TryStream, TryStreamExt};
 
 use crate::codec::content_payload::{ContentPayload, KeyAccessSettings};
 use crate::codec::crypto::{SigningKey, VerifyingKey};
@@ -151,4 +151,106 @@ impl DerefMut for Drive {
 pub enum DriveError {
     #[error("failed to parse drive data, is this a banyanfs file?")]
     HeaderReadFailure,
+}
+
+use crate::codec::{ParserStateMachine, SegmentStreamer, StateError, StateResult};
+use bytes::Bytes;
+
+pub struct DriverLoader<'a> {
+    signing_key: &'a SigningKey,
+    state: DriverLoaderState,
+}
+
+impl<'a> DriverLoader<'a> {
+    pub fn new(signing_key: &'a SigningKey) -> Self {
+        Self {
+            signing_key,
+            state: DriverLoaderState::IdentityHeader,
+        }
+    }
+
+    pub async fn load_from_reader<R: AsyncRead + Unpin>(
+        self,
+        mut reader: R,
+    ) -> Result<Drive, DriveLoaderError> {
+        let mut buffer: bytes::BytesMut;
+        let mut streamer = SegmentStreamer::new(self);
+
+        loop {
+            buffer = bytes::BytesMut::new();
+            let bytes_read = reader.read(&mut buffer).await?;
+
+            // Handle EOF
+            if bytes_read == 0 {
+                return Err(DriveLoaderError::UnexpectedStreamEnd);
+            }
+
+            let bytes_chunk = buffer.freeze();
+            streamer.add_chunk(&bytes_chunk);
+
+            if let Some(segment_res) = streamer.next().await {
+                let (hash, drive) = segment_res?;
+                tracing::info!("loaded drive with blake3 hash of {{{hash:02x?}}}");
+                return Ok(drive);
+            };
+        }
+    }
+
+    pub async fn load_from_stream<S>(self, mut stream: S) -> Result<Drive, DriveLoaderError>
+    where
+        S: TryStream<Ok = Bytes, Error = std::io::Error> + Unpin,
+    {
+        let mut streamer = SegmentStreamer::new(self);
+
+        while let Some(chunk) = stream.try_next().await? {
+            streamer.add_chunk(&chunk);
+
+            if let Some(segment_res) = streamer.next().await {
+                let (hash, drive) = segment_res?;
+                tracing::info!("loaded drive with blake3 hash of {{{hash:02x?}}}");
+                return Ok(drive);
+            };
+        }
+
+        Err(DriveLoaderError::UnexpectedStreamEnd)
+    }
+}
+
+enum DriverLoaderState {
+    IdentityHeader,
+    FilesystemId,
+    PublicSettings,
+}
+
+impl ParserStateMachine<Drive> for DriverLoader<'_> {
+    type Error = DriveLoaderError;
+
+    fn parse(&mut self, buffer: &[u8]) -> StateResult<Drive, Self::Error> {
+        todo!()
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum DriveLoaderError {
+    #[error("additional data needed to continue parsing")]
+    Incomplete(Option<usize>),
+
+    #[error("an I/O error occurred: {0}")]
+    IoError(#[from] std::io::Error),
+
+    #[error("unexpected end of stream")]
+    UnexpectedStreamEnd,
+}
+
+impl StateError for DriveLoaderError {
+    fn needed_data(&self) -> Option<usize> {
+        match self {
+            DriveLoaderError::Incomplete(n) => *n,
+            _ => None,
+        }
+    }
+
+    fn needs_more_data(&self) -> bool {
+        matches!(self, DriveLoaderError::Incomplete(_))
+    }
 }
