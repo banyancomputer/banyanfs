@@ -1,12 +1,10 @@
 use futures::{AsyncRead, AsyncReadExt};
 
 use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, SigningKey};
-use crate::codec::header::{
-    ContentOptions, IdentityHeader, KeyCount, PermissionControl, PublicSettings,
-};
-use crate::codec::{
-    FilesystemId, JournalCheckpoint, ParserStateMachine, ProgressType, SegmentStreamer, StateError,
-    StateResult,
+use crate::codec::header::{IdentityHeader, KeyCount, PublicSettings};
+use crate::codec::meta::{ContentContext, FilesystemId};
+use crate::codec::parser::{
+    ParserStateMachine, ProgressType, SegmentStreamer, StateError, StateResult,
 };
 use crate::filesystem::Drive;
 
@@ -29,7 +27,7 @@ impl<'a> DriveLoader<'a> {
         }
     }
 
-    pub async fn load_from_reader<R: AsyncRead + AsyncReadExt + Unpin>(
+    pub async fn from_reader<R: AsyncRead + AsyncReadExt + Unpin>(
         self,
         mut reader: R,
     ) -> Result<Drive, DriveLoaderError> {
@@ -66,11 +64,14 @@ enum DriveLoaderState {
     KeyCount,
 
     EscrowedAccessKeys(KeyCount),
-    EncryptedContentPayloadEntry(AccessKey),
+    EncryptedPermissions(KeyCount, AccessKey),
+    PrivateContentPayload(ContentContext),
 
-    PrivateContentPayload(JournalCheckpoint, ContentOptions, Vec<PermissionControl>),
+    PublicAccessKeys(KeyCount),
+    PublicContentPayload(ContentContext),
 
-    PublicContentPayload(KeyCount),
+    Signature,
+    ErrorCorrection,
 }
 
 impl ParserStateMachine<Drive> for DriveLoader<'_> {
@@ -128,7 +129,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 {
                     self.state = DriveLoaderState::EscrowedAccessKeys(key_count);
                 } else {
-                    self.state = DriveLoaderState::PublicContentPayload(key_count);
+                    unimplemented!("public filesystems not yet available");
                 }
 
                 Ok(ProgressType::Advance(bytes_read))
@@ -158,11 +159,12 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 };
                 tracing::debug!(unlocked_key = ?key_access_key, "drive_loader::escrowed_access_keys");
 
-                self.state = DriveLoaderState::EncryptedContentPayloadEntry(key_access_key);
+                self.state =
+                    DriveLoaderState::EncryptedPermissions(key_count.clone(), key_access_key);
 
                 Ok(ProgressType::Advance(bytes_read))
             }
-            DriveLoaderState::EncryptedContentPayloadEntry(access_key) => {
+            DriveLoaderState::EncryptedPermissions(_key_count, _access_key) => {
                 todo!()
             }
             remaining => {

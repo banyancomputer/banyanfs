@@ -104,7 +104,7 @@ async fn main() -> BanyanFsResult<()> {
     };
 
     let drive_loader = DriveLoader::new(&signing_key);
-    let _loaded_drive = match drive_loader.load_from_reader(&mut fh).await {
+    let _loaded_drive = match drive_loader.from_reader(&mut fh).await {
         Ok(d) => d,
         Err(err) => {
             tracing::error!("failed to load saved drive: {err}");

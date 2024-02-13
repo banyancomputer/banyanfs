@@ -1,25 +1,8 @@
+use crate::codec::parser::{ParserStateMachine, ProgressType, StateError};
+
 use bytes::{Bytes, BytesMut};
 use futures::stream::Stream;
 use futures::FutureExt;
-
-pub trait StateError {
-    fn needed_data(&self) -> Option<usize>;
-
-    fn needs_more_data(&self) -> bool;
-}
-
-pub trait ParserStateMachine<T> {
-    type Error: StateError;
-
-    fn parse(&mut self, buffer: &[u8]) -> StateResult<T, Self::Error>;
-}
-
-pub type StateResult<T, E> = Result<ProgressType<T>, E>;
-
-pub enum ProgressType<T> {
-    Ready(usize, T),
-    Advance(usize),
-}
 
 pub struct SegmentStreamer<T, S: ParserStateMachine<T>> {
     buffer: BytesMut,

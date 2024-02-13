@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use nom::bytes::streaming::take;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct KeyCount(u8);
 
 impl Deref for KeyCount {
