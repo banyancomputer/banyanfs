@@ -1,7 +1,7 @@
 use crate::codec::content_payload::KeyAccessSettings;
 use crate::codec::crypto::{AccessKey, KeyId, VerifyingKey};
 
-#[allow(dead_code)]
+#[derive(Debug)]
 pub struct PermissionControl {
     key_id: KeyId,
     verifying_key: VerifyingKey,

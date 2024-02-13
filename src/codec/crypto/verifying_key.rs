@@ -91,6 +91,12 @@ impl AsyncEncodable for VerifyingKey {
     }
 }
 
+impl std::fmt::Debug for VerifyingKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{{VerifyingKey({:?})}}", self.key_id())
+    }
+}
+
 impl Deref for VerifyingKey {
     type Target = ecdsa::VerifyingKey<NistP384>;
 

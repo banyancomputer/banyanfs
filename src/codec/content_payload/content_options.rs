@@ -19,6 +19,7 @@ const CONTENT_OPTIONS_MAINTENANCE_BIT: u8 = 0b0000_0010;
 
 const CONTENT_OPTIONS_DATA_BIT: u8 = 0b0000_0001;
 
+#[derive(Debug)]
 pub struct ContentOptions {
     realized_view: bool,
     journal: bool,

@@ -24,6 +24,10 @@ pub struct AsymLockedAccessKey {
 }
 
 impl AsymLockedAccessKey {
+    pub fn key_id(&self) -> KeyId {
+        self.key_id
+    }
+
     pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
         let (input, (key_id, dh_exchange_key, nonce, raw_cipher_text, tag)) = tuple((
             KeyId::parse,
@@ -80,6 +84,12 @@ impl AsymLockedAccessKey {
         )?;
 
         Ok(AccessKey::from(key_payload))
+    }
+}
+
+impl std::fmt::Debug for AsymLockedAccessKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{{AsymLockedKey({:?})}}", self.key_id())
     }
 }
 

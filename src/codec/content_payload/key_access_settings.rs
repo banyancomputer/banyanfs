@@ -24,7 +24,7 @@ const KEY_ACCESS_SETTINGS_JOURNAL_KEY_PRESENT_BIT: u8 = 0b0000_0010;
 
 const KEY_ACCESS_SETTINGS_MAINTENANCE_KEY_PRESENT_BIT: u8 = 0b0000_0001;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum KeyAccessSettings {
     Public {
         protected: bool,

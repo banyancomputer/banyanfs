@@ -100,6 +100,12 @@ impl AccessKey {
     }
 }
 
+impl std::fmt::Debug for AccessKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "AccessKey(*redacted*)")
+    }
+}
+
 impl From<[u8; ACCESS_KEY_LENGTH]> for AccessKey {
     fn from(key: [u8; ACCESS_KEY_LENGTH]) -> Self {
         Self(key)

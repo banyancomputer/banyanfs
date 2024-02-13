@@ -13,9 +13,13 @@ use std::ops::{Deref, DerefMut};
 
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncRead, AsyncReadExt, AsyncWrite};
+use nom::number::streaming::le_u64;
+use nom::IResult;
 
-use crate::codec::content_payload::{ContentPayload, KeyAccessSettings};
-use crate::codec::crypto::{SigningKey, VerifyingKey};
+use crate::codec::content_payload::{
+    ContentOptions, ContentPayload, KeyAccessSettings, PermissionControl,
+};
+use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, SigningKey, VerifyingKey};
 use crate::codec::header::{IdentityHeader, KeyCount, PublicSettings};
 use crate::codec::{
     ActorId, AsyncEncodable, Cid, FilesystemId, ParserStateMachine, ProgressType, SegmentStreamer,
@@ -193,16 +197,49 @@ impl<'a> DriveLoader<'a> {
 }
 
 #[derive(Debug)]
+pub(crate) struct VectorClock(u64);
+
+impl VectorClock {
+    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+        let (input, value) = le_u64(input)?;
+        Ok((input, Self(value)))
+    }
+}
+
+#[derive(Debug)]
+pub struct JournalCheckpoint {
+    merkle_root_cid: Cid,
+    vector: VectorClock,
+}
+
+impl JournalCheckpoint {
+    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+        let (input, merkle_root_cid) = Cid::parse(input)?;
+        let (input, vector) = VectorClock::parse(input)?;
+
+        let journal_checkpoint = JournalCheckpoint {
+            merkle_root_cid,
+            vector,
+        };
+
+        Ok((input, journal_checkpoint))
+    }
+}
+
+#[derive(Debug)]
 enum DriveLoaderState {
     IdentityHeader,
     FilesystemId,
     PublicSettings,
 
     KeyCount,
+
     EscrowedAccessKeys(KeyCount),
+    EncryptedContentPayloadEntry(AccessKey),
+
+    PrivateContentPayload(JournalCheckpoint, ContentOptions, Vec<PermissionControl>),
 
     PublicContentPayload(KeyCount),
-    PrivateContentPayload(KeyCount),
 }
 
 impl ParserStateMachine<Drive> for DriveLoader<'_> {
@@ -260,6 +297,14 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 }
 
                 Ok(ProgressType::Advance(bytes_read))
+            }
+            DriveLoaderState::EscrowedAccessKeys(key_count) => {
+                let (input, locked_keys) = AsymLockedAccessKey::parse_many(buffer, **key_count)?;
+                let bytes_read = buffer.len() - input.len();
+
+                tracing::debug!(?locked_keys, "drive_loader");
+
+                todo!()
             }
             remaining => {
                 unimplemented!("parsing for state {remaining:?}");
