@@ -21,6 +21,9 @@ pub(crate) trait Movable {
 pub enum OperationError {
     #[error("the {0} operation is not supported by this node type")]
     IncompatibleType(&'static str),
+
+    #[error("unable to make use of an empty path")]
+    UnexpectedEmptyPath,
 }
 
 #[async_trait]

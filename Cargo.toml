@@ -12,6 +12,7 @@ default = ["strict"]
 strict = []
 
 [dependencies]
+async-std = "^1"
 async-trait = "^0.1"
 futures = "^0.3"
 thiserror = "^1"

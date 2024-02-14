@@ -12,14 +12,14 @@ use crate::codec::meta::ActorId;
 
 pub(crate) type NodeId = usize;
 
-pub(crate) type PermanentNodeId = [u8; 16];
+pub(crate) type PermanentId = [u8; 16];
 
 pub struct Node {
     node_id: NodeId,
     parent_id: Option<NodeId>,
 
     owner_id: ActorId,
-    permanent_id: PermanentNodeId,
+    permanent_id: PermanentId,
 
     created_at: OffsetDateTime,
     modified_at: OffsetDateTime,
@@ -35,6 +35,10 @@ impl Node {
 
     pub fn owner_id(&self) -> ActorId {
         self.owner_id
+    }
+
+    pub fn permanent_id(&self) -> PermanentId {
+        self.permanent_id
     }
 
     pub fn set_attribute(&mut self, key: String, value: Vec<u8>) -> Option<Vec<u8>> {

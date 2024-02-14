@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use time::OffsetDateTime;
 
 use crate::codec::meta::ActorId;
-use crate::filesystem::nodes::{Node, NodeId, NodeKind, PermanentNodeId};
+use crate::filesystem::nodes::{Node, NodeId, NodeKind, PermanentId};
 
 pub(crate) struct NodeBuilder {
     node_id: NodeId,
@@ -30,7 +30,7 @@ impl NodeBuilder {
     }
 
     pub fn build(self, rng: &mut impl CryptoRngCore) -> Node {
-        let permanent_id: PermanentNodeId = rng.gen();
+        let permanent_id: PermanentId = rng.gen();
 
         Node {
             node_id: self.node_id,

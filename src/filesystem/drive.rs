@@ -1,5 +1,8 @@
+use std::collections::HashMap;
 use std::path::{Component, Path};
+use std::sync::Arc;
 
+use async_std::sync::RwLock;
 use elliptic_curve::rand_core::CryptoRngCore;
 use slab::Slab;
 
@@ -8,25 +11,30 @@ use crate::codec::header::KeyAccessSettingsBuilder;
 use crate::codec::meta::{ActorId, FilesystemId};
 use crate::filesystem::nodes::NodeKind;
 use crate::filesystem::operations::*;
-use crate::filesystem::{DriveAccess, Node, NodeBuilder, NodeId, PermanentNodeId};
+use crate::filesystem::{DriveAccess, Node, NodeBuilder, NodeId, PermanentId};
 
 pub struct Drive {
     current_key: SigningKey,
-
     filesystem_id: FilesystemId,
-    access: DriveAccess,
+    inner: Arc<RwLock<InnerDrive>>,
+}
 
+struct InnerDrive {
+    access: DriveAccess,
     nodes: Slab<Node>,
     root_node_id: NodeId,
+    permanent_id_map: HashMap<PermanentId, NodeId>,
 }
 
 impl Drive {
-    pub fn has_realized_view_access(&self, actor_id: ActorId) -> bool {
-        self.access.has_realized_view_access(actor_id)
+    pub async fn has_realized_view_access(&self, actor_id: ActorId) -> bool {
+        let inner = self.inner.read().await;
+        inner.access.has_realized_view_access(actor_id)
     }
 
-    pub fn has_write_access(&self, actor_id: ActorId) -> bool {
-        self.access.has_write_access(actor_id)
+    pub async fn has_write_access(&self, actor_id: ActorId) -> bool {
+        let inner = self.inner.read().await;
+        inner.access.has_write_access(actor_id)
     }
 
     //pub async fn encode_private<W: AsyncWrite + Unpin + Send>(
@@ -79,71 +87,133 @@ impl Drive {
         access.register_actor(verifying_key, kas);
 
         let mut nodes = Slab::with_capacity(32);
+        let mut permanent_id_map = HashMap::new();
 
         let node_entry = nodes.vacant_entry();
         let root_node_id = node_entry.key();
 
         let directory = NodeBuilder::directory(root_node_id, actor_id).build(rng);
+        permanent_id_map.insert(directory.permanent_id(), root_node_id);
         node_entry.insert(directory);
 
         Self {
             current_key,
-
             filesystem_id,
-            access,
 
-            nodes,
-            root_node_id,
+            inner: Arc::new(RwLock::new(InnerDrive {
+                access,
+                nodes,
+                root_node_id,
+                permanent_id_map,
+            })),
         }
     }
 
-    pub(crate) fn root_directory(&mut self) -> Directory {
-        Directory::new(self, self.root_node_id)
+    pub async fn mkdir(
+        &mut self,
+        _rng: &mut impl CryptoRngCore,
+        _path: &Path,
+        _recursive: bool,
+    ) -> Result<Directory, OperationError> {
+        todo!()
+    }
+
+    pub(crate) async fn root_directory(&mut self) -> Directory {
+        let inner_read = self.inner.read().await;
+        let root_node_id = inner_read.root_node_id;
+        drop(inner_read);
+
+        Directory::new(&self.current_key, root_node_id, self.inner.clone()).await
     }
 }
 
 pub struct Directory<'a> {
-    drive: &'a mut Drive,
-    node_id: NodeId,
+    current_key: &'a SigningKey,
+    cwd_id: NodeId,
+    inner: Arc<RwLock<InnerDrive>>,
 }
 
 impl<'a> Directory<'a> {
-    //async fn ls(mut self, path: &Path) -> Result<Vec<(String, PermanentNodeId)>, OperationError> {
-    //    let mut components = path.components();
+    async fn walk_directory(&self, path: &Path) -> Result<NodeId, OperationError> {
+        let mut components = path.components();
+        let mut cwd_id = self.cwd_id;
 
-    //    let mut active_path = components.next();
-    //    if let Some(Component::RootDir) = active_path {
-    //        self.node_id = self.drive.root_node_id;
-    //        active_path = components.next();
-    //    }
+        loop {
+            let mut active_path = match components.next() {
+                Some(path) => path,
+                None => return Err(OperationError::UnexpectedEmptyPath),
+            };
 
-    //    let node_children = match self.drive.nodes[self.node_id].kind() {
-    //        NodeKind::Directory { children, .. } => children,
-    //        _ => return Err(OperationError::IncompatibleType("ls")),
-    //    };
+            match active_path {
+                Component::RootDir => {
+                    cwd_id = self.inner.read().await.root_node_id;
+                }
+                _ => (),
+            }
 
-    //    if active_path.is_none() || active_path == Some(Component::CurDir) {
-    //        let contents: Vec<_> = node_children
-    //            .iter()
-    //            .map(|(name, pid)| (name.clone(), pid.clone()))
-    //            .collect();
+            let node_children = match self.inner.read().await.nodes[cwd_id].kind() {
+                NodeKind::Directory { children, .. } => children,
+                _ => return Err(OperationError::IncompatibleType("ls")),
+            };
 
-    //        return Ok(contents);
-    //    }
-    //
-    //    // todo: need to get the next node id , validate its a directory and then continue
+            todo!()
+        }
+    }
 
-    //    self.ls(components.as_path()).await
-    //}
+    async fn ls(mut self, path: &Path) -> Result<Vec<(String, PermanentId)>, OperationError> {
+        let mut components = path.components();
+        let mut cwd_id = self.cwd_id;
 
-    pub fn new(drive: &'a mut Drive, node_id: NodeId) -> Self {
-        debug_assert!(drive.nodes.contains(node_id));
+        let inner_read = self.inner.read().await;
+
+        loop {
+            let mut active_path = components.next();
+            if let Some(Component::RootDir) = active_path {
+                cwd_id = inner_read.root_node_id;
+                active_path = components.next();
+            }
+
+            let node_children = match inner_read.nodes[cwd_id].kind() {
+                NodeKind::Directory { children, .. } => children,
+                _ => return Err(OperationError::IncompatibleType("ls")),
+            };
+
+            match active_path {
+                Some(Component::CurDir) => (),
+                None => {
+                    let contents: Vec<_> = node_children
+                        .iter()
+                        .map(|(name, pid)| (name.clone(), *pid))
+                        .collect();
+
+                    return Ok(contents);
+                }
+                _ => (),
+            }
+
+            todo!()
+        }
+    }
+
+    pub async fn new(
+        current_key: &'a SigningKey,
+        cwd_id: NodeId,
+        inner: Arc<RwLock<InnerDrive>>,
+    ) -> Self {
+        let inner_read = inner.read().await;
+
+        debug_assert!(inner_read.nodes.contains(cwd_id));
         debug_assert!(matches!(
-            drive.nodes[node_id].kind(),
+            inner_read.nodes[cwd_id].kind(),
             NodeKind::Directory { .. }
         ));
+        drop(inner_read);
 
-        Self { drive, node_id }
+        Self {
+            current_key,
+            cwd_id,
+            inner,
+        }
     }
 
     pub fn mkdir(
