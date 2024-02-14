@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
 use crate::codec::filesystem::DirectoryPermissions;
-use crate::filesystem::EntryId;
+use crate::filesystem::NodeId;
 
 #[derive(Clone, Debug, Default)]
 pub struct Directory {
     permissions: DirectoryPermissions,
-    children: HashMap<String, EntryId>,
+    children: HashMap<String, NodeId>,
     children_size: u64,
 }
 

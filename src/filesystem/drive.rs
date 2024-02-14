@@ -4,14 +4,14 @@ use slab::Slab;
 use crate::codec::crypto::SigningKey;
 use crate::codec::header::KeyAccessSettingsBuilder;
 use crate::codec::meta::{ActorId, FilesystemId};
-use crate::filesystem::{DriveAccess, Entry, EntryBuilder, EntryId};
+use crate::filesystem::{DriveAccess, Node, NodeBuilder, NodeId};
 
 pub struct Drive {
     filesystem_id: FilesystemId,
     access: DriveAccess,
 
-    nodes: Slab<Entry>,
-    root_entry_id: EntryId,
+    nodes: Slab<Node>,
+    root_node_id: NodeId,
 }
 
 impl Drive {
@@ -60,9 +60,13 @@ impl Drive {
         let verifying_key = signing_key.verifying_key();
         let actor_id = verifying_key.actor_id();
 
+        let filesystem_id = FilesystemId::generate(rng);
+        tracing::debug!(?actor_id, ?filesystem_id, "drive::initializing_private");
+
         let kas = KeyAccessSettingsBuilder::private()
             .set_owner()
             .set_protected()
+            .with_all_access()
             .build();
 
         let mut access = DriveAccess::default();
@@ -70,19 +74,23 @@ impl Drive {
 
         let mut nodes = Slab::with_capacity(32);
 
-        let root_entry = nodes.vacant_entry();
-        let root_entry_id = root_entry.key();
+        let node_entry = nodes.vacant_entry();
+        let root_node_id = node_entry.key();
 
-        let directory = EntryBuilder::directory(root_entry_id, actor_id).build(rng);
-        root_entry.insert(directory);
+        let directory = NodeBuilder::directory(root_node_id, actor_id).build(rng);
+        node_entry.insert(directory);
 
         Self {
-            filesystem_id: FilesystemId::generate(rng),
+            filesystem_id,
             access,
 
             nodes,
-            root_entry_id,
+            root_node_id,
         }
+    }
+
+    pub fn root_directory(&self) -> &Node {
+        &self.nodes[self.root_node_id]
     }
 }
 

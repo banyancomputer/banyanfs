@@ -32,30 +32,6 @@ pub struct KeyAccessSettingsBuilder {
 }
 
 impl KeyAccessSettingsBuilder {
-    pub fn set_owner(mut self) -> Self {
-        self.bits |= KEY_ACCESS_SETTINGS_OWNER_BIT;
-        self
-    }
-
-    pub fn set_protected(mut self) -> Self {
-        self.bits |= KEY_ACCESS_SETTINGS_PROTECTED_BIT;
-        self
-    }
-
-    pub fn private() -> Self {
-        Self {
-            bits: 0,
-            private: true,
-        }
-    }
-
-    pub fn public() -> Self {
-        Self {
-            bits: 0,
-            private: false,
-        }
-    }
-
     pub fn build(self) -> KeyAccessSettings {
         if self.private {
             KeyAccessSettings::Private {
@@ -76,6 +52,39 @@ impl KeyAccessSettingsBuilder {
                 extra: self.bits & KEY_ACCESS_SETTINGS_PRIVATE_ONLY_MASK,
             }
         }
+    }
+
+    pub fn private() -> Self {
+        Self {
+            bits: 0,
+            private: true,
+        }
+    }
+
+    pub fn public() -> Self {
+        Self {
+            bits: 0,
+            private: false,
+        }
+    }
+
+    pub fn set_owner(mut self) -> Self {
+        self.bits |= KEY_ACCESS_SETTINGS_OWNER_BIT;
+        self
+    }
+
+    pub fn set_protected(mut self) -> Self {
+        self.bits |= KEY_ACCESS_SETTINGS_PROTECTED_BIT;
+        self
+    }
+
+    pub fn with_all_access(mut self) -> Self {
+        self.bits |= KEY_ACCESS_SETTINGS_REALIZED_KEY_PRESENT_BIT;
+        self.bits |= KEY_ACCESS_SETTINGS_DATA_KEY_PRESENT_BIT;
+        self.bits |= KEY_ACCESS_SETTINGS_JOURNAL_KEY_PRESENT_BIT;
+        self.bits |= KEY_ACCESS_SETTINGS_MAINT_KEY_PRESENT_BIT;
+
+        self
     }
 }
 

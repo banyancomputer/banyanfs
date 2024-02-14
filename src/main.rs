@@ -41,32 +41,29 @@ async fn main() -> BanyanFsResult<()> {
         return Err(BanyanFsError("key doesn't have access to the drive"));
     }
 
-    //if drive.is_writable(&signing_key) {
-    //    let actor_id = signing_key.actor_id();
-    //    let new_perms = DirectoryPermissions::default();
+    if drive.has_write_access(actor_id) {
+        //    if let Err(err) = drive.mkdir(&mut rng, actor_id, &["testing", "paths"], new_perms, true) {
+        //        tracing::error!("failed to create directory: {}", err);
+        //        return Ok(());
+        //    }
 
-    //    if let Err(err) = drive.mkdir(&mut rng, actor_id, &["testing", "paths"], new_perms, true) {
-    //        tracing::error!("failed to create directory: {}", err);
-    //        return Ok(());
-    //    }
+        //    //    let fh = drive.open("/root/testing/deep/paths/file.txt")?;
+        //    //    fh.write(b"hello world")?;
+        //    //    fh.close()?;
 
-    //    //    let fh = drive.open("/root/testing/deep/paths/file.txt")?;
-    //    //    fh.write(b"hello world")?;
-    //    //    fh.close()?;
+        //    //    let fh = drive.open("/root/testing/deep/paths/file.txt")?;
+        //    //    fh.seek(std::io::SeekFrom::Start(6))?;
+        //    //    let mut buf = [0u8; 5];
+        //    //    fh.read(&mut buf)?;
+        //    //    assert_eq!(&buf, b"world");
 
-    //    //    let fh = drive.open("/root/testing/deep/paths/file.txt")?;
-    //    //    fh.seek(std::io::SeekFrom::Start(6))?;
-    //    //    let mut buf = [0u8; 5];
-    //    //    fh.read(&mut buf)?;
-    //    //    assert_eq!(&buf, b"world");
+        //    //    drive.delete("/root/testing/deep/paths/file.txt")?;
 
-    //    //    drive.delete("/root/testing/deep/paths/file.txt")?;
+        //    //    let new_key: &[u8] = &[0x68, 0x55];
+        //    //    drive.authorize_key(new_key, Permission::StructureRead | Permission::DataRead)?;
 
-    //    //    let new_key: &[u8] = &[0x68, 0x55];
-    //    //    drive.authorize_key(new_key, Permission::StructureRead | Permission::DataRead)?;
-
-    //    //    drive.sync()?;
-    //}
+        //    //    drive.sync()?;
+    }
 
     //match drive.ls(&["testing"]) {
     //    Ok(dir_contents) => {

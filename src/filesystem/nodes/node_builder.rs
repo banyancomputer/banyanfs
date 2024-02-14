@@ -4,24 +4,23 @@ use std::collections::HashMap;
 use time::OffsetDateTime;
 
 use crate::codec::meta::ActorId;
-use crate::filesystem::nodes::Node;
-use crate::filesystem::{Entry, EntryId, PermanentEntryId};
+use crate::filesystem::nodes::{Node, NodeId, NodeType, PermanentNodeId};
 
-pub(crate) struct EntryBuilder {
-    node_id: EntryId,
-    parent_id: Option<EntryId>,
+pub(crate) struct NodeBuilder {
+    node_id: NodeId,
+    parent_id: Option<NodeId>,
 
     owner_id: ActorId,
 
-    node: Node,
+    node: NodeType,
     metadata: HashMap<String, Vec<u8>>,
 }
 
-impl EntryBuilder {
-    pub fn build(self, rng: &mut impl CryptoRngCore) -> Entry {
-        let permanent_id: PermanentEntryId = rng.gen();
+impl NodeBuilder {
+    pub fn build(self, rng: &mut impl CryptoRngCore) -> Node {
+        let permanent_id: PermanentNodeId = rng.gen();
 
-        Entry {
+        Node {
             node_id: self.node_id,
             parent_id: self.parent_id,
 
@@ -36,14 +35,14 @@ impl EntryBuilder {
         }
     }
 
-    pub fn directory(node_id: EntryId, owner_id: ActorId) -> Self {
+    pub fn directory(node_id: NodeId, owner_id: ActorId) -> Self {
         Self {
             node_id,
             parent_id: None,
 
             owner_id,
 
-            node: Node::Directory(Default::default()),
+            node: NodeType::Directory(Default::default()),
             metadata: HashMap::new(),
         }
     }
