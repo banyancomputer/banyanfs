@@ -42,17 +42,43 @@ async fn main() -> BanyanFsResult<()> {
     }
 
     if drive.has_write_access(actor_id).await {
-        let path_buf = std::path::PathBuf::from("/testing/paths");
+        let mut root = drive.root_directory().await;
 
-        if let Err(err) = drive.mkdir(&mut rng, path_buf.as_path(), true).await {
+        if let Err(err) = root.mkdir(&mut rng, &["testing", "paths"], true).await {
             tracing::error!("failed to create directory: {}", err);
             return Ok(());
         }
+        tracing::info!("initial batch of directories created");
 
-        match drive.root_directory().await.ls(path_buf.as_path()).await {
-            Ok(dir_contents) => {
-                let names: Vec<String> = dir_contents.into_iter().map(|(name, _)| name).collect();
-                tracing::info!(?names, "dir_contents");
+        let testing_dir = match root.cd(&["testing"]).await {
+            Ok(dir) => dir,
+            Err(err) => {
+                tracing::error!("failed to switch directory: {}", err);
+                return Ok(());
+            }
+        };
+        tracing::info!("grabbed an alternate directory handle");
+
+        if let Err(err) = root.mkdir(&mut rng, &["testing", "paths"], true).await {
+            tracing::error!("failed to create same directory: {}", err);
+            return Ok(());
+        }
+        tracing::info!("recreated existing directories");
+
+        match testing_dir.ls(&[]).await {
+            Ok(contents) => {
+                let names: Vec<String> = contents.into_iter().map(|(name, _)| name).collect();
+                tracing::info!(?names, "contents");
+            }
+            Err(err) => tracing::error!("failed to list directory: {}", err),
+        }
+
+        // get a fresh handle on the root directory
+        let root = drive.root_directory().await;
+        match root.ls(&["testing"]).await {
+            Ok(contents) => {
+                let names: Vec<String> = contents.into_iter().map(|(name, _)| name).collect();
+                tracing::info!(?names, "contents");
             }
             Err(err) => tracing::error!("failed to list directory: {}", err),
         }

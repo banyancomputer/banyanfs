@@ -2,7 +2,7 @@ use std::path::Path;
 
 use async_trait::async_trait;
 
-use crate::filesystem::PermanentId;
+use crate::codec::meta::PermanentId;
 
 #[async_trait]
 pub(crate) trait Deletable {
@@ -35,6 +35,9 @@ pub enum OperationError {
 
     #[error("missing permanent id in the filesystem: {0:?}")]
     MissingPermanentId(PermanentId),
+
+    #[error("individual path entry was empty")]
+    NameIsEmpty,
 
     #[error("path attempted to traverse a non-directory node")]
     NotADirectory,

@@ -10,7 +10,7 @@ pub(crate) mod nodes;
 
 pub(crate) use content_reference::ContentReference;
 pub(crate) use file_content::FileContent;
-pub(crate) use nodes::{Node, NodeBuilder, NodeId, PermanentId};
+pub(crate) use nodes::{Node, NodeBuilder, NodeId};
 pub(crate) use vector_clock::VectorClock;
 
 pub use drive::Drive;

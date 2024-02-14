@@ -1,5 +1,4 @@
 use elliptic_curve::rand_core::CryptoRngCore;
-use rand::Rng;
 use std::collections::HashMap;
 use time::OffsetDateTime;
 
@@ -30,14 +29,12 @@ impl NodeBuilder {
     }
 
     pub fn build(self, rng: &mut impl CryptoRngCore) -> Node {
-        let permanent_id: PermanentId = rng.gen();
-
         Node {
             node_id: self.node_id,
             parent_id: self.parent_id,
 
             owner_id: self.owner_id,
-            permanent_id,
+            permanent_id: PermanentId::generate(rng),
 
             created_at: OffsetDateTime::now_utc(),
             modified_at: OffsetDateTime::now_utc(),

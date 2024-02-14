@@ -8,11 +8,9 @@ pub use node_kind::NodeKind;
 use std::collections::HashMap;
 use time::OffsetDateTime;
 
-use crate::codec::meta::ActorId;
+use crate::codec::meta::{ActorId, PermanentId};
 
 pub(crate) type NodeId = usize;
-
-pub(crate) type PermanentId = [u8; 16];
 
 pub struct Node {
     node_id: NodeId,

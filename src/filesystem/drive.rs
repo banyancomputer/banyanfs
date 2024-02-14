@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::path::{Component, Path};
 use std::sync::Arc;
 
 use async_std::sync::RwLock;
@@ -12,7 +11,7 @@ use crate::codec::header::*;
 use crate::codec::*;
 use crate::filesystem::nodes::NodeKind;
 use crate::filesystem::operations::*;
-use crate::filesystem::{DriveAccess, Node, NodeBuilder, NodeId, PermanentId};
+use crate::filesystem::{DriveAccess, Node, NodeBuilder, NodeId};
 
 pub struct Drive {
     current_key: Arc<SigningKey>,
@@ -105,7 +104,7 @@ impl Drive {
     pub async fn mkdir(
         &mut self,
         rng: &mut impl CryptoRngCore,
-        path: &Path,
+        path: &[&str],
         recursive: bool,
     ) -> Result<(), OperationError> {
         self.root_directory()
@@ -132,16 +131,16 @@ pub struct Directory {
 enum WalkState<'a> {
     /// The path was fully traversed and resulted in the included ID and the final part of the
     /// path that matched
-    Found(NodeId, Component<'a>),
+    Found(NodeId, &'a str),
 
     /// If some or all of the path has been walked, but ran out of named nodes that match the path.
     /// It returns the ID of the last directory it was able to walk to and the missing part of the
     /// path.
-    Missing(NodeId, &'a Path),
+    Missing(NodeId, &'a [&'a str]),
 
     /// Part of the provided path was not a directory so traversal was stopped. The last valid
     /// directory ID and the remaining path is returned.
-    NotTraversable(NodeId, &'a Path),
+    NotTraversable(NodeId, &'a [&'a str]),
 }
 
 impl Directory {
@@ -149,56 +148,49 @@ impl Directory {
     async fn walk_directory<'b>(
         &self,
         mut cwd_id: NodeId,
-        path: &'b Path,
+        mut path: &'b [&'b str],
     ) -> Result<WalkState<'b>, OperationError> {
-        let mut components = path.components();
-
-        // For the first one, if its empty the path is invalid, later on it means we'll have
-        // reached our destination
-        let mut active_path = match components.next() {
-            Some(path) => path,
-            None => return Err(OperationError::UnexpectedEmptyPath),
-        };
-
         loop {
-            match active_path {
-                Component::RootDir => {
-                    cwd_id = self.inner.read().await.root_node_id;
+            let (current_entry, remaining_path) = match path.split_first() {
+                Some(r) => r,
+                None => {
+                    return Err(OperationError::UnexpectedEmptyPath);
                 }
+            };
+
+            match *current_entry {
                 // This path references where we currently are, do nothing and let the next loop
                 // advance our state
-                Component::CurDir => (),
-                // Weird windows prefixes, ignore them
-                Component::Prefix(_) => (),
+                "." => (),
                 // Zip up the directory level
-                Component::ParentDir => match self.inner.read().await.nodes[cwd_id].parent_id() {
+                ".." => match self.inner.read().await.nodes[cwd_id].parent_id() {
                     Some(parent_id) => {
                         cwd_id = parent_id;
                     }
                     None => return Err(OperationError::InvalidParentDir),
                 },
-                Component::Normal(current_path_os) => {
-                    let current_path = current_path_os
-                        .to_str()
-                        .ok_or(OperationError::InvalidPath)?;
-
-                    if current_path.is_empty() {
-                        return Err(OperationError::UnexpectedEmptyPath);
+                cur_name => {
+                    if cur_name.is_empty() {
+                        return Err(OperationError::NameIsEmpty);
                     }
 
-                    if current_path.len() > 255 {
+                    if cur_name.len() > 255 {
                         return Err(OperationError::PathComponentTooLong);
                     }
 
                     let inner_read = self.inner.read().await;
                     let node_children = match inner_read.nodes[cwd_id].kind() {
                         NodeKind::Directory { children, .. } => children,
-                        _ => return Err(OperationError::IncompatibleType("ls")),
+                        _ => {
+                            return Err(OperationError::IncompatibleType(
+                                "current node is not a directory",
+                            ))
+                        }
                     };
 
-                    let perm_id = match node_children.get(current_path) {
+                    let perm_id = match node_children.get(cur_name) {
                         Some(perm_id) => perm_id,
-                        None => return Ok(WalkState::Missing(cwd_id, components.as_path())),
+                        None => return Ok(WalkState::Missing(cwd_id, path)),
                     };
 
                     let next_cwd_id = inner_read
@@ -206,59 +198,61 @@ impl Directory {
                         .get(perm_id)
                         .ok_or(OperationError::MissingPermanentId(*perm_id))?;
 
-                    match inner_read.nodes[*next_cwd_id].kind() {
-                        // We can add in links, and external mounted filesystems here later on
-                        NodeKind::Directory { .. } => {
-                            cwd_id = *next_cwd_id;
-                        }
-                        _ => return Ok(WalkState::NotTraversable(cwd_id, components.as_path())),
+                    if path.is_empty() {
+                        return Ok(WalkState::Found(*next_cwd_id, cur_name));
                     }
+
+                    // The path goes deeper, make sure the next node is a directory
+                    let next_node = &inner_read.nodes[*next_cwd_id];
+                    if !matches!(next_node.kind(), NodeKind::Directory { .. }) {
+                        return Ok(WalkState::NotTraversable(cwd_id, path));
+                    }
+
+                    // Go deeper on our next loop, importantly though an empty path from this point on
+                    // means we've successfully reached our goal.
+                    cwd_id = *next_cwd_id;
+                    path = remaining_path;
                 }
             }
-
-            active_path = match components.next() {
-                Some(path) => path,
-                None => return Ok(WalkState::Found(cwd_id, active_path)),
-            };
         }
     }
 
-    pub async fn cd(mut self, path: &Path) -> Result<(), OperationError> {
+    pub async fn cd(&self, path: &[&str]) -> Result<Directory, OperationError> {
         let target_directory_id = match self.walk_directory(self.cwd_id, path).await {
             Ok(WalkState::Found(tdi_id, _)) => tdi_id,
             _ => return Err(OperationError::NotADirectory),
         };
 
-        self.cwd_id = target_directory_id;
+        tracing::debug!("drive::cd::{{path:?}}");
 
-        Ok(())
+        let directory = Directory {
+            current_key: self.current_key.clone(),
+            cwd_id: target_directory_id,
+            inner: self.inner.clone(),
+        };
+
+        Ok(directory)
     }
 
-    pub async fn ls(self, path: &Path) -> Result<Vec<(String, PermanentId)>, OperationError> {
-        let (target_directory_id, remaining) = match self.walk_directory(self.cwd_id, path).await? {
-            WalkState::Found(tdi_id, component) => (tdi_id, component),
+    pub async fn ls(self, path: &[&str]) -> Result<Vec<(String, PermanentId)>, OperationError> {
+        let (target_dir_id, entry) = match self.walk_directory(self.cwd_id, path).await? {
+            WalkState::Found(tdi_id, parent_entry) => (tdi_id, parent_entry),
             // If the last item is a file we can display it, this matches the behavior in linux
             // like shells
-            WalkState::NotTraversable(tdi, path) if path.components().count() == 1 => {
-                (tdi, path.components().next().unwrap())
+            WalkState::NotTraversable(tdi, blocked_path) if blocked_path.len() == 1 => {
+                (tdi, blocked_path[0])
             }
             WalkState::NotTraversable(_, _) => return Err(OperationError::NotADirectory),
             WalkState::Missing(_, _) => return Err(OperationError::PathNotFound),
         };
 
         let inner_read = self.inner.read().await;
-        let node_children = match inner_read.nodes[target_directory_id].kind() {
+        let target_dir = &inner_read.nodes[target_dir_id];
+
+        let node_children = match target_dir.kind() {
             NodeKind::Directory { children, .. } => children,
             NodeKind::File { .. } => {
-                let name = remaining
-                    .as_os_str()
-                    .to_str()
-                    .ok_or(OperationError::InvalidPath)?;
-
-                return Ok(vec![(
-                    name.to_string(),
-                    inner_read.nodes[target_directory_id].permanent_id(),
-                )]);
+                return Ok(vec![(entry.to_string(), target_dir.permanent_id())]);
             }
         };
 
@@ -291,39 +285,45 @@ impl Directory {
     pub async fn mkdir(
         &mut self,
         rng: &mut impl CryptoRngCore,
-        path: &Path,
+        mut path: &[&str],
         recursive: bool,
     ) -> Result<(), OperationError> {
         let mut cwd_id = self.cwd_id;
-        let mut path_components = path.components();
+        tracing::debug!(initial_working_directory_id = ?cwd_id, "drive::mkdir::{{{path:?}}}");
+
+        if path.is_empty() {
+            return Err(OperationError::UnexpectedEmptyPath);
+        }
 
         loop {
-            match self
-                .walk_directory(cwd_id, path_components.as_path())
-                .await?
-            {
-                // directory already exists, don't need to do anything
-                WalkState::Found(_, _) => return Ok(()),
+            match self.walk_directory(cwd_id, path).await? {
+                // node already exists, we'll double check its a folder and consider it a success
+                // if it is
+                WalkState::Found(nid, entry_name) => {
+                    match self.inner.read().await.nodes[nid].kind() {
+                        NodeKind::Directory { .. } => {
+                            tracing::debug!(directory = entry_name, "drive::mkdir::already_exists");
+                            return Ok(());
+                        }
+                        _ => return Err(OperationError::NotADirectory),
+                    }
+                }
                 WalkState::NotTraversable(_, _) => return Err(OperationError::NotADirectory),
-                WalkState::Missing(containing_node_id, remaining_path) => {
-                    path_components = remaining_path.components();
-
-                    let potential_directory_name = match path_components.next() {
-                        Some(Component::Normal(path_name)) => path_name,
-                        _ => unreachable!("should be caught by found branch"),
+                WalkState::Missing(current_dir_id, missing_path) if !missing_path.is_empty() => {
+                    // we should always have
+                    let (missing_name, remaining_path) = match missing_path.split_first() {
+                        Some(res) => res,
+                        _ => unreachable!("protected by branch guard"),
                     };
+
+                    tracing::debug!(cwd_id = ?current_dir_id, name = ?missing_name, "drive::mkdir::missing_directory");
 
                     // If there is more to the path and we are not in recursive mode, we should
                     // report the error
-                    if !recursive && path_components.by_ref().peekable().peek().is_some() {
+                    if !(recursive || remaining_path.is_empty()) {
+                        tracing::debug!("drive::mkdir::not_recursive");
                         return Err(OperationError::PathNotFound);
                     }
-
-                    let directory_name = potential_directory_name
-                        .to_str()
-                        .ok_or(OperationError::InvalidPath)?;
-
-                    tracing::debug!(orig_cwd = ?self.cwd_id, now_cwd = ?cwd_id, "creating directory '{directory_name}'");
 
                     // Create our new directory and set it up within the slab, nothing has been
                     // persisted yet and nothing about it will be recorded as we don't have a
@@ -351,20 +351,32 @@ impl Directory {
                     // ...which necessitates a new write
                     drop(inner_write);
                     let mut inner_write = self.inner.write().await;
-                    let node_children = match inner_write.nodes[containing_node_id].kind_mut() {
+
+                    let node_children = match inner_write.nodes[current_dir_id].kind_mut() {
                         NodeKind::Directory { children, .. } => children,
-                        _ => {
-                            return Err(OperationError::BadSearch(
-                                "only directories should be found here",
-                            ))
-                        }
+                        _ => return Err(OperationError::BadSearch("not in a directory?")),
                     };
 
-                    node_children.insert(directory_name.to_string(), new_permanent_id);
+                    node_children.insert(missing_name.to_string(), new_permanent_id);
+                    tracing::debug!(
+                        cwd_id = ?current_dir_id,
+                        name = missing_name,
+                        pid = ?new_permanent_id,
+                        "drive::mkdir::created"
+                    );
+
+                    if remaining_path.is_empty() {
+                        // Nothing left to do, let's bail out
+                        return Ok(());
+                    }
 
                     cwd_id = new_node_id;
-
-                    tracing::debug!("directory created");
+                    path = remaining_path;
+                }
+                // This shouldn't happen as this branch should be considered "Found" posibly an
+                // empty path error, either way we shouldn't be here
+                WalkState::Missing(_, _) => {
+                    return Err(OperationError::BadSearch("unexpected lack of directory"));
                 }
             };
         }
