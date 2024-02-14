@@ -309,8 +309,8 @@ impl Directory {
                     path_components = remaining_path.components();
 
                     let potential_directory_name = match path_components.next() {
-                        Some(name) => name,
-                        None => unreachable!("should be caught by Found branch"),
+                        Some(Component::Normal(path_name)) => path_name,
+                        _ => unreachable!("should be caught by found branch"),
                     };
 
                     // If there is more to the path and we are not in recursive mode, we should
@@ -320,11 +320,10 @@ impl Directory {
                     }
 
                     let directory_name = potential_directory_name
-                        .as_os_str()
                         .to_str()
                         .ok_or(OperationError::InvalidPath)?;
 
-                    tracing::info!(orig_cwd = ?self.cwd_id, now_cwd = ?cwd_id, "creating directory '{potential_directory_name:?}'");
+                    tracing::debug!(orig_cwd = ?self.cwd_id, now_cwd = ?cwd_id, "creating directory '{directory_name}'");
 
                     // Create our new directory and set it up within the slab, nothing has been
                     // persisted yet and nothing about it will be recorded as we don't have a
@@ -364,6 +363,8 @@ impl Directory {
                     node_children.insert(directory_name.to_string(), new_permanent_id);
 
                     cwd_id = new_node_id;
+
+                    tracing::debug!("directory created");
                 }
             };
         }

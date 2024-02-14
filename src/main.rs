@@ -57,53 +57,43 @@ async fn main() -> BanyanFsResult<()> {
             Err(err) => tracing::error!("failed to list directory: {}", err),
         }
 
-        //    //    let fh = drive.open("/root/testing/deep/paths/file.txt")?;
-        //    //    fh.write(b"hello world")?;
-        //    //    fh.close()?;
+        //let fh = drive.open("/root/testing/deep/paths/file.txt")?;
+        //fh.write(b"hello world")?;
+        //fh.close()?;
 
-        //    //    let fh = drive.open("/root/testing/deep/paths/file.txt")?;
-        //    //    fh.seek(std::io::SeekFrom::Start(6))?;
-        //    //    let mut buf = [0u8; 5];
-        //    //    fh.read(&mut buf)?;
-        //    //    assert_eq!(&buf, b"world");
+        //let fh = drive.open("/root/testing/deep/paths/file.txt")?;
+        //fh.seek(std::io::SeekFrom::Start(6))?;
+        //let mut buf = [0u8; 5];
+        //fh.read(&mut buf)?;
+        //assert_eq!(&buf, b"world");
 
-        //    //    drive.delete("/root/testing/deep/paths/file.txt")?;
+        //drive.rm("/root/testing/deep/paths/file.txt")?;
 
-        //    //    let new_key: &[u8] = &[0x68, 0x55];
-        //    //    drive.authorize_key(new_key, Permission::StructureRead | Permission::DataRead)?;
+        //let new_key = SigningKey::generate(&mut rng);
+        //let new_pub_key = new_key.verifying_key();
+        //drive.authorize_key(new_pub_key, Permission::StructureRead | Permission::DataRead)?;
 
-        //    //    drive.sync()?;
+        //drive.sync()?;
     }
 
-    //match drive.ls(&["testing"]) {
-    //    Ok(dir_contents) => {
-    //        let names: Vec<String> = dir_contents.into_iter().map(|(name, _)| name).collect();
-    //        tracing::info!("dir_contents: {names:?}");
-    //    }
-    //    Err(err) => {
-    //        tracing::error!("failed to list directory: {err}");
-    //        return Ok(());
-    //    }
-    //}
+    let mut file_opts = tokio::fs::OpenOptions::new();
 
-    //let mut file_opts = tokio::fs::OpenOptions::new();
+    file_opts.write(true);
+    file_opts.create(true);
+    file_opts.truncate(true);
 
-    //file_opts.write(true);
-    //file_opts.create(true);
-    //file_opts.truncate(true);
+    let mut fh = match file_opts.open("fixtures/minimal.bfs").await {
+        Ok(fh) => fh.compat(),
+        Err(err) => {
+            tracing::error!("failed to open file: {err}");
+            return Ok(());
+        }
+    };
 
-    //let mut fh = match file_opts.open("fixtures/minimal.bfs").await {
-    //    Ok(fh) => fh.compat(),
-    //    Err(err) => {
-    //        tracing::error!("failed to open file: {err}");
-    //        return Ok(());
-    //    }
-    //};
-
-    //if let Err(err) = drive.encode_private(&mut rng, &mut fh, &signing_key).await {
-    //    tracing::error!("failed to encode drive: {err}");
-    //    return Ok(());
-    //}
+    if let Err(err) = drive.encode_private(&mut rng, &mut fh).await {
+        tracing::error!("failed to encode drive: {err}");
+        return Ok(());
+    }
 
     let mut fh = match tokio::fs::File::open("fixtures/minimal.bfs").await {
         Ok(fh) => fh.compat(),
