@@ -43,9 +43,18 @@ async fn main() -> BanyanFsResult<()> {
 
     if drive.has_write_access(actor_id).await {
         let path_buf = std::path::PathBuf::from("/testing/paths");
+
         if let Err(err) = drive.mkdir(&mut rng, path_buf.as_path(), true).await {
             tracing::error!("failed to create directory: {}", err);
             return Ok(());
+        }
+
+        match drive.root_directory().await.ls(path_buf.as_path()).await {
+            Ok(dir_contents) => {
+                let names: Vec<String> = dir_contents.into_iter().map(|(name, _)| name).collect();
+                tracing::info!(?names, "dir_contents");
+            }
+            Err(err) => tracing::error!("failed to list directory: {}", err),
         }
 
         //    //    let fh = drive.open("/root/testing/deep/paths/file.txt")?;

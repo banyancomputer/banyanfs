@@ -33,8 +33,16 @@ impl Node {
         &self.kind
     }
 
+    pub fn kind_mut(&mut self) -> &mut NodeKind {
+        &mut self.kind
+    }
+
     pub fn owner_id(&self) -> ActorId {
         self.owner_id
+    }
+
+    pub fn parent_id(&self) -> Option<NodeId> {
+        self.parent_id
     }
 
     pub fn permanent_id(&self) -> PermanentId {
