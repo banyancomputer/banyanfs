@@ -8,8 +8,9 @@ readme = "README.md"
 edition = "2021"
 
 [features]
-default = ["strict"]
+default = ["strict", "tomb-compat"]
 strict = []
+tomb-compat = []
 
 [dependencies]
 async-std = "^1"

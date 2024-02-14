@@ -4,11 +4,12 @@ use std::sync::Arc;
 
 use async_std::sync::RwLock;
 use elliptic_curve::rand_core::CryptoRngCore;
+use futures::io::AsyncWrite;
 use slab::Slab;
 
-use crate::codec::crypto::SigningKey;
-use crate::codec::header::KeyAccessSettingsBuilder;
-use crate::codec::meta::{ActorId, FilesystemId};
+use crate::codec::crypto::*;
+use crate::codec::header::*;
+use crate::codec::*;
 use crate::filesystem::nodes::NodeKind;
 use crate::filesystem::operations::*;
 use crate::filesystem::{DriveAccess, Node, NodeBuilder, NodeId, PermanentId};
@@ -16,6 +17,9 @@ use crate::filesystem::{DriveAccess, Node, NodeBuilder, NodeId, PermanentId};
 pub struct Drive {
     current_key: Arc<SigningKey>,
     filesystem_id: FilesystemId,
+    // todo: need to switch to a mutex, can't have state being modified during an encoding session
+    // and the cooperative multitasking model of async/await means we can't guarantee that some
+    // other task isn't going to tweak it
     inner: Arc<RwLock<InnerDrive>>,
 }
 
@@ -27,6 +31,22 @@ struct InnerDrive {
 }
 
 impl Drive {
+    pub async fn encode_private<W: AsyncWrite + Unpin + Send>(
+        &self,
+        _rng: &mut impl CryptoRngCore,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let mut written_bytes = 0;
+
+        written_bytes += IdentityHeader::encode(&IdentityHeader, writer).await?;
+        written_bytes += self.filesystem_id.encode(writer).await?;
+
+        // Don't support ECC yet
+        written_bytes += PublicSettings::new(false, true).encode(writer).await?;
+
+        Ok(written_bytes)
+    }
+
     pub async fn has_realized_view_access(&self, actor_id: ActorId) -> bool {
         let inner = self.inner.read().await;
         inner.access.has_realized_view_access(actor_id)
@@ -36,35 +56,6 @@ impl Drive {
         let inner = self.inner.read().await;
         inner.access.has_write_access(actor_id)
     }
-
-    //pub async fn encode_private<W: AsyncWrite + Unpin + Send>(
-    //    &self,
-    //    rng: &mut impl CryptoRngCore,
-    //    writer: &mut W,
-    //    _signing_key: &SigningKey,
-    //) -> std::io::Result<usize> {
-    //    let mut written_bytes = 0;
-
-    //    written_bytes += IdentityHeader::encode(&IdentityHeader, writer).await?;
-    //    written_bytes += self.filesystem_id.encode(writer).await?;
-
-    //    // Don't support ECC yet
-    //    written_bytes += PublicSettings::new(false, true).encode(writer).await?;
-
-    //    let encoding_context = PrivateEncodingContext::new(
-    //        rng,
-    //        self.keys.clone(),
-    //        (0, 0),
-    //        (Cid::from([0u8; 32]), Cid::from([0u8; 32])),
-    //    );
-
-    //    let content_payload = ContentPayload::Private;
-    //    written_bytes += content_payload
-    //        .encode_private(rng, &encoding_context, writer)
-    //        .await?;
-
-    //    Ok(written_bytes)
-    //}
 
     pub fn id(&self) -> FilesystemId {
         self.filesystem_id
@@ -383,4 +374,53 @@ impl Directory {
 pub enum DriveError {
     //    #[error("failed to parse drive data, is this a banyanfs file?")]
     //    HeaderReadFailure,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::*;
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_creating_directories() {
+        todo!()
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_walking_relative_directories() {
+        let mut rng = crate::utils::crypto_rng();
+
+        let current_key = SigningKey::generate(&mut rng);
+        let _drive = Drive::initialize_private(&mut rng, current_key);
+
+        todo!()
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_walking_absolute_directories() {
+        todo!()
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_missing_child_in_path_traversal() {
+        todo!()
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_non_directory_in_path_traversal() {
+        todo!()
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_parent_traversal() {
+        todo!()
+    }
 }

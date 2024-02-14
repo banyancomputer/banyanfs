@@ -2,6 +2,12 @@ use tracing::Level;
 use tracing_wasm::{ConsoleConfig, WASMLayerConfigBuilder};
 use wasm_bindgen::prelude::*;
 
+#[cfg(feature = "tomb-compat")]
+pub(crate) mod tomb_compat;
+
+#[cfg(feature = "tomb-compat")]
+pub use tomb_compat::*;
+
 use crate::version::version;
 
 #[wasm_bindgen(start)]

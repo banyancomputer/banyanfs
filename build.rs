@@ -14,6 +14,9 @@ fn report_enabled_features() {
     #[cfg(feature = "strict")]
     enabled_features.push("strict");
 
+    #[cfg(feature = "tomb-compat")]
+    enabled_features.push("tomb-compat");
+
     if enabled_features.is_empty() {
         enabled_features.push("none");
     }
