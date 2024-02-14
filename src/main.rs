@@ -34,7 +34,7 @@ async fn main() -> BanyanFsResult<()> {
     let verifying_key = signing_key.verifying_key();
     let actor_id = verifying_key.actor_id();
 
-    let drive = Drive::initialize_private(&mut rng, &signing_key);
+    let drive = Drive::initialize_private(&mut rng, signing_key.clone());
 
     if !drive.has_realized_view_access(actor_id) {
         tracing::error!("key doesn't have access to the drive");
@@ -42,7 +42,7 @@ async fn main() -> BanyanFsResult<()> {
     }
 
     if drive.has_write_access(actor_id) {
-        //    if let Err(err) = drive.mkdir(&mut rng, actor_id, &["testing", "paths"], new_perms, true) {
+        //    if let Err(err) = drive.mkdir(&mut rng, &["testing", "paths"], true) {
         //        tracing::error!("failed to create directory: {}", err);
         //        return Ok(());
         //    }

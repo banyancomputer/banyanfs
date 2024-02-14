@@ -7,6 +7,7 @@ use crate::codec::ActorId;
 
 const KEY_SIZE: usize = 48;
 
+#[derive(Clone)]
 pub struct SigningKey {
     inner: ecdsa::SigningKey<NistP384>,
 }
@@ -35,6 +36,11 @@ impl SigningKey {
         self.verifying_key().fingerprint()
     }
 
+    pub fn from_slice(bytes: &[u8]) -> Result<Self, SigningKeyError> {
+        let inner = ecdsa::SigningKey::from_slice(&bytes).map_err(SigningKeyError::LoadFailed)?;
+        Ok(Self { inner })
+    }
+
     pub fn generate(rng: &mut impl CryptoRngCore) -> Self {
         let inner = ecdsa::SigningKey::<NistP384>::random(rng);
         Self { inner }
@@ -44,7 +50,7 @@ impl SigningKey {
         self.verifying_key().key_id()
     }
 
-    pub fn to_private_bytes(&self) -> [u8; KEY_SIZE] {
+    pub fn to_bytes(&self) -> [u8; KEY_SIZE] {
         let private_key_bytes = self.inner.to_bytes();
 
         let mut private_key = [0u8; KEY_SIZE];
@@ -58,6 +64,12 @@ impl SigningKey {
     }
 }
 
+impl std::fmt::Debug for SigningKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{{SigningKey({:?})}}", self.key_id())
+    }
+}
+
 impl RandomizedDigestSigner<sha2::Sha384, Signature> for SigningKey {
     fn try_sign_digest_with_rng(
         &self,
@@ -67,4 +79,10 @@ impl RandomizedDigestSigner<sha2::Sha384, Signature> for SigningKey {
         let signature: ecdsa::Signature<NistP384> = self.inner.sign_digest_with_rng(rng, digest);
         Ok(Signature::from(signature))
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SigningKeyError {
+    #[error("failed to load signing key: {0}")]
+    LoadFailed(ecdsa::signature::Error),
 }

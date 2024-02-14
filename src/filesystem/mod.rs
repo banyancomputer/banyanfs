@@ -3,6 +3,7 @@ mod drive;
 mod drive_access;
 mod drive_loader;
 mod file_content;
+mod operations;
 mod vector_clock;
 
 pub(crate) mod nodes;

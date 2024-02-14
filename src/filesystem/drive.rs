@@ -1,12 +1,18 @@
+use std::path::{Component, Path};
+
 use elliptic_curve::rand_core::CryptoRngCore;
 use slab::Slab;
 
 use crate::codec::crypto::SigningKey;
 use crate::codec::header::KeyAccessSettingsBuilder;
 use crate::codec::meta::{ActorId, FilesystemId};
-use crate::filesystem::{DriveAccess, Node, NodeBuilder, NodeId};
+use crate::filesystem::nodes::NodeKind;
+use crate::filesystem::operations::*;
+use crate::filesystem::{DriveAccess, Node, NodeBuilder, NodeId, PermanentNodeId};
 
 pub struct Drive {
+    current_key: SigningKey,
+
     filesystem_id: FilesystemId,
     access: DriveAccess,
 
@@ -56,8 +62,8 @@ impl Drive {
         self.filesystem_id
     }
 
-    pub fn initialize_private(rng: &mut impl CryptoRngCore, signing_key: &SigningKey) -> Self {
-        let verifying_key = signing_key.verifying_key();
+    pub fn initialize_private(rng: &mut impl CryptoRngCore, current_key: SigningKey) -> Self {
+        let verifying_key = current_key.verifying_key();
         let actor_id = verifying_key.actor_id();
 
         let filesystem_id = FilesystemId::generate(rng);
@@ -81,6 +87,8 @@ impl Drive {
         node_entry.insert(directory);
 
         Self {
+            current_key,
+
             filesystem_id,
             access,
 
@@ -89,24 +97,64 @@ impl Drive {
         }
     }
 
-    pub fn root_directory(&self) -> &Node {
-        &self.nodes[self.root_node_id]
+    pub(crate) fn root_directory(&mut self) -> Directory {
+        Directory::new(self, self.root_node_id)
     }
 }
 
-//impl Deref for Drive {
-//    type Target = Directory;
-//
-//    fn deref(&self) -> &Self::Target {
-//        &self.root
-//    }
-//}
-//
-//impl DerefMut for Drive {
-//    fn deref_mut(&mut self) -> &mut Self::Target {
-//        &mut self.root
-//    }
-//}
+pub struct Directory<'a> {
+    drive: &'a mut Drive,
+    node_id: NodeId,
+}
+
+impl<'a> Directory<'a> {
+    //async fn ls(mut self, path: &Path) -> Result<Vec<(String, PermanentNodeId)>, OperationError> {
+    //    let mut components = path.components();
+
+    //    let mut active_path = components.next();
+    //    if let Some(Component::RootDir) = active_path {
+    //        self.node_id = self.drive.root_node_id;
+    //        active_path = components.next();
+    //    }
+
+    //    let node_children = match self.drive.nodes[self.node_id].kind() {
+    //        NodeKind::Directory { children, .. } => children,
+    //        _ => return Err(OperationError::IncompatibleType("ls")),
+    //    };
+
+    //    if active_path.is_none() || active_path == Some(Component::CurDir) {
+    //        let contents: Vec<_> = node_children
+    //            .iter()
+    //            .map(|(name, pid)| (name.clone(), pid.clone()))
+    //            .collect();
+
+    //        return Ok(contents);
+    //    }
+    //
+    //    // todo: need to get the next node id , validate its a directory and then continue
+
+    //    self.ls(components.as_path()).await
+    //}
+
+    pub fn new(drive: &'a mut Drive, node_id: NodeId) -> Self {
+        debug_assert!(drive.nodes.contains(node_id));
+        debug_assert!(matches!(
+            drive.nodes[node_id].kind(),
+            NodeKind::Directory { .. }
+        ));
+
+        Self { drive, node_id }
+    }
+
+    pub fn mkdir(
+        &mut self,
+        _rng: &mut impl CryptoRngCore,
+        _path: &Path,
+        _recursive: bool,
+    ) -> Result<Directory, OperationError> {
+        todo!()
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum DriveError {
