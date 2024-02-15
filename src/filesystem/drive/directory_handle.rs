@@ -6,11 +6,10 @@ use tracing::{debug, instrument, trace, Instrument, Level};
 
 use crate::codec::*;
 use crate::filesystem::nodes::NodeKind;
-use crate::filesystem::operations::*;
 use crate::filesystem::{Node, NodeId};
 
 use crate::codec::crypto::SigningKey;
-use crate::filesystem::drive::{InnerDrive, WalkState};
+use crate::filesystem::drive::{InnerDrive, OperationError, WalkState};
 
 pub struct DirectoryHandle {
     current_key: Arc<SigningKey>,
@@ -22,12 +21,12 @@ impl DirectoryHandle {
     // todo: these operations should really be using the permanent ids, but is that worth the extra
     // level of indirection? As long as we remain consistent it should be fine.
     #[instrument(level = Level::TRACE, skip(self))]
-    async fn walk_directory<'b>(
-        &self,
-        mut cwd_id: NodeId,
-        path: &'b [&'b str],
-    ) -> Result<WalkState<'b>, OperationError> {
+    async fn walk_path<'b>(&self, path: &'b [&'b str]) -> Result<WalkState<'b>, OperationError> {
         trace!("directory::walk_directory");
+
+        if path.is_empty() {
+            return Ok(WalkState::found(self.cwd_id));
+        }
 
         todo!()
 

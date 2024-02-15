@@ -6,7 +6,7 @@ use rand::Rng;
 
 use crate::codec::AsyncEncodable;
 
-const PERMANENT_ID_SIZE: usize = 16;
+const PERMANENT_ID_SIZE: usize = 8;
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct PermanentId([u8; PERMANENT_ID_SIZE]);

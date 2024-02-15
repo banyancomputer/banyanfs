@@ -1,7 +1,6 @@
 use nom::IResult;
 
-use crate::codec::Cid;
-use crate::filesystem::VectorClock;
+use crate::codec::meta::{Cid, VectorClock};
 
 #[derive(Debug)]
 pub struct JournalCheckpoint {

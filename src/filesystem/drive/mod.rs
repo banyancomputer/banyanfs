@@ -1,3 +1,18 @@
+mod access;
+mod directory_handle;
+mod file_handle;
+mod loader;
+mod operations;
+mod walk_state;
+
+pub use access::DriveAccess;
+pub use directory_handle::DirectoryHandle;
+pub use file_handle::FileHandle;
+pub use loader::{DriveLoader, DriveLoaderError};
+pub use operations::OperationError;
+
+pub(crate) use walk_state::WalkState;
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -10,10 +25,7 @@ use tracing::debug;
 use crate::codec::crypto::*;
 use crate::codec::header::*;
 use crate::codec::*;
-use crate::filesystem::operations::*;
-use crate::filesystem::{
-    DirectoryHandle, DriveAccess, Node, NodeBuilder, NodeBuilderError, NodeId, NodeName,
-};
+use crate::filesystem::{Node, NodeBuilder, NodeBuilderError, NodeId};
 
 pub struct Drive {
     current_key: Arc<SigningKey>,
@@ -129,22 +141,6 @@ impl Drive {
 
         DirectoryHandle::new(self.current_key.clone(), root_node_id, self.inner.clone()).await
     }
-}
-
-pub(crate) enum WalkState<'a> {
-    /// The path was traversed and the final path component was a node
-    FoundNode { node_id: NodeId },
-
-    /// While traversing the path, one or more of the path elements
-    MissingComponent(NodeId, &'a [&'a str]),
-
-    /// Part of the provided path was not a directory so traversal was stopped. The last valid
-    /// directory ID and the remaining path is returned.
-    NotTraversable {
-        working_directory: NodeId,
-        missing_name: NodeName,
-        remaining_path: &'a [&'a str],
-    },
 }
 
 #[derive(Debug, thiserror::Error)]
