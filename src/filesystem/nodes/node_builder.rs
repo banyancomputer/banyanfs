@@ -6,7 +6,7 @@ use crate::codec::meta::ActorId;
 use crate::filesystem::nodes::{Node, NodeId, NodeKind, NodeName, NodeNameError, PermanentId};
 
 pub(crate) struct NodeBuilder {
-    node_id: Option<NodeId>,
+    id: Option<NodeId>,
     parent_id: Option<NodeId>,
 
     name: NodeName,
@@ -18,7 +18,7 @@ pub(crate) struct NodeBuilder {
 
 impl NodeBuilder {
     pub fn build(self, rng: &mut impl CryptoRngCore) -> Result<Node, NodeBuilderError> {
-        let node_id = self.node_id.ok_or(NodeBuilderError::MissingNodeId)?;
+        let id = self.id.ok_or(NodeBuilderError::MissingNodeId)?;
         let owner_id = self.owner_id.ok_or(NodeBuilderError::MissingOwner)?;
 
         // Only the root node is allowed to be without a parent
@@ -27,7 +27,7 @@ impl NodeBuilder {
         }
 
         let new_node = Node {
-            node_id,
+            id,
             parent_id: self.parent_id,
 
             name: self.name,
@@ -48,7 +48,7 @@ impl NodeBuilder {
         let name = NodeName::named(name)?;
 
         let dir_node = Self {
-            node_id: None,
+            id: None,
             parent_id: None,
 
             name,
@@ -61,8 +61,8 @@ impl NodeBuilder {
         Ok(dir_node)
     }
 
-    pub fn with_node_id(mut self, node_id: NodeId) -> Self {
-        self.node_id = Some(node_id);
+    pub fn with_id(mut self, id: NodeId) -> Self {
+        self.id = Some(id);
         self
     }
 
@@ -78,7 +78,7 @@ impl NodeBuilder {
 
     pub(crate) fn root() -> Self {
         Self {
-            node_id: None,
+            id: None,
             parent_id: None,
 
             name: NodeName::root(),

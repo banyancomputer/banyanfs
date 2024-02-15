@@ -100,7 +100,7 @@ impl Drive {
         let root_node_id = node_entry.key();
 
         let directory = NodeBuilder::root()
-            .with_node_id(root_node_id)
+            .with_id(root_node_id)
             .with_owner(actor_id)
             .build(rng)?;
 

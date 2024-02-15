@@ -2,14 +2,16 @@ use std::sync::Arc;
 
 use async_std::sync::RwLock;
 use elliptic_curve::rand_core::CryptoRngCore;
+use futures::future::BoxFuture;
+use futures::FutureExt;
 use tracing::{debug, instrument, trace, Instrument, Level};
 
 use crate::codec::*;
 use crate::filesystem::nodes::NodeKind;
-use crate::filesystem::{Node, NodeId};
 
 use crate::codec::crypto::SigningKey;
 use crate::filesystem::drive::{InnerDrive, OperationError, WalkState};
+use crate::filesystem::nodes::{Node, NodeId, NodeName};
 
 pub struct DirectoryHandle {
     current_key: Arc<SigningKey>,
@@ -18,90 +20,6 @@ pub struct DirectoryHandle {
 }
 
 impl DirectoryHandle {
-    // todo: these operations should really be using the permanent ids, but is that worth the extra
-    // level of indirection? As long as we remain consistent it should be fine.
-    #[instrument(level = Level::TRACE, skip(self))]
-    async fn walk_path<'b>(&self, path: &'b [&'b str]) -> Result<WalkState<'b>, OperationError> {
-        trace!("directory::walk_directory");
-
-        if path.is_empty() {
-            return Ok(WalkState::found(self.cwd_id));
-        }
-
-        todo!()
-
-        //loop {
-        //    let (current_entry, remaining_path) = match path.split_first() {
-        //        Some(r) => r,
-        //        None => {
-        //            return Err(OperationError::UnexpectedEmptyPath);
-        //        }
-        //    };
-
-        //    match *current_entry {
-        //        // This path references where we currently are, do nothing and let the next loop
-        //        // advance our state
-        //        "." => (),
-        //        // Zip up the directory level
-        //        ".." => match self.inner.read().in_current_span().await.nodes[cwd_id].parent_id() {
-        //            Some(parent_id) => {
-        //                cwd_id = parent_id;
-        //            }
-        //            None => return Err(OperationError::InvalidParentDir),
-        //        },
-        //        cur_name => {
-        //            if cur_name.is_empty() {
-        //                return Err(OperationError::NameIsEmpty);
-        //            }
-
-        //            if cur_name.len() > 255 {
-        //                return Err(OperationError::PathComponentTooLong);
-        //            }
-
-        //            let inner_read = self.inner.read().await;
-        //            let node_children = match inner_read.nodes[cwd_id].kind() {
-        //                NodeKind::Directory { children, .. } => children,
-        //                _ => {
-        //                    return Err(OperationError::IncompatibleType(
-        //                        "current node is not a directory",
-        //                    ))
-        //                }
-        //            };
-
-        //            let name = NodeName::from(cur_name);
-        //            let perm_id = match node_children.get(&name) {
-        //                Some(perm_id) => perm_id,
-        //                None => return Ok(WalkState::MissingComponent(cwd_id, path)),
-        //            };
-
-        //            let next_cwd_id = inner_read
-        //                .permanent_id_map
-        //                .get(perm_id)
-        //                .ok_or(OperationError::MissingPermanentId(*perm_id))?;
-
-        //            if remaining_path.is_empty() {
-        //                return Ok(WalkState::Found(*next_cwd_id));
-        //            }
-
-        //            // The path goes deeper, make sure the next node is a directory
-        //            let next_node = &inner_read.nodes[*next_cwd_id];
-        //            if !matches!(next_node.kind(), NodeKind::Directory { .. }) {
-        //                return Ok(WalkState::NotTraversable {
-        //                    working_directory: cwd_id,
-        //                    missing_name: cur_name,
-        //                    remaining_path,
-        //                });
-        //            }
-
-        //            // Go deeper on our next loop, importantly though an empty path from this point on
-        //            // means we've successfully reached our goal.
-        //            cwd_id = *next_cwd_id;
-        //            path = remaining_path;
-        //        }
-        //    }
-        //}
-    }
-
     #[instrument(level = Level::DEBUG, skip(self))]
     pub async fn cd(&self, path: &[&str]) -> Result<DirectoryHandle, OperationError> {
         debug!(cwd_id = self.cwd_id, "directory::cd");
@@ -210,15 +128,39 @@ impl DirectoryHandle {
             .in_current_span()
             .await?;
 
-        let _name = node.name();
+        let name = node.name();
         let permanent_id = node.permanent_id();
 
         node_entry.insert(node);
         inner_write.permanent_id_map.insert(permanent_id, node_id);
 
-        debug!(?node_id, ?permanent_id, "directory::insert_node::inserted");
+        let parent_node =
+            inner_write
+                .nodes
+                .get_mut(parent_id)
+                .ok_or(OperationError::InternalCorruption(
+                    parent_id,
+                    "expected referenced parent to exist",
+                ))?;
 
-        // todo: associate this node to its parent.
+        let parent_children = match parent_node.kind_mut() {
+            NodeKind::Directory { children, .. } => children,
+            _ => {
+                return Err(OperationError::InternalCorruption(
+                    parent_id,
+                    "parent node must be a directory",
+                ));
+            }
+        };
+
+        if parent_children.insert(name, permanent_id).is_some() {
+            return Err(OperationError::InternalCorruption(
+                parent_id,
+                "wrote new directory over existing entry",
+            ));
+        }
+
+        debug!(?node_id, ?permanent_id, "directory::insert_node::inserted");
 
         Ok((node_id, permanent_id))
     }
@@ -227,17 +169,45 @@ impl DirectoryHandle {
     pub async fn mkdir(
         &mut self,
         rng: &mut impl CryptoRngCore,
-        mut path: &[&str],
+        path: &[&str],
         recursive: bool,
     ) -> Result<(), OperationError> {
-        let mut cwd_id = self.cwd_id;
-        debug!(?cwd_id, "drive::mkdir");
-
         if path.is_empty() {
             return Err(OperationError::UnexpectedEmptyPath);
         }
 
-        todo!()
+        match walk_path(self.inner.clone(), self.cwd_id, path).await? {
+            WalkState::FoundNode { node_id } => {
+                let inner_read = self.inner.read().await;
+
+                match inner_read.nodes[node_id].kind() {
+                    NodeKind::Directory { .. } => return Ok(()),
+                    NodeKind::File { .. } => return Err(OperationError::Exists(node_id)),
+                }
+            }
+            WalkState::MissingComponent {
+                working_directory_id,
+                missing_name,
+                remaining_path,
+            } => {
+                // Handle our common ideal case, the only missing node is the last path component
+                // so we can just create it.
+                if remaining_path.is_empty() {}
+
+                if !recursive {
+                    tracing::debug!("drive::mkdir::not_recursive");
+                    return Err(OperationError::PathNotFound);
+                }
+
+                todo!("might need to recurse, might need to create the final node");
+            }
+            WalkState::NotTraversable {
+                working_directory_id,
+                blocking_name,
+            } => {
+                todo!("directory not traversable");
+            }
+        }
 
         //loop {
         //    match self.walk_directory(cwd_id, path).await? {
@@ -265,7 +235,6 @@ impl DirectoryHandle {
         //            // If there is more to the path and we are not in recursive mode, we should
         //            // report the error
         //            if !(recursive || remaining_path.is_empty()) {
-        //                tracing::debug!("drive::mkdir::not_recursive");
         //                return Err(OperationError::PathNotFound);
         //            }
 
@@ -315,4 +284,66 @@ impl DirectoryHandle {
         //    };
         //}
     }
+}
+
+// todo: should these operations be using the permanent ids? Is that worth the extra
+// level of indirection? As long as we remain consistent it should be fine.
+#[instrument(level = Level::TRACE, skip(inner))]
+fn walk_path<'a>(
+    inner: Arc<RwLock<InnerDrive>>,
+    working_directory_id: NodeId,
+    path: &'a [&'a str],
+) -> BoxFuture<'a, Result<WalkState<'a>, OperationError>> {
+    trace!("directory::walk_directory");
+
+    async move {
+        let inner_read = inner.read().await;
+        let current_node = inner_read.nodes.get(working_directory_id).ok_or(
+            OperationError::InternalCorruption(working_directory_id, "missing working directory"),
+        )?;
+
+        let children = match current_node.kind() {
+            NodeKind::Directory { children, .. } => children,
+            _ => {
+                return Err(OperationError::InternalCorruption(
+                    working_directory_id,
+                    "current working directory not directory",
+                ))
+            }
+        };
+
+        let (current_entry, remaining_path) = match path.split_first() {
+            Some((name, path)) => (NodeName::try_from(*name)?, path),
+            // Nothing left in the path, we've found our target just validate the node actually
+            None => return Ok(WalkState::found(working_directory_id)),
+        };
+
+        let perm_id = match children.get(&current_entry) {
+            Some(pid) => pid,
+            None => {
+                return Ok(WalkState::MissingComponent {
+                    working_directory_id,
+                    missing_name: current_entry,
+                    remaining_path,
+                });
+            }
+        };
+
+        let next_node_id = *inner_read
+            .permanent_id_map
+            .get(perm_id)
+            .ok_or(OperationError::MissingPermanentId(*perm_id))?;
+
+        let next_node = &inner_read.nodes[next_node_id];
+        if !matches!(next_node.kind(), NodeKind::Directory { .. }) {
+            return Ok(WalkState::NotTraversable {
+                working_directory_id,
+                blocking_name: current_entry,
+            });
+        }
+        drop(inner_read);
+
+        walk_path(inner, next_node_id, remaining_path).await
+    }
+    .boxed()
 }
