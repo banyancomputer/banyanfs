@@ -4,9 +4,8 @@ use std::sync::Arc;
 use async_std::sync::RwLock;
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::AsyncWrite;
-use rand::Rng;
 use slab::Slab;
-use tracing::{debug, debug_span, instrument, Instrument};
+use tracing::{debug, instrument, trace, Instrument, Level};
 
 use crate::codec::crypto::*;
 use crate::codec::header::*;
@@ -148,12 +147,14 @@ enum WalkState<'a> {
 impl Directory {
     // todo: these operations should really be using the permanent ids, but is that worth the extra
     // level of indirection? As long as we remain consistent it should be fine.
-    #[instrument(skip(self))]
+    #[instrument(level = Level::TRACE, skip(self))]
     async fn walk_directory<'b>(
         &self,
         mut cwd_id: NodeId,
         mut path: &'b [&'b str],
     ) -> Result<WalkState<'b>, OperationError> {
+        trace!("directory::walk_directory");
+
         loop {
             let (current_entry, remaining_path) = match path.split_first() {
                 Some(r) => r,
@@ -221,14 +222,14 @@ impl Directory {
         }
     }
 
-    #[instrument(skip(self))]
+    #[instrument(level = Level::DEBUG, skip(self))]
     pub async fn cd(&self, path: &[&str]) -> Result<Directory, OperationError> {
+        debug!(cwd_id = self.cwd_id, "directory::cd");
+
         let target_directory_id = match self.walk_directory(self.cwd_id, path).await {
             Ok(WalkState::Found(tdi_id, _)) => tdi_id,
             _ => return Err(OperationError::NotADirectory),
         };
-
-        debug!("drive::cd::{{path:?}}");
 
         let directory = Directory {
             current_key: self.current_key.clone(),
@@ -239,8 +240,10 @@ impl Directory {
         Ok(directory)
     }
 
-    #[instrument(skip(self))]
+    #[instrument(level = Level::DEBUG, skip(self))]
     pub async fn ls(self, path: &[&str]) -> Result<Vec<(String, PermanentId)>, OperationError> {
+        debug!(cwd_id = self.cwd_id, "directory::ls");
+
         let (target_dir_id, entry) = match self.walk_directory(self.cwd_id, path).await? {
             WalkState::Found(tdi_id, parent_entry) => (tdi_id, parent_entry),
             // If the last item is a file we can display it, this matches the behavior in linux
@@ -267,11 +270,14 @@ impl Directory {
         Ok(children)
     }
 
+    #[instrument(level = Level::TRACE, skip(current_key, inner))]
     async fn new(
         current_key: Arc<SigningKey>,
         cwd_id: NodeId,
         inner: Arc<RwLock<InnerDrive>>,
     ) -> Self {
+        trace!("directory::new");
+
         let inner_read = inner.read().await;
 
         debug_assert!(inner_read.nodes.contains(cwd_id));
@@ -288,28 +294,35 @@ impl Directory {
         }
     }
 
-    #[instrument(skip_all)]
+    #[instrument(level = tracing::Level::TRACE, skip_all)]
     async fn insert_node<'a, 'b, R, F, Fut>(
         &'b mut self,
         rng: &'a mut R,
+        parent_id: NodeId,
         build_node: F,
     ) -> Result<(NodeId, PermanentId), OperationError>
     where
         R: CryptoRngCore,
-        F: FnOnce(&'a mut R, NodeId, ActorId) -> Fut,
+        F: FnOnce(&'a mut R, ActorId, NodeId) -> Fut,
         Fut: std::future::Future<Output = Result<Node, OperationError>>,
     {
+        trace!("directory::insert_node");
+
         let mut inner_write = self.inner.write().in_current_span().await;
+
+        // todo: sanity check the parent is a directory
 
         let node_entry = inner_write.nodes.vacant_entry();
         let node_id = node_entry.key();
 
         let actor_id = self.current_key.actor_id();
-        let node = build_node(rng, node_id, actor_id).in_current_span().await?;
+        let node = build_node(rng, actor_id, node_id).in_current_span().await?;
         let permanent_id = node.permanent_id();
 
         node_entry.insert(node);
         inner_write.permanent_id_map.insert(permanent_id, node_id);
+
+        // todo: associate this node to its parent.
 
         Ok((node_id, permanent_id))
     }
@@ -322,7 +335,7 @@ impl Directory {
         recursive: bool,
     ) -> Result<(), OperationError> {
         let mut cwd_id = self.cwd_id;
-        tracing::debug!(initial_working_directory_id = ?cwd_id, "drive::mkdir");
+        debug!(?cwd_id, "drive::mkdir");
 
         if path.is_empty() {
             return Err(OperationError::UnexpectedEmptyPath);
@@ -335,7 +348,7 @@ impl Directory {
                 WalkState::Found(nid, entry_name) => {
                     match self.inner.read().in_current_span().await.nodes[nid].kind() {
                         NodeKind::Directory { .. } => {
-                            tracing::debug!(directory = entry_name, "drive::mkdir::already_exists");
+                            debug!(directory = entry_name, "drive::mkdir::already_exists");
                             return Ok(());
                         }
                         _ => return Err(OperationError::NotADirectory),
@@ -359,7 +372,7 @@ impl Directory {
                     }
 
                     let (node_id, permanent_id) = self
-                        .insert_node(rng, |rng, node_id, actor_id| async move {
+                        .insert_node(rng, current_node_id, |rng, node_id, actor_id| async move {
                             Ok(NodeBuilder::directory(node_id, actor_id).build(rng))
                         })
                         .await?;
