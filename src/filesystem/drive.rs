@@ -372,7 +372,7 @@ impl Directory {
                     }
 
                     let (node_id, permanent_id) = self
-                        .insert_node(rng, current_node_id, |rng, node_id, actor_id| async move {
+                        .insert_node(rng, current_dir_id, |rng, actor_id, node_id| async move {
                             Ok(NodeBuilder::directory(node_id, actor_id).build(rng))
                         })
                         .await?;
