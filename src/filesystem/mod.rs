@@ -1,4 +1,5 @@
 mod content_reference;
+mod directory_handle;
 mod drive;
 mod drive_access;
 mod drive_loader;
@@ -13,6 +14,7 @@ pub(crate) use file_content::FileContent;
 pub(crate) use nodes::{Node, NodeBuilder, NodeBuilderError, NodeId, NodeName};
 pub(crate) use vector_clock::VectorClock;
 
+pub use directory_handle::DirectoryHandle;
 pub use drive::Drive;
 pub use drive_access::DriveAccess;
 pub use drive_loader::DriveLoader;
