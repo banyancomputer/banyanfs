@@ -48,7 +48,6 @@ async fn main() -> BanyanFsResult<()> {
             tracing::error!("failed to create directory: {}", err);
             return Ok(());
         }
-        tracing::info!("initial batch of directories created");
 
         let testing_dir = match root.cd(&["testing"]).await {
             Ok(dir) => dir,
@@ -57,13 +56,12 @@ async fn main() -> BanyanFsResult<()> {
                 return Ok(());
             }
         };
-        tracing::info!("grabbed an alternate directory handle");
 
-        if let Err(err) = root.mkdir(&mut rng, &["testing", "paths"], true).await {
+        // duplicate path as before, folders should already exist and not cause any error
+        if let Err(err) = root.mkdir(&mut rng, &["testing", "paths"], false).await {
             tracing::error!("failed to create same directory: {}", err);
             return Ok(());
         }
-        tracing::info!("recreated existing directories");
 
         match testing_dir.ls(&[]).await {
             Ok(contents) => {
@@ -130,7 +128,7 @@ async fn main() -> BanyanFsResult<()> {
     };
 
     let drive_loader = DriveLoader::new(&signing_key);
-    let _loaded_drive = match drive_loader.from_reader(&mut fh).await {
+    let loaded_drive = match drive_loader.from_reader(&mut fh).await {
         Ok(d) => d,
         Err(err) => {
             tracing::error!("failed to load saved drive: {err}");
@@ -138,16 +136,18 @@ async fn main() -> BanyanFsResult<()> {
         }
     };
 
-    //match loaded_drive.ls(&["testing"]) {
-    //    Ok(dir_contents) => {
-    //        let names: Vec<String> = dir_contents.into_iter().map(|(name, _)| name).collect();
-    //        tracing::info!("dir_contents: {names:?}");
-    //    }
-    //    Err(err) => {
-    //        tracing::error!("failed to list directory: {err}");
-    //        return Ok(());
-    //    }
-    //}
+    // todo: should add convenient methods on the drive itself for the directory operations
+    let root_dir = loaded_drive.root_directory().await;
+    match root_dir.ls(&["testing"]).await {
+        Ok(dir_contents) => {
+            let names: Vec<String> = dir_contents.into_iter().map(|(name, _)| name).collect();
+            tracing::info!("dir_contents: {names:?}");
+        }
+        Err(err) => {
+            tracing::error!("failed to list directory: {err}");
+            return Ok(());
+        }
+    }
 
     Ok(())
 }

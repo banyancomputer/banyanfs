@@ -114,7 +114,7 @@ impl Drive {
             .await
     }
 
-    pub async fn root_directory(&mut self) -> Directory {
+    pub async fn root_directory(&self) -> Directory {
         let inner_read = self.inner.read().await;
         let root_node_id = inner_read.root_node_id;
         drop(inner_read);
