@@ -226,9 +226,13 @@ impl Directory {
     pub async fn cd(&self, path: &[&str]) -> Result<Directory, OperationError> {
         debug!(cwd_id = self.cwd_id, "directory::cd");
 
-        let target_directory_id = match self.walk_directory(self.cwd_id, path).await {
-            Ok(WalkState::Found(tdi_id, _)) => tdi_id,
-            _ => return Err(OperationError::NotADirectory),
+        let target_directory_id = if path.is_empty() {
+            self.cwd_id
+        } else {
+            match self.walk_directory(self.cwd_id, path).await {
+                Ok(WalkState::Found(tdi_id, _)) => tdi_id,
+                _ => return Err(OperationError::NotADirectory),
+            }
         };
 
         let directory = Directory {
@@ -321,6 +325,8 @@ impl Directory {
 
         node_entry.insert(node);
         inner_write.permanent_id_map.insert(permanent_id, node_id);
+
+        debug!(?node_id, ?permanent_id, "directory::insert_node::inserted");
 
         // todo: associate this node to its parent.
 
