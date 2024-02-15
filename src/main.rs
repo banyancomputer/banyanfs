@@ -34,7 +34,7 @@ async fn main() -> BanyanFsResult<()> {
     let verifying_key = signing_key.verifying_key();
     let actor_id = verifying_key.actor_id();
 
-    let mut drive = Drive::initialize_private(&mut rng, signing_key.clone());
+    let mut drive = Drive::initialize_private(&mut rng, signing_key.clone()).unwrap();
 
     if !drive.has_realized_view_access(actor_id).await {
         tracing::error!("key doesn't have access to the drive");
@@ -42,7 +42,7 @@ async fn main() -> BanyanFsResult<()> {
     }
 
     if drive.has_write_access(actor_id).await {
-        let mut root = drive.root_directory().await;
+        let mut root = drive.root().await;
 
         if let Err(err) = root.mkdir(&mut rng, &["testing", "paths"], true).await {
             tracing::error!("failed to create directory: {}", err);
@@ -72,7 +72,7 @@ async fn main() -> BanyanFsResult<()> {
         }
 
         // get a fresh handle on the root directory
-        let root = drive.root_directory().await;
+        let root = drive.root().await;
         match root.ls(&["testing"]).await {
             Ok(contents) => {
                 let names: Vec<String> = contents.into_iter().map(|(name, _)| name).collect();
@@ -137,7 +137,7 @@ async fn main() -> BanyanFsResult<()> {
     };
 
     // todo: should add convenient methods on the drive itself for the directory operations
-    let root_dir = loaded_drive.root_directory().await;
+    let root_dir = loaded_drive.root().await;
     match root_dir.ls(&["testing"]).await {
         Ok(dir_contents) => {
             let names: Vec<String> = dir_contents.into_iter().map(|(name, _)| name).collect();

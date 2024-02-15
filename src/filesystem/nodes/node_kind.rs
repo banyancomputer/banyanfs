@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::codec::filesystem::{DirectoryPermissions, FilePermissions};
 use crate::codec::meta::PermanentId;
+use crate::filesystem::nodes::NodeName;
 use crate::filesystem::FileContent;
 
 pub enum NodeKind {
@@ -11,7 +12,7 @@ pub enum NodeKind {
     },
     Directory {
         permissions: DirectoryPermissions,
-        children: HashMap<String, PermanentId>,
+        children: HashMap<NodeName, PermanentId>,
         children_size: u64,
     },
 }

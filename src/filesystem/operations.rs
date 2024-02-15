@@ -42,6 +42,9 @@ pub enum OperationError {
     #[error("path attempted to traverse a non-directory node")]
     NotADirectory,
 
+    #[error("filesystem entries can only be placed under a directory")]
+    ParentMustBeDirectory,
+
     #[error("path component was too long")]
     PathComponentTooLong,
 
