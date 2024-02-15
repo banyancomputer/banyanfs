@@ -12,9 +12,16 @@ use crate::codec::meta::{ActorId, PermanentId};
 
 pub(crate) type NodeId = usize;
 
+pub(crate) enum NodeName {
+    Root,
+    Named(String),
+}
+
 pub struct Node {
     node_id: NodeId,
     parent_id: Option<NodeId>,
+
+    name: NodeName,
 
     owner_id: ActorId,
     permanent_id: PermanentId,

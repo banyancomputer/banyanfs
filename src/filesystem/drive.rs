@@ -130,14 +130,11 @@ pub struct Directory {
 }
 
 enum WalkState<'a> {
-    /// The path was fully traversed and resulted in the included ID and the final part of the
-    /// path that matched
-    Found(NodeId, &'a str),
+    /// The path was traversed and the final path component was a node
+    FoundNode { node_id: NodeId },
 
-    /// If some or all of the path has been walked, but ran out of named nodes that match the path.
-    /// It returns the ID of the last directory it was able to walk to and the missing part of the
-    /// path.
-    Missing(NodeId, &'a [&'a str]),
+    /// While traversing the path, one or more of the path elements
+    MissingComponent(NodeId, &'a [&'a str]),
 
     /// Part of the provided path was not a directory so traversal was stopped. The last valid
     /// directory ID and the remaining path is returned.
@@ -150,8 +147,7 @@ impl Directory {
     #[instrument(level = Level::TRACE, skip(self))]
     async fn walk_directory<'b>(
         &self,
-        mut cwd_id: NodeId,
-        mut path: &'b [&'b str],
+        path: &'b [&'b str],
     ) -> Result<WalkState<'b>, OperationError> {
         trace!("directory::walk_directory");
 
