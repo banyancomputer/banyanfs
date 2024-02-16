@@ -18,6 +18,7 @@ async-trait = "^0.1"
 futures = "^0.3"
 thiserror = "^1"
 tracing = "^0.1"
+tracing-subscriber = { version = "^0.3", default-features = false }
 
 blake3 = { version = "^1", features = ["traits-preview"] }
 chacha20poly1305 = "^0.10"
@@ -56,6 +57,10 @@ js-sys = "^0.3"
 tracing-wasm = "^0.2"
 wasm-bindgen = "^0.2"
 wasm-bindgen-futures = "^0.4"
+web-sys = { version = "^0.3", default-features = false, features = [
+  "Storage",
+  "Window",
+] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "^0.3"
@@ -64,11 +69,7 @@ wasm-bindgen-test = "^0.3"
 tokio = { version = "^1", features = ["full"] }
 tokio-util = { version = "^0.7", features = ["compat", "io"] }
 tracing-appender = "^0.2"
-tracing-subscriber = { version = "^0.3", features = [
-  "env-filter",
-  "fmt",
-  "time",
-] }
+tracing-subscriber = { version = "^0.3", features = ["env-filter"] }
 
 [build-dependencies]
 time = { version = "^0.3", features = ["formatting"] }

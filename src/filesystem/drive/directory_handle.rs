@@ -245,7 +245,7 @@ impl DirectoryHandle {
 
 // todo: should these operations be using the permanent ids? Is that worth the extra
 // level of indirection? As long as we remain consistent it should be fine.
-#[instrument(level = Level::TRACE, skip(inner))]
+#[instrument(level = Level::TRACE, skip(inner, path))]
 fn walk_path<'a>(
     inner: &'a Arc<RwLock<InnerDrive>>,
     working_directory_id: NodeId,
