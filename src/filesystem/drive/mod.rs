@@ -58,7 +58,7 @@ impl Drive {
         written_bytes += PublicSettings::new(false, true).encode(writer).await?;
 
         let inner_read = self.inner.read().await;
-        written_bytes += inner_read.access.encode_private(rng, writer).await?;
+        written_bytes += inner_read.access.encode_escrow(rng, writer).await?;
 
         Ok(written_bytes)
     }

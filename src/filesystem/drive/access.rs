@@ -6,7 +6,7 @@ use futures::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::codec::crypto::{AccessKey, VerifyingKey};
 use crate::codec::header::KeyAccessSettings;
-use crate::codec::{ActorId, ActorSettings};
+use crate::codec::{ActorId, ActorSettings, AsyncEncodable};
 
 #[derive(Debug, Default)]
 pub struct DriveAccess {
@@ -20,7 +20,7 @@ impl DriveAccess {
             .map(|settings| settings.actor_settings())
     }
 
-    pub async fn encode_private<W: AsyncWrite + Unpin + Send>(
+    pub async fn encode_escrow<W: AsyncWrite + Unpin + Send>(
         &self,
         rng: &mut impl CryptoRngCore,
         writer: &mut W,
@@ -36,7 +36,17 @@ impl DriveAccess {
         writer.write_all(&[key_count]).await?;
         written_bytes += 1;
 
-        let _access_protection_key = AccessKey::generate(rng);
+        let escrow_key = AccessKey::generate(rng);
+
+        for settings in self.actor_settings.values() {
+            let verifying_key = settings.verifying_key();
+
+            let locked_key = escrow_key
+                .lock_for(rng, &verifying_key)
+                .map_err(|_| StdError::new(StdErrorKind::Other, "unable to escrow key"))?;
+
+            written_bytes += locked_key.encode(writer).await?;
+        }
 
         Ok(written_bytes)
     }

@@ -140,8 +140,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 };
                 tracing::debug!(unlocked_key = ?key_access_key, "drive_loader::escrowed_access_keys");
 
-                self.state =
-                    DriveLoaderState::EncryptedPermissions(key_count.clone(), key_access_key);
+                self.state = DriveLoaderState::EncryptedPermissions(*key_count, key_access_key);
 
                 Ok(ProgressType::Advance(bytes_read))
             }
