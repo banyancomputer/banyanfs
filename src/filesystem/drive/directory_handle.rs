@@ -12,6 +12,7 @@ use crate::filesystem::nodes::NodeKind;
 use crate::codec::crypto::SigningKey;
 use crate::filesystem::drive::{InnerDrive, OperationError, WalkState};
 use crate::filesystem::nodes::{Node, NodeId, NodeName};
+use crate::filesystem::NodeBuilder;
 
 const MAX_PATH_DEPTH: usize = 32;
 
@@ -184,7 +185,7 @@ impl DirectoryHandle {
         }
 
         for _ in 0..MAX_PATH_DEPTH {
-            match walk_path(&self.inner, self.cwd_id, path, 0).await? {
+            match walk_path(&self.inner.clone(), self.cwd_id, path, 0).await? {
                 WalkState::FoundNode { node_id } => {
                     debug!(node_id, "drive::mkdir::already_exists");
                     let inner_read = self.inner.read().await;
@@ -201,14 +202,26 @@ impl DirectoryHandle {
                 } => {
                     debug!(cwd_id = working_directory_id, name = ?missing_name, "drive::mkdir::node_missing");
 
-                    // Handle our common ideal case, the only missing node is the last path component
-                    // so we can just create it.
+                    // When we're not recursing and there are more path components left, we have to
+                    // abort early
                     if !recursive && !remaining_path.is_empty() {
                         debug!("drive::mkdir::not_recursive");
                         return Err(OperationError::PathNotFound);
                     }
 
-                    //todo!("create our directory");
+                    self.insert_node(
+                        &mut *rng,
+                        working_directory_id,
+                        |rng, parent_id, new_node_id, actor_id| async move {
+                            NodeBuilder::directory(missing_name)
+                                .with_parent(parent_id)
+                                .with_id(new_node_id)
+                                .with_owner(actor_id)
+                                .build(rng)
+                                .map_err(OperationError::CreationFailed)
+                        },
+                    )
+                    .await?;
 
                     if remaining_path.is_empty() {
                         debug!("drive::mkdir::complete");

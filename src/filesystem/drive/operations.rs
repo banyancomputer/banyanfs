@@ -3,7 +3,7 @@ use std::path::Path;
 use async_trait::async_trait;
 
 use crate::codec::meta::PermanentId;
-use crate::filesystem::nodes::{NodeId, NodeNameError};
+use crate::filesystem::nodes::{NodeBuilderError, NodeId, NodeNameError};
 
 #[async_trait]
 pub(crate) trait Deletable {
@@ -24,6 +24,9 @@ pub(crate) trait Movable {
 pub enum OperationError {
     #[error("encountered a kind of node at a location that really should have been safe: {0}")]
     BadSearch(&'static str),
+
+    #[error("creation of a node failed: {0}")]
+    CreationFailed(#[from] NodeBuilderError),
 
     #[error("attempted to create a node where one already exists (node {0} in place)")]
     Exists(NodeId),

@@ -44,10 +44,8 @@ impl NodeBuilder {
         Ok(new_node)
     }
 
-    pub fn directory(name: String) -> Result<Self, NodeBuilderError> {
-        let name = NodeName::named(name)?;
-
-        let dir_node = Self {
+    pub fn directory(name: NodeName) -> Self {
+        Self {
             id: None,
             parent_id: None,
 
@@ -56,9 +54,7 @@ impl NodeBuilder {
 
             kind: NodeKind::new_directory(),
             metadata: HashMap::new(),
-        };
-
-        Ok(dir_node)
+        }
     }
 
     pub fn with_id(mut self, id: NodeId) -> Self {
