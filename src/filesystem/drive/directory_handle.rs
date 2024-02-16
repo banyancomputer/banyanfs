@@ -45,35 +45,41 @@ impl DirectoryHandle {
     }
 
     #[instrument(level = Level::DEBUG, skip(self))]
-    pub async fn ls(self, path: &[&str]) -> Result<Vec<(String, PermanentId)>, OperationError> {
+    pub async fn ls(self, path: &[&str]) -> Result<Vec<(NodeName, PermanentId)>, OperationError> {
         debug!(cwd_id = self.cwd_id, "directory::ls");
 
-        todo!()
+        // These behaviors are slightly different mostly in the error cases, in the first case we
+        // should be in a directory, any other state is an error. In the latter case, we can match
+        // a specific node as well as a directory and should always succeed if we can reach the
+        // node.
+        let inner_read = self.inner.read().await;
+        let children = if path.is_empty() {
+            match inner_read.nodes[self.cwd_id].kind() {
+                NodeKind::Directory { children, .. } => children,
+                _ => {
+                    return Err(OperationError::InternalCorruption(
+                        self.cwd_id,
+                        "current NodeId not a directory",
+                    ))
+                }
+            }
+        } else {
+            let node_id = match walk_path(&self.inner, self.cwd_id, path, 0).await {
+                Ok(WalkState::FoundNode { node_id }) => node_id,
+                _ => return Err(OperationError::NotADirectory),
+            };
 
-        //let (target_dir_id, entry) = match self.walk_directory(self.cwd_id, path).await? {
-        //    WalkState::FoundNode(tdi_id) => tdi_id,
-        //    // If the last item is a file we can display it, this matches the behavior in linux
-        //    // like shells
-        //    WalkState::NotTraversable(tdi, blocked_path) if blocked_path.len() == 1 => {
-        //        (tdi, blocked_path[0])
-        //    }
-        //    WalkState::NotTraversable(_, _) => return Err(OperationError::NotADirectory),
-        //    WalkState::Missing(_, _) => return Err(OperationError::PathNotFound),
-        //};
+            let listed_node = &inner_read.nodes[node_id];
 
-        //let inner_read = self.inner.read().await;
-        //let target_dir = &inner_read.nodes[target_dir_id];
+            match listed_node.kind() {
+                NodeKind::Directory { children, .. } => children,
+                _ => return Ok(vec![(listed_node.name(), listed_node.permanent_id())]),
+            }
+        };
 
-        //let node_children = match target_dir.kind() {
-        //    NodeKind::Directory { children, .. } => children,
-        //    NodeKind::File { .. } => {
-        //        return Ok(vec![(entry.to_string(), target_dir.permanent_id())]);
-        //    }
-        //};
+        let children = children.iter().map(|(k, v)| (k.clone(), *v)).collect();
 
-        //let children = node_children.iter().map(|(k, v)| (k.clone(), *v)).collect();
-
-        //Ok(children)
+        Ok(children)
     }
 
     #[instrument(level = Level::TRACE, skip(current_key, inner))]

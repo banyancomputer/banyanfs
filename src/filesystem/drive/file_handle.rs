@@ -5,8 +5,7 @@ use elliptic_curve::rand_core::CryptoRngCore;
 use tracing::{debug, instrument, trace, Instrument, Level};
 
 use crate::codec::*;
-use crate::filesystem::nodes::NodeKind;
-use crate::filesystem::{Node, NodeId};
+use crate::filesystem::nodes::{Node, NodeId, NodeKind};
 
 use crate::codec::crypto::SigningKey;
 use crate::filesystem::drive::{InnerDrive, WalkState};

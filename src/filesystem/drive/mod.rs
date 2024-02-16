@@ -25,7 +25,7 @@ use tracing::debug;
 use crate::codec::crypto::*;
 use crate::codec::header::*;
 use crate::codec::*;
-use crate::filesystem::{Node, NodeBuilder, NodeBuilderError, NodeId};
+use crate::filesystem::nodes::{Node, NodeBuilder, NodeBuilderError, NodeId};
 
 pub struct Drive {
     current_key: Arc<SigningKey>,

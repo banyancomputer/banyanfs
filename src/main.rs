@@ -8,7 +8,8 @@ fn main() -> BanyanFsResult<()> {
 #[cfg(not(target_arch = "wasm32"))]
 #[tokio::main]
 async fn main() -> BanyanFsResult<()> {
-    //use banyanfs::codec::filesystem::DirectoryPermissions;
+    use banyanfs::filesystem::NodeName;
+
     use tokio_util::compat::TokioAsyncReadCompatExt;
     use tracing::Level;
     use tracing_subscriber::layer::SubscriberExt;
@@ -64,7 +65,7 @@ async fn main() -> BanyanFsResult<()> {
 
         match testing_dir.ls(&[]).await {
             Ok(contents) => {
-                let names: Vec<String> = contents.into_iter().map(|(name, _)| name).collect();
+                let names: Vec<NodeName> = contents.into_iter().map(|(name, _)| name).collect();
                 tracing::info!(?names, "contents");
             }
             Err(err) => tracing::error!("failed to list directory: {}", err),
@@ -74,7 +75,7 @@ async fn main() -> BanyanFsResult<()> {
         let root = drive.root().await;
         match root.ls(&["testing"]).await {
             Ok(contents) => {
-                let names: Vec<String> = contents.into_iter().map(|(name, _)| name).collect();
+                let names: Vec<NodeName> = contents.into_iter().map(|(name, _)| name).collect();
                 tracing::info!(?names, "contents");
             }
             Err(err) => tracing::error!("failed to list directory: {}", err),
@@ -139,7 +140,7 @@ async fn main() -> BanyanFsResult<()> {
     let root_dir = loaded_drive.root().await;
     match root_dir.ls(&["testing"]).await {
         Ok(dir_contents) => {
-            let names: Vec<String> = dir_contents.into_iter().map(|(name, _)| name).collect();
+            let names: Vec<NodeName> = dir_contents.into_iter().map(|(name, _)| name).collect();
             tracing::info!("dir_contents: {names:?}");
         }
         Err(err) => {
