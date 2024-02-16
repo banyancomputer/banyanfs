@@ -123,9 +123,10 @@ impl DirectoryHandle {
 
         let inner_read = self.inner.read().await;
         let parent_node = &inner_read.nodes[parent_id];
-        if parent_node.is_directory() {
+        if !parent_node.is_directory() {
             return Err(OperationError::ParentMustBeDirectory);
         }
+        drop(inner_read);
 
         let mut inner_write = self.inner.write().in_current_span().await;
         let node_entry = inner_write.nodes.vacant_entry();
