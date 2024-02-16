@@ -13,6 +13,8 @@ use crate::codec::crypto::SigningKey;
 use crate::filesystem::drive::{InnerDrive, OperationError, WalkState};
 use crate::filesystem::nodes::{Node, NodeId, NodeName};
 
+const MAX_PATH_DEPTH: usize = 32;
+
 pub struct DirectoryHandle {
     current_key: Arc<SigningKey>,
     cwd_id: NodeId,
@@ -27,11 +29,10 @@ impl DirectoryHandle {
         let target_directory_id = if path.is_empty() {
             self.cwd_id
         } else {
-            //match self.walk_directory(self.cwd_id, path).await {
-            //    Ok(WalkState::FoundNode(tdi_id, _)) => tdi_id,
-            //    _ => return Err(OperationError::NotADirectory),
-            //}
-            todo!()
+            match walk_path(&self.inner, self.cwd_id, path, 0).await {
+                Ok(WalkState::FoundNode { node_id }) => node_id,
+                _ => return Err(OperationError::NotADirectory),
+            }
         };
 
         let directory = DirectoryHandle {
@@ -176,113 +177,49 @@ impl DirectoryHandle {
             return Err(OperationError::UnexpectedEmptyPath);
         }
 
-        match walk_path(self.inner.clone(), self.cwd_id, path).await? {
-            WalkState::FoundNode { node_id } => {
-                let inner_read = self.inner.read().await;
+        for _ in 0..MAX_PATH_DEPTH {
+            match walk_path(&self.inner, self.cwd_id, path, 0).await? {
+                WalkState::FoundNode { node_id } => {
+                    debug!(node_id, "drive::mkdir::already_exists");
+                    let inner_read = self.inner.read().await;
 
-                match inner_read.nodes[node_id].kind() {
-                    NodeKind::Directory { .. } => return Ok(()),
-                    NodeKind::File { .. } => return Err(OperationError::Exists(node_id)),
+                    match inner_read.nodes[node_id].kind() {
+                        NodeKind::Directory { .. } => return Ok(()),
+                        NodeKind::File { .. } => return Err(OperationError::Exists(node_id)),
+                    }
                 }
-            }
-            WalkState::MissingComponent {
-                working_directory_id,
-                missing_name,
-                remaining_path,
-            } => {
-                // Handle our common ideal case, the only missing node is the last path component
-                // so we can just create it.
-                if remaining_path.is_empty() {}
+                WalkState::MissingComponent {
+                    working_directory_id,
+                    missing_name,
+                    remaining_path,
+                } => {
+                    debug!(cwd_id = working_directory_id, name = ?missing_name, "drive::mkdir::node_missing");
 
-                if !recursive {
-                    tracing::debug!("drive::mkdir::not_recursive");
-                    return Err(OperationError::PathNotFound);
+                    // Handle our common ideal case, the only missing node is the last path component
+                    // so we can just create it.
+                    if !recursive && !remaining_path.is_empty() {
+                        debug!("drive::mkdir::not_recursive");
+                        return Err(OperationError::PathNotFound);
+                    }
+
+                    //todo!("create our directory");
+
+                    if remaining_path.is_empty() {
+                        debug!("drive::mkdir::complete");
+                        return Ok(());
+                    }
                 }
-
-                todo!("might need to recurse, might need to create the final node");
-            }
-            WalkState::NotTraversable {
-                working_directory_id,
-                blocking_name,
-            } => {
-                todo!("directory not traversable");
+                WalkState::NotTraversable {
+                    working_directory_id,
+                    blocking_name,
+                } => {
+                    debug!(cwd_id = working_directory_id, name = ?blocking_name, "drive::mkdir::not_traversable");
+                    return Err(OperationError::NotADirectory);
+                }
             }
         }
 
-        //loop {
-        //    match self.walk_directory(cwd_id, path).await? {
-        //        // node already exists, we'll double check its a folder and consider it a success
-        //        // if it is
-        //        WalkState::Found(nid, entry_name) => {
-        //            match self.inner.read().in_current_span().await.nodes[nid].kind() {
-        //                NodeKind::Directory { .. } => {
-        //                    debug!(directory = entry_name, "drive::mkdir::already_exists");
-        //                    return Ok(());
-        //                }
-        //                _ => return Err(OperationError::NotADirectory),
-        //            }
-        //        }
-        //        WalkState::NotTraversable(_, _) => return Err(OperationError::NotADirectory),
-        //        WalkState::Missing(current_dir_id, missing_path) if !missing_path.is_empty() => {
-        //            // we should always have
-        //            let (missing_name, remaining_path) = match missing_path.split_first() {
-        //                Some(res) => res,
-        //                _ => unreachable!("protected by branch guard"),
-        //            };
-
-        //            tracing::debug!(cwd_id = ?current_dir_id, name = ?missing_name, "drive::mkdir::missing_directory");
-
-        //            // If there is more to the path and we are not in recursive mode, we should
-        //            // report the error
-        //            if !(recursive || remaining_path.is_empty()) {
-        //                return Err(OperationError::PathNotFound);
-        //            }
-
-        //            let (node_id, permanent_id) = self
-        //                .insert_node(
-        //                    rng,
-        //                    current_dir_id,
-        //                    |rng, name, actor_id, node_id| async move {
-        //                        let dir = NodeBuilder::directory(name)
-        //                            .with_node_id(node_id)
-        //                            .with_owner(actor_id)
-        //                            .with_parent(current_dir_id)
-        //                            .build(rng)?;
-
-        //                        Ok(dir)
-        //                    },
-        //                )
-        //                .await?;
-
-        //            let mut inner_write = self.inner.write().in_current_span().await;
-        //            let node_children = match inner_write.nodes[current_dir_id].kind_mut() {
-        //                NodeKind::Directory { children, .. } => children,
-        //                _ => return Err(OperationError::BadSearch("not in a directory?")),
-        //            };
-
-        //            node_children.insert(missing_name.to_string(), permanent_id);
-        //            tracing::debug!(
-        //                cwd_id = ?current_dir_id,
-        //                name = missing_name,
-        //                pid = ?permanent_id,
-        //                "drive::mkdir::created"
-        //            );
-
-        //            if remaining_path.is_empty() {
-        //                // Nothing left to do, let's bail out
-        //                return Ok(());
-        //            }
-
-        //            cwd_id = node_id;
-        //            path = remaining_path;
-        //        }
-        //        // This shouldn't happen as this branch should be considered "Found" posibly an
-        //        // empty path error, either way we shouldn't be here
-        //        WalkState::Missing(_, _) => {
-        //            return Err(OperationError::BadSearch("unexpected lack of directory"));
-        //        }
-        //    };
-        //}
+        Err(OperationError::PathTooDeep)
     }
 }
 
@@ -290,9 +227,10 @@ impl DirectoryHandle {
 // level of indirection? As long as we remain consistent it should be fine.
 #[instrument(level = Level::TRACE, skip(inner))]
 fn walk_path<'a>(
-    inner: Arc<RwLock<InnerDrive>>,
+    inner: &'a Arc<RwLock<InnerDrive>>,
     working_directory_id: NodeId,
     path: &'a [&'a str],
+    depth: usize,
 ) -> BoxFuture<'a, Result<WalkState<'a>, OperationError>> {
     trace!("directory::walk_directory");
 
@@ -343,7 +281,11 @@ fn walk_path<'a>(
         }
         drop(inner_read);
 
-        walk_path(inner, next_node_id, remaining_path).await
+        if depth >= MAX_PATH_DEPTH {
+            return Err(OperationError::PathTooDeep);
+        }
+
+        walk_path(inner, next_node_id, remaining_path, depth + 1).await
     }
     .boxed()
 }

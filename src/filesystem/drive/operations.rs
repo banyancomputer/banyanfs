@@ -44,7 +44,7 @@ pub enum OperationError {
     MissingPermanentId(PermanentId),
 
     #[error("path attempted to traverse a non-directory node")]
-    NotADirectory(NodeId),
+    NotADirectory,
 
     #[error("filesystem entries can only be placed under a directory")]
     ParentMustBeDirectory,
@@ -54,6 +54,9 @@ pub enum OperationError {
 
     #[error("provided path or parent directory was not found")]
     PathNotFound,
+
+    #[error("attempted recursion too deep to process")]
+    PathTooDeep,
 
     #[error("unable to make use of an empty path")]
     UnexpectedEmptyPath,
