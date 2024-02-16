@@ -1,6 +1,10 @@
 use std::collections::HashMap;
+use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
-use crate::codec::crypto::VerifyingKey;
+use elliptic_curve::rand_core::CryptoRngCore;
+use futures::io::{AsyncWrite, AsyncWriteExt};
+
+use crate::codec::crypto::{AccessKey, VerifyingKey};
 use crate::codec::header::KeyAccessSettings;
 use crate::codec::{ActorId, ActorSettings};
 
@@ -14,6 +18,27 @@ impl DriveAccess {
         self.actor_settings
             .get(&actor_id)
             .map(|settings| settings.actor_settings())
+    }
+
+    pub async fn encode_private<W: AsyncWrite + Unpin + Send>(
+        &self,
+        rng: &mut impl CryptoRngCore,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let mut written_bytes = 0;
+
+        let key_count = self.actor_settings.len();
+        if key_count == 0 || key_count > u8::MAX as usize {
+            return Err(StdError::new(StdErrorKind::Other, "invalid number of keys"));
+        }
+        let key_count = key_count as u8;
+
+        writer.write_all(&[key_count]).await?;
+        written_bytes += 1;
+
+        let _access_protection_key = AccessKey::generate(rng);
+
+        Ok(written_bytes)
     }
 
     pub fn has_realized_view_access(&self, actor_id: ActorId) -> bool {

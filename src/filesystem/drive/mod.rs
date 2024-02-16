@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use async_std::sync::RwLock;
 use elliptic_curve::rand_core::CryptoRngCore;
-use futures::io::AsyncWrite;
+use futures::io::{AsyncWrite, AsyncWriteExt};
 use slab::Slab;
 use tracing::debug;
 
@@ -46,7 +46,7 @@ pub(crate) struct InnerDrive {
 impl Drive {
     pub async fn encode_private<W: AsyncWrite + Unpin + Send>(
         &self,
-        _rng: &mut impl CryptoRngCore,
+        rng: &mut impl CryptoRngCore,
         writer: &mut W,
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
@@ -56,6 +56,9 @@ impl Drive {
 
         // Don't support ECC yet
         written_bytes += PublicSettings::new(false, true).encode(writer).await?;
+
+        let inner_read = self.inner.read().await;
+        written_bytes += inner_read.access.encode_private(rng, writer).await?;
 
         Ok(written_bytes)
     }
