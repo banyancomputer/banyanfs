@@ -11,7 +11,7 @@ async fn main() -> BanyanFsResult<()> {
     use banyanfs::filesystem::NodeName;
 
     use tokio_util::compat::TokioAsyncReadCompatExt;
-    use tracing::Level;
+    use tracing::{debug, error, info, Level};
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
     use tracing_subscriber::{EnvFilter, Layer};
@@ -27,7 +27,7 @@ async fn main() -> BanyanFsResult<()> {
         .with_filter(env_filter);
 
     tracing_subscriber::registry().with(stderr_layer).init();
-    tracing::debug!("running banyanfs {}", version());
+    debug!("running banyanfs {}", version());
 
     let mut rng = banyanfs::utils::crypto_rng();
 
@@ -37,7 +37,7 @@ async fn main() -> BanyanFsResult<()> {
 
     let drive = Drive::initialize_private(&mut rng, signing_key.clone()).unwrap();
     if !drive.has_realized_view_access(actor_id).await {
-        tracing::error!("key doesn't have access to the drive");
+        error!("key doesn't have access to the drive");
         return Err(BanyanFsError("key doesn't have access to the drive"));
     }
 
@@ -45,30 +45,30 @@ async fn main() -> BanyanFsResult<()> {
         let mut root = drive.root().await;
 
         if let Err(err) = root.mkdir(&mut rng, &["testing", "paths"], true).await {
-            tracing::error!("failed to create directory: {}", err);
+            error!("failed to create directory: {}", err);
             return Ok(());
         }
 
         let testing_dir = match root.cd(&["testing"]).await {
             Ok(dir) => dir,
             Err(err) => {
-                tracing::error!("failed to switch directory: {}", err);
+                error!("failed to switch directory: {}", err);
                 return Ok(());
             }
         };
 
         // duplicate path as before, folders should already exist and not cause any error
         if let Err(err) = root.mkdir(&mut rng, &["testing", "paths"], false).await {
-            tracing::error!("failed to create same directory: {}", err);
+            error!("failed to create same directory: {}", err);
             return Ok(());
         }
 
         match testing_dir.ls(&[]).await {
             Ok(contents) => {
                 let names: Vec<NodeName> = contents.into_iter().map(|(name, _)| name).collect();
-                tracing::info!(?names, "contents");
+                info!(?names, "contents");
             }
-            Err(err) => tracing::error!("failed to list directory: {}", err),
+            Err(err) => error!("failed to list directory: {}", err),
         }
 
         // get a fresh handle on the root directory
@@ -76,9 +76,9 @@ async fn main() -> BanyanFsResult<()> {
         match root.ls(&["testing"]).await {
             Ok(contents) => {
                 let names: Vec<NodeName> = contents.into_iter().map(|(name, _)| name).collect();
-                tracing::info!(?names, "contents");
+                info!(?names, "contents");
             }
-            Err(err) => tracing::error!("failed to list directory: {}", err),
+            Err(err) => error!("failed to list directory: {}", err),
         }
 
         //let fh = drive.open("/root/testing/deep/paths/file.txt")?;
@@ -109,20 +109,22 @@ async fn main() -> BanyanFsResult<()> {
     let mut fh = match file_opts.open("fixtures/minimal.bfs").await {
         Ok(fh) => fh.compat(),
         Err(err) => {
-            tracing::error!("failed to open file: {err}");
+            tracing::error!("failed to open file to persist drive: {err}");
             return Ok(());
         }
     };
 
     if let Err(err) = drive.encode_private(&mut rng, &mut fh).await {
-        tracing::error!("failed to encode drive: {err}");
+        tracing::error!("failed to encode drive to file: {err}");
         return Ok(());
     }
+
+    tracing::info!("persisted drive");
 
     let mut fh = match tokio::fs::File::open("fixtures/minimal.bfs").await {
         Ok(fh) => fh.compat(),
         Err(err) => {
-            tracing::error!("failed to open file: {err}");
+            tracing::error!("failed to re-open file for loading: {err}");
             return Ok(());
         }
     };
@@ -131,20 +133,23 @@ async fn main() -> BanyanFsResult<()> {
     let loaded_drive = match drive_loader.from_reader(&mut fh).await {
         Ok(d) => d,
         Err(err) => {
-            tracing::error!("failed to load saved drive: {err}");
+            tracing::error!("failed to load drive: {err}");
             return Ok(());
         }
     };
 
-    // todo: should add convenient methods on the drive itself for the directory operations
+    tracing::info!("loaded drive");
+
     let root_dir = loaded_drive.root().await;
+
+    // todo: should add convenient methods on the drive itself for the directory operations
     match root_dir.ls(&["testing"]).await {
         Ok(dir_contents) => {
             let names: Vec<NodeName> = dir_contents.into_iter().map(|(name, _)| name).collect();
             tracing::info!("dir_contents: {names:?}");
         }
         Err(err) => {
-            tracing::error!("failed to list directory: {err}");
+            tracing::error!("failed to list directory from loaded drive: {err}");
             return Ok(());
         }
     }

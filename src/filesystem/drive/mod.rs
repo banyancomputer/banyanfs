@@ -124,16 +124,6 @@ impl Drive {
         Ok(drive)
     }
 
-    pub async fn mkdir(
-        &mut self,
-        rng: &mut impl CryptoRngCore,
-        path: &[&str],
-        recursive: bool,
-    ) -> Result<(), DriveError> {
-        self.root().await.mkdir(rng, path, recursive).await?;
-        Ok(())
-    }
-
     pub async fn root(&self) -> DirectoryHandle {
         let inner_read = self.inner.read().await;
         let root_node_id = inner_read.root_node_id;
