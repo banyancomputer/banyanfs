@@ -116,9 +116,10 @@ impl TombCompat {
         todo!()
     }
 
-    // checked, returns itself
+    // checked, returns itself, DANGER: needs to be fallible
     #[wasm_bindgen(constructor)]
-    pub async fn new(_key_pem: String, _account_id: String, _api_endpoint: String) -> Self {
+    pub async fn new(key_pem: String, _account_id: String, _api_endpoint: String) -> Self {
+        let _signing_key = SigningKey::from_pem(&key_pem).unwrap();
         todo!()
     }
 

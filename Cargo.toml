@@ -8,7 +8,8 @@ readme = "README.md"
 edition = "2021"
 
 [features]
-default = ["strict", "tomb-compat"]
+default = ["pem", "strict", "tomb-compat"]
+pem = ["p384/pem", "p384/pkcs8"]
 strict = []
 tomb-compat = []
 
@@ -28,6 +29,7 @@ p384 = { version = "^0.13", features = ["ecdh", "ecdsa"] }
 rand = "^0.8"
 rand_chacha = "^0.3"
 sha2 = "^0.10"
+zeroize = { version = "^1", features = ["derive", "std"] }
 
 bytes = "^1"
 uuid = { version = "^1", features = ["v7", "serde"] }

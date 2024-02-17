@@ -1,6 +1,7 @@
 use ecdsa::signature::rand_core::CryptoRngCore;
 use ecdsa::signature::RandomizedDigestSigner;
-use p384::NistP384;
+use p384::{NistP384, SecretKey};
+use zeroize::Zeroizing;
 
 use crate::codec::crypto::{AccessKey, Fingerprint, KeyId, Signature, VerifyingKey};
 use crate::codec::ActorId;
@@ -36,8 +37,18 @@ impl SigningKey {
         self.verifying_key().fingerprint()
     }
 
-    pub fn from_slice(bytes: &[u8]) -> Result<Self, SigningKeyError> {
-        let inner = ecdsa::SigningKey::from_slice(&bytes).map_err(SigningKeyError::LoadFailed)?;
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, SigningKeyError> {
+        let private_key =
+            SecretKey::from_sec1_der(&bytes).map_err(SigningKeyError::InvalidDerBytes)?;
+        let inner = ecdsa::SigningKey::from(private_key);
+        Ok(Self { inner })
+    }
+
+    #[cfg(feature = "pem")]
+    pub fn from_pem(pem: &str) -> Result<Self, SigningKeyError> {
+        let p384_key = SecretKey::from_sec1_pem(pem).map_err(SigningKeyError::PemDecodingFailed)?;
+        let inner = ecdsa::SigningKey::from(p384_key);
+
         Ok(Self { inner })
     }
 
@@ -51,12 +62,26 @@ impl SigningKey {
     }
 
     pub fn to_bytes(&self) -> [u8; KEY_SIZE] {
-        let private_key_bytes = self.inner.to_bytes();
+        let private_key: SecretKey = self.inner.clone().into();
+        let private_key_bytes = private_key
+            .to_sec1_der()
+            .expect("valid key to be valid format");
 
         let mut private_key = [0u8; KEY_SIZE];
         private_key.copy_from_slice(&private_key_bytes);
 
         private_key
+    }
+
+    #[cfg(feature = "pem")]
+    pub fn to_pem(&self) -> Result<Zeroizing<String>, SigningKeyError> {
+        let private_key: SecretKey = self.inner.clone().into();
+
+        let pem = private_key
+            .to_sec1_pem(elliptic_curve::pkcs8::LineEnding::LF)
+            .map_err(SigningKeyError::PemEncodingFailed)?;
+
+        Ok(pem)
     }
 
     pub fn verifying_key(&self) -> VerifyingKey {
@@ -83,6 +108,12 @@ impl RandomizedDigestSigner<sha2::Sha384, Signature> for SigningKey {
 
 #[derive(Debug, thiserror::Error)]
 pub enum SigningKeyError {
-    #[error("failed to load signing key: {0}")]
-    LoadFailed(ecdsa::signature::Error),
+    #[error("failed to load DER encoded signing key: {0}")]
+    InvalidDerBytes(elliptic_curve::Error),
+
+    #[error("failed to decode private key from SEC1 encoded PEM: {0}")]
+    PemDecodingFailed(elliptic_curve::Error),
+
+    #[error("failed to encoded private key as SEC1 encoded PEM: {0}")]
+    PemEncodingFailed(elliptic_curve::Error),
 }
