@@ -1,6 +1,9 @@
 // Note: wasm-pack test does not run any unit tests that are pub reachable from the root module, I
 // think this includes the test module itself
 
+#[cfg(feature = "banyan-api")]
+pub mod api;
+
 pub mod codec;
 pub mod error;
 pub mod filesystem;
@@ -14,6 +17,9 @@ pub mod wasm;
 pub use async_trait;
 
 pub mod prelude {
+    #[cfg(feature = "banyan-api")]
+    pub use crate::api::*;
+
     pub use crate::error::*;
     pub use crate::filesystem::*;
     pub use crate::version::*;

@@ -10,6 +10,15 @@ pub use tomb_compat::*;
 
 use crate::version::version;
 
+// Pending needed improvements for the WASM components:
+//
+// - Ensure all methods that need it return a result with an effective error message instead of
+//   panicing. Need to get all the unwraps() out but we need to maintain the type signatures for
+//   the time being.
+// - Switch off of using reqwest for the HTTP client, we should be using the web-sys bindings for
+//   Fetch requests, the streaming bodies will need some JS fiddling. We can probably get streaming
+//   uploads working by switching off of it as well (that would be a JS API breaking change).
+
 #[wasm_bindgen(start)]
 pub fn wasm_init() -> Result<(), JsValue> {
     // Only run this in debug mode, in release mode this bloats up the library quite a bit

@@ -18,6 +18,9 @@ pub use wasm_node_metadata::WasmNodeMetadata;
 pub use wasm_shared_file::WasmSharedFile;
 pub use wasm_snapshot::WasmSnapshot;
 
+use std::sync::Arc;
+
+use reqwest::Url;
 use tracing::debug;
 use wasm_bindgen::prelude::*;
 use zeroize::Zeroize;
@@ -29,7 +32,8 @@ use crate::prelude::*;
 
 #[wasm_bindgen(js_name = TombWasm)]
 pub struct TombCompat {
-    key: SigningKey,
+    client: ApiClient,
+    key: Arc<SigningKey>,
 }
 
 #[wasm_bindgen(js_class = TombWasm)]
@@ -124,18 +128,25 @@ impl TombCompat {
     #[wasm_bindgen(constructor)]
     pub async fn new(
         mut private_key_pem: String,
-        _account_id: String,
-        _api_endpoint: String,
+        account_id: String,
+        api_endpoint: String,
     ) -> Self {
         let key = match SigningKey::from_pkcs8_pem(&private_key_pem) {
-            Ok(key) => key,
+            Ok(key) => Arc::new(key),
             Err(e) => panic!("Failed to create signing key: {}", e),
         };
         private_key_pem.zeroize();
 
-        debug!(key_id = ?key.key_id(), "loaded private key into new TombWasm instance");
+        let api_endpoint = match reqwest::Url::parse(&api_endpoint) {
+            Ok(url) => url,
+            Err(e) => panic!("Failed to parse api endpoint: {}", e),
+        };
 
-        Self { key }
+        let client = ApiClient::with_auth(api_endpoint, account_id, key.clone());
+
+        debug!(key_id = ?key.key_id(), "initialized new TombWasm instance");
+
+        Self { client, key }
     }
 
     // new transfered and checked
