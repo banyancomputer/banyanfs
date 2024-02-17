@@ -8,7 +8,8 @@ readme = "README.md"
 edition = "2021"
 
 [features]
-default = ["pem", "strict", "tomb-compat"]
+default = ["banyan-api", "pem", "strict", "tomb-compat"]
+banyan-api = []
 pem = ["p384/pem", "p384/pkcs8"]
 strict = []
 tomb-compat = []
@@ -40,6 +41,7 @@ crdts = { version = "^7", default-features = false, features = [
 ] }
 slab = "^0.4"
 time = "^0.3"
+reqwest = { version = "0.11.24", default-features = false }
 
 [[bin]]
 name = "banyanfs"

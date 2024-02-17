@@ -11,6 +11,12 @@ fn report_build_profile() {
 fn report_enabled_features() {
     let mut enabled_features: Vec<&str> = Vec::new();
 
+    #[cfg(feature = "banyan-api")]
+    enabled_features.push("banyan-api");
+
+    #[cfg(feature = "pem")]
+    enabled_features.push("pem");
+
     #[cfg(feature = "strict")]
     enabled_features.push("strict");
 
