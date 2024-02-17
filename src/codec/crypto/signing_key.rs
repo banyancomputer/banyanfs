@@ -39,14 +39,26 @@ impl SigningKey {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, SigningKeyError> {
         let private_key =
-            SecretKey::from_sec1_der(&bytes).map_err(SigningKeyError::InvalidDerBytes)?;
+            SecretKey::from_sec1_der(bytes).map_err(|_| SigningKeyError::InvalidDerBytes)?;
         let inner = ecdsa::SigningKey::from(private_key);
         Ok(Self { inner })
     }
 
     #[cfg(feature = "pem")]
-    pub fn from_pem(pem: &str) -> Result<Self, SigningKeyError> {
-        let p384_key = SecretKey::from_sec1_pem(pem).map_err(SigningKeyError::PemDecodingFailed)?;
+    pub fn from_pkcs8_pem(pem: &str) -> Result<Self, SigningKeyError> {
+        use ecdsa::elliptic_curve::pkcs8::DecodePrivateKey;
+
+        let p384_key =
+            SecretKey::from_pkcs8_pem(pem).map_err(|_| SigningKeyError::PemDecodingFailed)?;
+        let inner = ecdsa::SigningKey::from(p384_key);
+
+        Ok(Self { inner })
+    }
+
+    #[cfg(feature = "pem")]
+    pub fn from_sec1_pem(pem: &str) -> Result<Self, SigningKeyError> {
+        let p384_key =
+            SecretKey::from_sec1_pem(pem).map_err(|_| SigningKeyError::PemDecodingFailed)?;
         let inner = ecdsa::SigningKey::from(p384_key);
 
         Ok(Self { inner })
@@ -74,12 +86,25 @@ impl SigningKey {
     }
 
     #[cfg(feature = "pem")]
-    pub fn to_pem(&self) -> Result<Zeroizing<String>, SigningKeyError> {
+    pub fn to_pkcs8_pem(&self) -> Result<Zeroizing<String>, SigningKeyError> {
+        use ecdsa::elliptic_curve::pkcs8::EncodePrivateKey;
+
+        let private_key: SecretKey = self.inner.clone().into();
+
+        let pem = private_key
+            .to_pkcs8_pem(elliptic_curve::pkcs8::LineEnding::LF)
+            .map_err(|_| SigningKeyError::PemEncodingFailed)?;
+
+        Ok(pem)
+    }
+
+    #[cfg(feature = "pem")]
+    pub fn to_sec1_pem(&self) -> Result<Zeroizing<String>, SigningKeyError> {
         let private_key: SecretKey = self.inner.clone().into();
 
         let pem = private_key
             .to_sec1_pem(elliptic_curve::pkcs8::LineEnding::LF)
-            .map_err(SigningKeyError::PemEncodingFailed)?;
+            .map_err(|_| SigningKeyError::PemEncodingFailed)?;
 
         Ok(pem)
     }
@@ -106,14 +131,16 @@ impl RandomizedDigestSigner<sha2::Sha384, Signature> for SigningKey {
     }
 }
 
+// note(sstelfox): Its not worth capturing the 'elliptic_curve::Error' type as the result is always
+// just 'CryptoError'.
 #[derive(Debug, thiserror::Error)]
 pub enum SigningKeyError {
-    #[error("failed to load DER encoded signing key: {0}")]
-    InvalidDerBytes(elliptic_curve::Error),
+    #[error("failed to load DER encoded signing key")]
+    InvalidDerBytes,
 
-    #[error("failed to decode private key from SEC1 encoded PEM: {0}")]
-    PemDecodingFailed(elliptic_curve::Error),
+    #[error("failed to decode private key from SEC1 encoded PEM")]
+    PemDecodingFailed,
 
-    #[error("failed to encoded private key as SEC1 encoded PEM: {0}")]
-    PemEncodingFailed(elliptic_curve::Error),
+    #[error("failed to encode private key as PEM")]
+    PemEncodingFailed,
 }

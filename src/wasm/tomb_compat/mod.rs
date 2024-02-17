@@ -18,7 +18,9 @@ pub use wasm_node_metadata::WasmNodeMetadata;
 pub use wasm_shared_file::WasmSharedFile;
 pub use wasm_snapshot::WasmSnapshot;
 
+use tracing::debug;
 use wasm_bindgen::prelude::*;
+use zeroize::Zeroize;
 
 // This section should effectively be a consumer of the normal API calls, nothing in here should
 // have a namespace conflict with anything exported in the prelude, as nothing in this or any
@@ -26,7 +28,9 @@ use wasm_bindgen::prelude::*;
 use crate::prelude::*;
 
 #[wasm_bindgen(js_name = TombWasm)]
-pub struct TombCompat;
+pub struct TombCompat {
+    key: SigningKey,
+}
 
 #[wasm_bindgen(js_class = TombWasm)]
 impl TombCompat {
@@ -118,9 +122,20 @@ impl TombCompat {
 
     // checked, returns itself, DANGER: needs to be fallible
     #[wasm_bindgen(constructor)]
-    pub async fn new(key_pem: String, _account_id: String, _api_endpoint: String) -> Self {
-        let _signing_key = SigningKey::from_pem(&key_pem).unwrap();
-        todo!()
+    pub async fn new(
+        mut private_key_pem: String,
+        _account_id: String,
+        _api_endpoint: String,
+    ) -> Self {
+        let key = match SigningKey::from_pkcs8_pem(&private_key_pem) {
+            Ok(key) => key,
+            Err(e) => panic!("Failed to create signing key: {}", e),
+        };
+        private_key_pem.zeroize();
+
+        debug!(key_id = ?key.key_id(), "loaded private key into new TombWasm instance");
+
+        Self { key }
     }
 
     // new transfered and checked
