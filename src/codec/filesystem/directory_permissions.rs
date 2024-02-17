@@ -13,7 +13,7 @@ const DIRECTORY_PERMISSIONS_IMMUTABLE: u8 = 0b0000_0010;
 
 const DIRECTORY_PERMISSIONS_OWNER_WRITE_ONLY: u8 = 0b0000_0001;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct DirectoryPermissions {
     immutable: bool,
     owner_write_only: bool,
@@ -63,14 +63,5 @@ impl AsyncEncodable for DirectoryPermissions {
         writer.write_all(&[options]).await?;
 
         Ok(1)
-    }
-}
-
-impl Default for DirectoryPermissions {
-    fn default() -> Self {
-        Self {
-            immutable: false,
-            owner_write_only: false,
-        }
     }
 }

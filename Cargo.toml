@@ -9,10 +9,10 @@ edition = "2021"
 
 [features]
 default = ["banyan-api", "pem", "strict", "tomb-compat"]
-banyan-api = []
+banyan-api = ["reqwest", "serde", "serde_json"]
 pem = ["p384/pem", "p384/pkcs8"]
 strict = []
-tomb-compat = []
+tomb-compat = ["banyan-api"]
 
 [dependencies]
 async-std = "^1"
@@ -41,7 +41,14 @@ crdts = { version = "^7", default-features = false, features = [
 ] }
 slab = "^0.4"
 time = "^0.3"
-reqwest = { version = "0.11.24", default-features = false }
+
+reqwest = { version = "^0.11", default-features = false, optional = true, features = [
+  "multipart",
+  "json",
+  "stream",
+] }
+serde = { version = "^1", features = ["derive"], optional = true }
+serde_json = { version = "^1", optional = true }
 
 [[bin]]
 name = "banyanfs"
@@ -59,7 +66,7 @@ console_error_panic_hook = "^0.1"
 getrandom = { version = "^0.2", features = ["js"] }
 js-sys = "^0.3"
 tracing-wasm = "^0.2"
-wasm-bindgen = "^0.2"
+wasm-bindgen = { version = "^0.2", features = ["serde-serialize"] }
 wasm-bindgen-futures = "^0.4"
 web-sys = { version = "^0.3", default-features = false, features = [
   "Storage",

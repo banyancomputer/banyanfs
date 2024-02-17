@@ -15,7 +15,7 @@ const FILE_PERMISSIONS_IMMUTABLE: u8 = 0b0000_0010;
 
 const FILE_PERMISSIONS_OWNER_WRITE_ONLY: u8 = 0b0000_0001;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct FilePermissions {
     executable: bool,
     immutable: bool,
@@ -76,15 +76,5 @@ impl AsyncEncodable for FilePermissions {
         writer.write_all(&[options]).await?;
 
         Ok(1)
-    }
-}
-
-impl Default for FilePermissions {
-    fn default() -> Self {
-        Self {
-            executable: false,
-            immutable: false,
-            owner_write_only: false,
-        }
     }
 }
