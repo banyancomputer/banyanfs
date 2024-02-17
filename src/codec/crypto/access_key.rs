@@ -2,6 +2,7 @@ use chacha20poly1305::{AeadInPlace, Key as ChaChaKey, KeyInit, XChaCha20Poly1305
 use ecdsa::signature::rand_core::CryptoRngCore;
 use nom::AsBytes;
 use rand::Rng;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::codec::crypto::{
     AsymLockedAccessKey, AuthenticationTag, Nonce, SymLockedAccessKey, VerifyingKey,
@@ -9,7 +10,7 @@ use crate::codec::crypto::{
 
 const ACCESS_KEY_LENGTH: usize = 32;
 
-#[derive(Clone)]
+#[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct AccessKey([u8; ACCESS_KEY_LENGTH]);
 
 impl AccessKey {
