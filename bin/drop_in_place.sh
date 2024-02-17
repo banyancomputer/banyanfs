@@ -18,3 +18,7 @@ rm -rf ${INLINED_TOMB_DIR}/*
 cp -f pkg/* ${INLINED_TOMB_DIR}/
 (cd ${INLINED_TOMB_DIR} && jq '.name = "tomb-wasm-experimental"' package.json >tmp.$$.json && mv tmp.$$.json package.json)
 (cd ${BANYAN_CORE_FRONTEND_DIR} && yarn install)
+
+# Probably don't want to keep this around permanently, but its convenient for now
+(cd ${BANYAN_CORE_ROOT_DIR} && rm -f dist/assets/*)
+(cd ${BANYAN_CORE_FRONTEND_DIR} && yarn build)
