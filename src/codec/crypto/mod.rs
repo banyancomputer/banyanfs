@@ -1,7 +1,6 @@
 mod access_key;
 mod asym_locked_access_key;
 mod authentication_tag;
-mod encrypted_stream;
 mod fingerprint;
 mod key_id;
 mod nonce;
@@ -13,7 +12,6 @@ mod verifying_key;
 pub use access_key::AccessKey;
 pub use asym_locked_access_key::AsymLockedAccessKey;
 pub use authentication_tag::AuthenticationTag;
-pub use encrypted_stream::EncryptingWriter;
 pub use fingerprint::Fingerprint;
 pub use key_id::KeyId;
 pub use nonce::Nonce;

@@ -7,7 +7,7 @@ use crate::codec::AsyncEncodable;
 
 const FINGERPRINT_SIZE: usize = 32;
 
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Fingerprint([u8; FINGERPRINT_SIZE]);
 
 impl Fingerprint {

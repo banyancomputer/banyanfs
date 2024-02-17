@@ -5,7 +5,7 @@ use crate::codec::crypto::Fingerprint;
 use crate::codec::AsyncEncodable;
 
 // todo(sstelfox) likely need a vector clock here...
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct ActorId(Fingerprint);
 
 impl ActorId {

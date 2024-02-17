@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use async_std::sync::RwLock;
 use elliptic_curve::rand_core::CryptoRngCore;
-use futures::io::{AsyncWrite, AsyncWriteExt};
+use futures::io::AsyncWrite;
 use slab::Slab;
 use tracing::debug;
 
@@ -63,9 +63,9 @@ impl Drive {
         Ok(written_bytes)
     }
 
-    pub async fn has_realized_view_access(&self, actor_id: ActorId) -> bool {
+    pub async fn has_read_access(&self, actor_id: ActorId) -> bool {
         let inner = self.inner.read().await;
-        inner.access.has_realized_view_access(actor_id)
+        inner.access.has_read_access(actor_id)
     }
 
     pub async fn has_write_access(&self, actor_id: ActorId) -> bool {

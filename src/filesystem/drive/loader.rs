@@ -211,7 +211,7 @@ enum DriveLoaderState {
     EncryptedPermissions(KeyCount, AccessKey),
     PrivateContentPayload(ContentContext),
 
-    PublicAccessKeys(KeyCount),
+    PublicPermissions(KeyCount),
     PublicContentPayload(ContentContext),
 
     Signature,

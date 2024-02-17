@@ -6,25 +6,23 @@ use nom::number::streaming::le_u8;
 
 use crate::codec::AsyncEncodable;
 
-const KEY_ACCESS_SETTINGS_PROTECTED_BIT: u8 = 0b1000_0000;
+const PROTECTED_BIT: u8 = 0b1000_0000;
 
-const KEY_ACCESS_SETTINGS_OWNER_BIT: u8 = 0b0100_0000;
+const OWNER_BIT: u8 = 0b0100_0000;
 
-const KEY_ACCESS_SETTINGS_HISTORICAL_BIT: u8 = 0b0010_0000;
+const HISTORICAL_BIT: u8 = 0b0010_0000;
 
-const KEY_ACCESS_SETTINGS_PUBLIC_RESERVED_MASK: u8 = 0b0001_1111;
+const FILESYSTEM_KEY_PRESENT_BIT: u8 = 0b0000_0100;
 
-const KEY_ACCESS_SETTINGS_PRIVATE_ONLY_MASK: u8 = 0b0000_1111;
+const DATA_KEY_PRESENT_BIT: u8 = 0b0000_0010;
 
-const KEY_ACCESS_SETTINGS_PRIVATE_RESERVED_MASK: u8 = 0b0001_0000;
+const MAINTENANCE_KEY_PRESENT_BIT: u8 = 0b0000_0001;
 
-const KEY_ACCESS_SETTINGS_REALIZED_KEY_PRESENT_BIT: u8 = 0b0000_1000;
+const PUBLIC_RESERVED_MASK: u8 = 0b0001_1111;
 
-const KEY_ACCESS_SETTINGS_DATA_KEY_PRESENT_BIT: u8 = 0b0100_0100;
+const PRIVATE_ONLY_MASK: u8 = 0b0000_0111;
 
-const KEY_ACCESS_SETTINGS_JOURNAL_KEY_PRESENT_BIT: u8 = 0b0000_0010;
-
-const KEY_ACCESS_SETTINGS_MAINT_KEY_PRESENT_BIT: u8 = 0b0000_0001;
+const PRIVATE_RESERVED_MASK: u8 = PUBLIC_RESERVED_MASK ^ PRIVATE_ONLY_MASK;
 
 pub struct KeyAccessSettingsBuilder {
     bits: u8,
@@ -35,21 +33,20 @@ impl KeyAccessSettingsBuilder {
     pub fn build(self) -> KeyAccessSettings {
         if self.private {
             KeyAccessSettings::Private {
-                protected: self.bits & KEY_ACCESS_SETTINGS_PROTECTED_BIT != 0,
-                owner: self.bits & KEY_ACCESS_SETTINGS_OWNER_BIT != 0,
-                historical: self.bits & KEY_ACCESS_SETTINGS_HISTORICAL_BIT != 0,
+                protected: self.bits & PROTECTED_BIT != 0,
+                owner: self.bits & OWNER_BIT != 0,
+                historical: self.bits & HISTORICAL_BIT != 0,
 
-                realized_key_present: self.bits & KEY_ACCESS_SETTINGS_REALIZED_KEY_PRESENT_BIT != 0,
-                data_key_present: self.bits & KEY_ACCESS_SETTINGS_DATA_KEY_PRESENT_BIT != 0,
-                journal_key_present: self.bits & KEY_ACCESS_SETTINGS_JOURNAL_KEY_PRESENT_BIT != 0,
-                maintenance_key_present: self.bits & KEY_ACCESS_SETTINGS_MAINT_KEY_PRESENT_BIT != 0,
+                filesystem_key_present: self.bits & FILESYSTEM_KEY_PRESENT_BIT != 0,
+                data_key_present: self.bits & DATA_KEY_PRESENT_BIT != 0,
+                maintenance_key_present: self.bits & MAINTENANCE_KEY_PRESENT_BIT != 0,
             }
         } else {
             KeyAccessSettings::Public {
-                protected: self.bits & KEY_ACCESS_SETTINGS_PROTECTED_BIT != 0,
-                owner: self.bits & KEY_ACCESS_SETTINGS_OWNER_BIT != 0,
-                historical: self.bits & KEY_ACCESS_SETTINGS_HISTORICAL_BIT != 0,
-                extra: self.bits & KEY_ACCESS_SETTINGS_PRIVATE_ONLY_MASK,
+                protected: self.bits & PROTECTED_BIT != 0,
+                owner: self.bits & OWNER_BIT != 0,
+                historical: self.bits & HISTORICAL_BIT != 0,
+                extra: self.bits & PRIVATE_ONLY_MASK,
             }
         }
     }
@@ -69,20 +66,19 @@ impl KeyAccessSettingsBuilder {
     }
 
     pub fn set_owner(mut self) -> Self {
-        self.bits |= KEY_ACCESS_SETTINGS_OWNER_BIT;
+        self.bits |= OWNER_BIT;
         self
     }
 
     pub fn set_protected(mut self) -> Self {
-        self.bits |= KEY_ACCESS_SETTINGS_PROTECTED_BIT;
+        self.bits |= PROTECTED_BIT;
         self
     }
 
     pub fn with_all_access(mut self) -> Self {
-        self.bits |= KEY_ACCESS_SETTINGS_REALIZED_KEY_PRESENT_BIT;
-        self.bits |= KEY_ACCESS_SETTINGS_DATA_KEY_PRESENT_BIT;
-        self.bits |= KEY_ACCESS_SETTINGS_JOURNAL_KEY_PRESENT_BIT;
-        self.bits |= KEY_ACCESS_SETTINGS_MAINT_KEY_PRESENT_BIT;
+        self.bits |= FILESYSTEM_KEY_PRESENT_BIT;
+        self.bits |= DATA_KEY_PRESENT_BIT;
+        self.bits |= MAINTENANCE_KEY_PRESENT_BIT;
 
         self
     }
@@ -102,14 +98,42 @@ pub enum KeyAccessSettings {
         owner: bool,
         historical: bool,
 
-        realized_key_present: bool,
+        filesystem_key_present: bool,
         data_key_present: bool,
-        journal_key_present: bool,
         maintenance_key_present: bool,
     },
 }
 
 impl KeyAccessSettings {
+    pub fn has_data_key(&self) -> bool {
+        match self {
+            KeyAccessSettings::Public { .. } => false,
+            KeyAccessSettings::Private {
+                data_key_present, ..
+            } => *data_key_present,
+        }
+    }
+
+    pub fn has_filesystem_key(&self) -> bool {
+        match self {
+            KeyAccessSettings::Public { .. } => false,
+            KeyAccessSettings::Private {
+                filesystem_key_present,
+                ..
+            } => *filesystem_key_present,
+        }
+    }
+
+    pub fn has_maintenance_key(&self) -> bool {
+        match self {
+            KeyAccessSettings::Public { .. } => false,
+            KeyAccessSettings::Private {
+                maintenance_key_present,
+                ..
+            } => *maintenance_key_present,
+        }
+    }
+
     pub fn is_historical(&self) -> bool {
         match self {
             KeyAccessSettings::Public { historical, .. } => *historical,
@@ -134,27 +158,25 @@ impl KeyAccessSettings {
     pub fn parse_private(input: &[u8]) -> nom::IResult<&[u8], Self> {
         let (input, byte) = le_u8(input)?;
 
-        if cfg!(feature = "strict") && byte & KEY_ACCESS_SETTINGS_PRIVATE_RESERVED_MASK != 0 {
+        if cfg!(feature = "strict") && byte & PRIVATE_RESERVED_MASK != 0 {
             return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Tag)));
         }
 
-        let protected = byte & KEY_ACCESS_SETTINGS_PROTECTED_BIT != 0;
-        let owner = byte & KEY_ACCESS_SETTINGS_OWNER_BIT != 0;
-        let historical = byte & KEY_ACCESS_SETTINGS_HISTORICAL_BIT != 0;
+        let protected = byte & PROTECTED_BIT != 0;
+        let owner = byte & OWNER_BIT != 0;
+        let historical = byte & HISTORICAL_BIT != 0;
 
-        let realized_key_present = byte & KEY_ACCESS_SETTINGS_REALIZED_KEY_PRESENT_BIT != 0;
-        let data_key_present = byte & KEY_ACCESS_SETTINGS_DATA_KEY_PRESENT_BIT != 0;
-        let journal_key_present = byte & KEY_ACCESS_SETTINGS_JOURNAL_KEY_PRESENT_BIT != 0;
-        let maintenance_key_present = byte & KEY_ACCESS_SETTINGS_MAINT_KEY_PRESENT_BIT != 0;
+        let filesystem_key_present = byte & FILESYSTEM_KEY_PRESENT_BIT != 0;
+        let data_key_present = byte & DATA_KEY_PRESENT_BIT != 0;
+        let maintenance_key_present = byte & MAINTENANCE_KEY_PRESENT_BIT != 0;
 
         let settings = Self::Private {
             protected,
             owner,
             historical,
 
-            realized_key_present,
+            filesystem_key_present,
             data_key_present,
-            journal_key_present,
             maintenance_key_present,
         };
 
@@ -164,14 +186,14 @@ impl KeyAccessSettings {
     pub fn parse_public(input: &[u8]) -> nom::IResult<&[u8], Self> {
         let (input, byte) = le_u8(input)?;
 
-        if cfg!(feature = "strict") && byte & KEY_ACCESS_SETTINGS_PUBLIC_RESERVED_MASK != 0 {
+        if cfg!(feature = "strict") && byte & PUBLIC_RESERVED_MASK != 0 {
             return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Tag)));
         }
 
-        let protected = byte & KEY_ACCESS_SETTINGS_PROTECTED_BIT != 0;
-        let owner = byte & KEY_ACCESS_SETTINGS_OWNER_BIT != 0;
-        let historical = byte & KEY_ACCESS_SETTINGS_HISTORICAL_BIT != 0;
-        let extra = byte & KEY_ACCESS_SETTINGS_PRIVATE_ONLY_MASK;
+        let protected = byte & PROTECTED_BIT != 0;
+        let owner = byte & OWNER_BIT != 0;
+        let historical = byte & HISTORICAL_BIT != 0;
+        let extra = byte & PRIVATE_ONLY_MASK;
 
         let settings = Self::Public {
             protected,
@@ -197,54 +219,49 @@ impl AsyncEncodable for KeyAccessSettings {
                 extra,
             } => {
                 if *protected {
-                    settings |= KEY_ACCESS_SETTINGS_PROTECTED_BIT;
+                    settings |= PROTECTED_BIT;
                 }
 
                 if *owner {
-                    settings |= KEY_ACCESS_SETTINGS_OWNER_BIT;
+                    settings |= OWNER_BIT;
                 }
 
                 if *historical {
-                    settings |= KEY_ACCESS_SETTINGS_HISTORICAL_BIT;
+                    settings |= HISTORICAL_BIT;
                 }
 
-                settings |= *extra & KEY_ACCESS_SETTINGS_PRIVATE_ONLY_MASK;
+                settings |= *extra & PRIVATE_ONLY_MASK;
             }
             Self::Private {
                 protected,
                 owner,
                 historical,
-                realized_key_present,
+                filesystem_key_present,
                 data_key_present,
-                journal_key_present,
                 maintenance_key_present,
             } => {
                 if *protected {
-                    settings |= KEY_ACCESS_SETTINGS_PROTECTED_BIT;
+                    settings |= PROTECTED_BIT;
                 }
 
                 if *owner {
-                    settings |= KEY_ACCESS_SETTINGS_OWNER_BIT;
+                    settings |= OWNER_BIT;
                 }
 
                 if *historical {
-                    settings |= KEY_ACCESS_SETTINGS_HISTORICAL_BIT;
+                    settings |= HISTORICAL_BIT;
                 }
 
-                if *realized_key_present {
-                    settings |= KEY_ACCESS_SETTINGS_REALIZED_KEY_PRESENT_BIT;
+                if *filesystem_key_present {
+                    settings |= FILESYSTEM_KEY_PRESENT_BIT;
                 }
 
                 if *data_key_present {
-                    settings |= KEY_ACCESS_SETTINGS_DATA_KEY_PRESENT_BIT;
-                }
-
-                if *journal_key_present {
-                    settings |= KEY_ACCESS_SETTINGS_JOURNAL_KEY_PRESENT_BIT;
+                    settings |= DATA_KEY_PRESENT_BIT;
                 }
 
                 if *maintenance_key_present {
-                    settings |= KEY_ACCESS_SETTINGS_MAINT_KEY_PRESENT_BIT;
+                    settings |= MAINTENANCE_KEY_PRESENT_BIT;
                 }
             }
         }
