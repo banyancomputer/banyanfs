@@ -1,17 +1,17 @@
 use serde::{Deserialize, Serialize};
 
-use crate::api::client::ApiRequest;
+use crate::api::client::{ApiClient, ApiError, ApiRequest};
 
 #[derive(Debug, Deserialize, Serialize)]
 #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct ApiDrive {
-    id: String,
-    name: String,
+    pub(crate) id: String,
+    pub(crate) name: String,
 
     #[serde(rename = "type")]
-    kind: String,
+    pub(crate) kind: String,
 
-    storage_class: String,
+    pub(crate) storage_class: String,
 }
 
 pub struct GetAllDrivesRequest;
@@ -27,5 +27,12 @@ impl ApiRequest for GetAllDrivesRequest {
 
     fn payload(&self) -> Option<Self::Payload> {
         None
+    }
+}
+
+pub async fn get_all_drives(client: &ApiClient) -> Result<Vec<ApiDrive>, ApiError> {
+    match client.platform_request(GetAllDrivesRequest).await? {
+        Some(drives) => Ok(drives),
+        None => Err(ApiError::UnexpectedResponse("response should not be empty")),
     }
 }

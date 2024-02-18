@@ -20,6 +20,7 @@ use time::OffsetDateTime;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::codec::crypto::SigningKey;
+use crate::prelude::BanyanFsError;
 
 pub(crate) const PLATFORM_AUDIENCE: &str = "banyan-platform";
 
@@ -57,9 +58,9 @@ impl ApiClient {
         })
     }
 
-    pub(crate) async fn send_platform_request<R: ApiRequest>(
+    pub(crate) async fn platform_request<R: ApiRequest>(
         &self,
-        request: &R,
+        request: R,
     ) -> Result<Option<R::Response>, ApiError> {
         if request.requires_auth() && self.auth.is_none() {
             return Err(ApiError::RequiresAuth);
@@ -86,9 +87,17 @@ impl ApiClient {
                 return Ok(None);
             }
 
-            response.json::<R::Response>().await?;
+            match response.json::<R::Response>().await {
+                Ok(resp) => Ok(Some(resp)),
+                Err(err) => {
+                    tracing::error!("failed to parse response API: {}", err);
 
-            todo!();
+                    return Err(ApiError::Message {
+                        status_code: status.as_u16(),
+                        message: format!("failed to parse response: {err}"),
+                    });
+                }
+            }
         } else {
             let raw_error = response.json::<RawApiError>().await?;
 
@@ -245,6 +254,15 @@ pub enum ApiError {
 
     #[error("API request requires authentication but client is not authenticated")]
     RequiresAuth,
+
+    #[error("unexpected API response: {0}")]
+    UnexpectedResponse(&'static str),
+}
+
+impl From<ApiError> for BanyanFsError {
+    fn from(error: ApiError) -> Self {
+        Self::from(error.to_string())
+    }
 }
 
 #[derive(Debug, Deserialize)]

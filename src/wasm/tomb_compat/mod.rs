@@ -1,3 +1,4 @@
+pub(crate) mod models;
 mod wasm_bucket;
 mod wasm_bucket_key;
 mod wasm_bucket_metadata;
@@ -97,12 +98,13 @@ impl TombCompat {
     // untested so far
     #[wasm_bindgen(js_name = listBuckets)]
     pub async fn list_buckets(&mut self) -> BanyanFsResult<JsValue> {
-        let all_buckets = self
-            .client
-            .send_platform_request(&crate::api::platform::GetAllDrivesRequest)
-            .await?;
+        let all_drives = crate::api::platform::get_all_drives(&self.client).await?;
 
-        let bucket_list = serde_wasm_bindgen::to_value(&all_buckets)?;
+        let tomb_buckets = all_drives
+            .into_iter()
+            .map(models::TombBucket::from)
+            .collect::<Vec<_>>();
+        let bucket_list = serde_wasm_bindgen::to_value(&tomb_buckets)?;
 
         Ok(bucket_list)
     }

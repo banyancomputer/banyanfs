@@ -8,6 +8,7 @@ pub(crate) mod tomb_compat;
 #[cfg(feature = "tomb-compat")]
 pub use tomb_compat::*;
 
+use crate::error::BanyanFsError;
 use crate::version::full_version;
 
 use tracing::info;
@@ -65,5 +66,17 @@ fn configured_log_level() -> Level {
         Some("warn") => Level::WARN,
         Some("error") => Level::ERROR,
         _ => default_level,
+    }
+}
+
+impl From<BanyanFsError> for JsValue {
+    fn from(error: BanyanFsError) -> Self {
+        JsValue::from_str(&error.to_string())
+    }
+}
+
+impl From<serde_wasm_bindgen::Error> for BanyanFsError {
+    fn from(error: serde_wasm_bindgen::Error) -> Self {
+        Self::from(error.to_string())
     }
 }

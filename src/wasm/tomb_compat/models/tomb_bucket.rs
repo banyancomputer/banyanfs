@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::api::platform::ApiDrive;
+
 #[derive(Debug, Deserialize, Serialize)]
 #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct TombBucket {
