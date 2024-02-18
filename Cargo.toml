@@ -9,7 +9,7 @@ edition = "2021"
 
 [features]
 default = ["banyan-api", "pem", "strict", "tomb-compat"]
-banyan-api = ["reqwest", "serde", "serde_json"]
+banyan-api = ["reqwest", "serde", "serde_json", "url"]
 pem = ["p384/pem", "p384/pkcs8"]
 strict = []
 tomb-compat = ["banyan-api"]
@@ -49,6 +49,7 @@ reqwest = { version = "^0.11", default-features = false, optional = true, featur
 ] }
 serde = { version = "^1", features = ["derive"], optional = true }
 serde_json = { version = "^1", optional = true }
+url = { version = "^2", optional = true }
 
 [[bin]]
 name = "banyanfs"

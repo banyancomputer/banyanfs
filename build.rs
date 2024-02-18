@@ -1,3 +1,5 @@
+#![allow(clippy::vec_init_then_push)]
+
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 

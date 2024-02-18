@@ -1,3 +1,3 @@
-mod api_client;
+mod client;
 
-pub use api_client::ApiClient;
+pub use client::ApiClient;

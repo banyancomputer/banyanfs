@@ -4,7 +4,7 @@ use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
 
-use crate::codec::crypto::{AccessKey, Nonce, VerifyingKey};
+use crate::codec::crypto::{AccessKey, VerifyingKey};
 use crate::codec::header::KeyAccessSettings;
 use crate::codec::{ActorId, ActorSettings, AsyncEncodable};
 

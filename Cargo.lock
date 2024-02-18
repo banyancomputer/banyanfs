@@ -269,6 +269,7 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "tracing-wasm",
+ "url",
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",

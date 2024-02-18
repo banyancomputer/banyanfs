@@ -20,7 +20,6 @@ pub use wasm_snapshot::WasmSnapshot;
 
 use std::sync::Arc;
 
-use reqwest::Url;
 use tracing::debug;
 use wasm_bindgen::prelude::*;
 use zeroize::Zeroize;
@@ -137,14 +136,9 @@ impl TombCompat {
         };
         private_key_pem.zeroize();
 
-        let api_endpoint = match reqwest::Url::parse(&api_endpoint) {
-            Ok(url) => url,
-            Err(e) => panic!("Failed to parse api endpoint: {}", e),
-        };
+        let client = ApiClient::authenticated(&api_endpoint, &account_id, key.clone()).unwrap();
 
-        let client = ApiClient::with_auth(api_endpoint, account_id, key.clone());
-
-        debug!(key_id = ?key.key_id(), "initialized new TombWasm instance");
+        debug!(account_id, key_id = ?key.key_id(), "initialized new TombWasm instance");
 
         Self { client, key }
     }

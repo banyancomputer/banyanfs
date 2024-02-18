@@ -2,68 +2,74 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 
+mod auth;
+mod traits;
+
+pub(crate) use traits::{ApiRequestTrait, ApiResponseTrait};
+
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use async_std::sync::RwLock;
 use reqwest::header::{HeaderMap, HeaderValue};
-use reqwest::{Client, Method, Response, Url};
-use serde::de::DeserializeOwned;
+use reqwest::{Client as RClient, Method, Response, Url};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::codec::crypto::SigningKey;
 
-const PLATFORM_AUDIENCE: &str = "banyan-platform";
+pub(crate) const PLATFORM_AUDIENCE: &str = "banyan-platform";
 
-pub(crate) trait ApiRequestTrait {
-    type Response: ApiResponseTrait + DeserializeOwned;
-
-    fn requires_auth(&self) -> bool;
-}
-
-pub(crate) trait ApiResponseTrait: Sized {
-    fn from_response(response: Response) -> Result<Self, ApiError>;
-}
-
-#[derive(Clone)]
 pub struct ApiClient {
     auth: Option<ApiAuth>,
     base_url: Url,
-    client: Client,
+    client: RClient,
 }
 
 impl ApiClient {
+    pub fn anonymous(base_url: &str) -> Result<Self, ApiClientError> {
+        let client = default_reqwest_client()?;
+        let base_url = Url::parse(base_url)?;
+
+        Ok(Self {
+            auth: None,
+            base_url,
+            client,
+        })
+    }
+
+    pub fn authenticated(
+        base_url: &str,
+        account_id: &str,
+        key: Arc<SigningKey>,
+    ) -> Result<Self, ApiClientError> {
+        let base_url = Url::parse(base_url)?;
+        let auth = Some(ApiAuth::new(account_id, key));
+        let client = default_reqwest_client()?;
+
+        Ok(Self {
+            auth,
+            base_url,
+            client,
+        })
+    }
+
     pub(crate) async fn call<T>(&self, request: &T) -> Result<T::Response, ApiError>
     where
         T: ApiRequestTrait,
     {
         todo!()
     }
-
-    pub fn new(base_url: Url) -> Self {
-        Self {
-            auth: None,
-            base_url,
-            client: default_reqwest_client(),
-        }
-    }
-
-    pub fn with_auth(base_url: Url, account_id: String, key: Arc<SigningKey>) -> Self {
-        let auth = Some(ApiAuth::new(account_id, key));
-
-        Self {
-            auth,
-            base_url,
-            client: default_reqwest_client(),
-        }
-    }
 }
 
-fn default_reqwest_client() -> Client {
+fn default_reqwest_client() -> Result<RClient, ApiClientError> {
     let mut default_headers = HeaderMap::new();
     default_headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+
+    let client = RClient::builder()
+        .default_headers(default_headers)
+        .build()?;
 
     todo!()
 }
@@ -78,7 +84,12 @@ pub(crate) struct ApiAuth {
 }
 
 impl ApiAuth {
-    pub fn new(account_id: String, key: Arc<SigningKey>) -> Self {
+    async fn core_token(&self) -> Result<String, CoreTokenError> {
+        self.core_token.get(&self.account_id, &self.key).await
+    }
+
+    pub fn new(account_id: impl Into<String>, key: Arc<SigningKey>) -> Self {
+        let account_id = account_id.into();
         let core_token = CoreToken::default();
         let storage_tokens = StorageTokens::default();
 
@@ -89,10 +100,6 @@ impl ApiAuth {
             core_token,
             storage_tokens,
         }
-    }
-
-    async fn core_token(&self) -> Result<String, CoreTokenError> {
-        self.core_token.get(&self.account_id, &self.key).await
     }
 
     async fn storage_token(&self, host: &str) -> Result<String, StorageTokenError> {
@@ -189,7 +196,16 @@ pub struct ApiError {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct RawApiError {
+pub(crate) struct RawApiError {
     #[serde(rename = "msg")]
     pub message: String,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ApiClientError {
+    #[error("provided URL wasn't valid: {0}")]
+    BadUrl(#[from] url::ParseError),
+
+    #[error("underlying HTTP client error: {0}")]
+    Reqwest(#[from] reqwest::Error),
 }

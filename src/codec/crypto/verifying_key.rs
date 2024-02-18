@@ -3,7 +3,6 @@ use std::ops::Deref;
 use async_trait::async_trait;
 use ecdsa::signature::rand_core::CryptoRngCore;
 use elliptic_curve::pkcs8::EncodePublicKey;
-use elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 use nom::error::ErrorKind;
