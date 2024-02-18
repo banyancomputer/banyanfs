@@ -1,13 +1,31 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use async_std::sync::RwLock;
+use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::{Client, Method, Response, Url};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::codec::crypto::SigningKey;
+
+const PLATFORM_AUDIENCE: &str = "banyan-platform";
+
+pub(crate) trait ApiRequestTrait {
+    type Response: ApiResponseTrait + DeserializeOwned;
+
+    fn requires_auth(&self) -> bool;
+}
+
+pub(crate) trait ApiResponseTrait: Sized {
+    fn from_response(response: Response) -> Result<Self, ApiError>;
+}
 
 #[derive(Clone)]
 pub struct ApiClient {
@@ -17,11 +35,18 @@ pub struct ApiClient {
 }
 
 impl ApiClient {
+    pub(crate) async fn call<T>(&self, request: &T) -> Result<T::Response, ApiError>
+    where
+        T: ApiRequestTrait,
+    {
+        todo!()
+    }
+
     pub fn new(base_url: Url) -> Self {
         Self {
             auth: None,
             base_url,
-            client: Client::new(),
+            client: default_reqwest_client(),
         }
     }
 
@@ -31,9 +56,16 @@ impl ApiClient {
         Self {
             auth,
             base_url,
-            client: Client::new(),
+            client: default_reqwest_client(),
         }
     }
+}
+
+fn default_reqwest_client() -> Client {
+    let mut default_headers = HeaderMap::new();
+    default_headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+
+    todo!()
 }
 
 #[derive(Clone)]
@@ -63,7 +95,7 @@ impl ApiAuth {
         self.core_token.get(&self.account_id, &self.key).await
     }
 
-    async fn storage_token(&self, host: &String) -> Result<String, StorageTokenError> {
+    async fn storage_token(&self, host: &str) -> Result<String, StorageTokenError> {
         self.storage_tokens
             .get(host, &self.account_id, &self.key)
             .await
@@ -112,7 +144,7 @@ pub(crate) struct StorageTokens {
 impl StorageTokens {
     pub(crate) async fn get(
         &self,
-        _host: &String,
+        _host: &str,
         _id: &str,
         _key: &Arc<SigningKey>,
     ) -> Result<String, StorageTokenError> {
