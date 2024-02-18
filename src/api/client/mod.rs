@@ -5,7 +5,7 @@
 mod auth;
 mod traits;
 
-pub(crate) use traits::{ApiRequestTrait, ApiResponseTrait};
+pub(crate) use traits::{RequestTrait, ResponseTrait};
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -57,7 +57,7 @@ impl ApiClient {
 
     pub(crate) async fn call<T>(&self, request: &T) -> Result<T::Response, ApiError>
     where
-        T: ApiRequestTrait,
+        T: RequestTrait,
     {
         todo!()
     }

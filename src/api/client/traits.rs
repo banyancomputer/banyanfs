@@ -4,8 +4,12 @@
 
 use serde::de::DeserializeOwned;
 
-pub(crate) trait ApiRequestTrait {
-    type Response: ApiResponseTrait + DeserializeOwned;
+pub(crate) trait RequestTrait {
+    type Response;
 }
 
-pub(crate) trait ApiResponseTrait: Sized {}
+pub(crate) trait JsonFullRequestTrait: RequestTrait {
+    type Response: DeserializeOwned;
+}
+
+pub(crate) trait ResponseTrait: Sized {}
