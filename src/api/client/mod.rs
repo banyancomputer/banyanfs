@@ -7,7 +7,7 @@ mod error;
 mod traits;
 
 pub use error::ApiClientError;
-pub(crate) use traits::{ApiRequest, ApiResponse};
+pub(crate) use traits::ApiRequest;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;

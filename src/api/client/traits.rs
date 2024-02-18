@@ -10,7 +10,7 @@ use serde::Serialize;
 use crate::api::client::ApiError;
 
 pub(crate) trait ApiRequest {
-    type Response: ApiResponse;
+    type Response: DeserializeOwned + Sized;
     type Payload: Serialize;
 
     fn method(&self) -> Method {
@@ -26,14 +26,14 @@ pub(crate) trait ApiRequest {
     }
 }
 
-#[async_trait]
-pub(crate) trait ApiResponse: DeserializeOwned + Sized {
-    async fn from_response(response: reqwest::Response) -> Result<Self, ApiError>;
-}
+//#[async_trait]
+//pub(crate) trait ApiResponse: DeserializeOwned + Sized {
+//    async fn from_response(response: reqwest::Response) -> Result<Self, ApiError>;
+//}
 
-#[async_trait]
-impl<T: DeserializeOwned> ApiResponse for T {
-    async fn from_response(response: reqwest::Response) -> Result<Self, ApiError> {
-        response.json().await.map_err(ApiError::from)
-    }
-}
+//#[async_trait]
+//impl<T: DeserializeOwned> ApiResponse for T {
+//    async fn from_response(response: reqwest::Response) -> Result<Self, ApiError> {
+//        response.json().await.map_err(ApiError::from)
+//    }
+//}
