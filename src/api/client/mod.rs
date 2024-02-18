@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use async_std::sync::RwLock;
 use reqwest::header::{HeaderMap, HeaderValue};
-use reqwest::{Client as RClient, Method, Response, Url};
+use reqwest::{Client as RClient, Method, Response, StatusCode, Url};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -57,18 +57,46 @@ impl ApiClient {
         })
     }
 
-    pub(crate) async fn send_request<R: ApiRequest>(
+    pub(crate) async fn send_core_request<R: ApiRequest>(
         &self,
         request: &R,
     ) -> Result<Option<R::Response>, ApiError> {
-        let full_url = self.base_url.join(request.path())?;
-        let req = self.client.request(request.method(), full_url);
-
         if request.requires_auth() && self.auth.is_none() {
             return Err(ApiError::RequiresAuth);
         }
 
-        todo!()
+        let full_url = self.base_url.join(request.path())?;
+        let mut request_builder = self.client.request(request.method(), full_url);
+
+        if let Some(auth) = &self.auth {
+            let token = auth.core_token().await?;
+            request_builder = request_builder.bearer_auth(token);
+        }
+
+        let request_builder = match request.payload() {
+            Some(payload) => request_builder.json(&payload),
+            None => request_builder,
+        };
+
+        let response = request_builder.send().await?;
+        let status = response.status();
+
+        if status.is_success() {
+            if response.status() == StatusCode::NO_CONTENT {
+                return Ok(None);
+            }
+
+            response.json::<R::Response>().await?;
+
+            todo!();
+        } else {
+            let raw_error = response.json::<RawApiError>().await?;
+
+            Err(ApiError::Message {
+                status_code: status.as_u16(),
+                message: raw_error.message,
+            })
+        }
     }
 }
 
@@ -203,6 +231,12 @@ impl ExpiringToken {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
+    #[error("network client experienced issue: {0}")]
+    ClientError(#[from] reqwest::Error),
+
+    #[error("failed to generate token for core platform: {0}")]
+    CoreTokenError(#[from] CoreTokenError),
+
     #[error("API returned {status_code} response with message: {message}")]
     Message { status_code: u16, message: String },
 
