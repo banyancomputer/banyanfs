@@ -95,10 +95,10 @@ impl TombCompat {
 
     // checked, returns list of WasmBucket instances
     // note(sstelfox): change return type from js_sys::Array to JsValue should be compatible but
-    // untested so far
+    // seems to be fine so far
     #[wasm_bindgen(js_name = listBuckets)]
     pub async fn list_buckets(&mut self) -> BanyanFsResult<JsValue> {
-        let all_drives = crate::api::platform::get_all_drives(&self.client).await?;
+        let all_drives = crate::api::platform::drives::list_all(&self.client).await?;
 
         let tomb_buckets = all_drives
             .into_iter()
