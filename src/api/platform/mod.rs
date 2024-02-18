@@ -3,6 +3,7 @@ use serde::Deserialize;
 use crate::api::client::{ApiRequest, ApiResponse};
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct ApiDrive {
     id: String,
     name: String,
@@ -20,8 +21,8 @@ impl ApiRequest for GetAllDrivesRequest {
 
     type Payload = ();
 
-    fn path(&self) -> &str {
-        "/api/v1/buckets"
+    fn path(&self) -> String {
+        "/api/v1/buckets".to_string()
     }
 
     fn payload(&self) -> Option<Self::Payload> {

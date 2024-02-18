@@ -65,7 +65,7 @@ impl ApiClient {
             return Err(ApiError::RequiresAuth);
         }
 
-        let full_url = self.base_url.join(request.path())?;
+        let full_url = self.base_url.join(&request.path())?;
         let mut request_builder = self.client.request(request.method(), full_url);
 
         if let Some(auth) = &self.auth {

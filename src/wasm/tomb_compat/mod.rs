@@ -100,7 +100,9 @@ impl TombCompat {
             .send_platform_request(crate::api::platform::GetAllDrivesRequest)
             .await?;
 
-        todo!()
+        let bucket_list = serde_wasmbindgen::to_value(&all_buckets)?;
+
+        Ok(bucket_list)
     }
 
     // checked, returns list of WasmBucketKey instances

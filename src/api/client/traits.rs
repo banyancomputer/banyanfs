@@ -17,7 +17,7 @@ pub(crate) trait ApiRequest {
         Method::GET
     }
 
-    fn path(&self) -> &str;
+    fn path(&self) -> String;
 
     fn payload(&self) -> Option<Self::Payload>;
 
