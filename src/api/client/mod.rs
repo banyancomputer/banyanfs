@@ -3,9 +3,11 @@
 #![allow(unused_variables)]
 
 mod auth;
+mod error;
 mod traits;
 
-pub(crate) use traits::*;
+pub use error::ApiClientError;
+pub(crate) use traits::{ApiRequest, ApiResponse};
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -55,10 +57,17 @@ impl ApiClient {
         })
     }
 
-    pub(crate) async fn call<T>(&self, request: &T) -> Result<T::Response, ApiError>
-    where
-        T: Request,
-    {
+    pub(crate) async fn send_request<R: ApiRequest>(
+        &self,
+        request: &R,
+    ) -> Result<Option<R::Response>, ApiError> {
+        let full_url = self.base_url.join(request.path())?;
+        let req = self.client.request(request.method(), full_url);
+
+        if request.requires_auth() && self.auth.is_none() {
+            return Err(ApiError::RequiresAuth);
+        }
+
         todo!()
     }
 }
@@ -192,23 +201,20 @@ impl ExpiringToken {
     }
 }
 
-#[derive(Debug)]
-pub struct ApiError {
-    pub status: u16,
-    pub message: String,
+#[derive(Debug, thiserror::Error)]
+pub enum ApiError {
+    #[error("API returned {status_code} response with message: {message}")]
+    Message { status_code: u16, message: String },
+
+    #[error("API request requires authentication but client is not authenticated")]
+    RequiresAuth,
+
+    #[error("Request URL is invalid: {0}")]
+    InvalidUrl(#[from] url::ParseError),
 }
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct RawApiError {
+pub struct RawApiError {
     #[serde(rename = "msg")]
     pub message: String,
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum ApiClientError {
-    #[error("provided URL wasn't valid: {0}")]
-    BadUrl(#[from] url::ParseError),
-
-    #[error("underlying HTTP client error: {0}")]
-    Reqwest(#[from] reqwest::Error),
 }
