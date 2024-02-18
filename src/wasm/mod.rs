@@ -8,7 +8,9 @@ pub(crate) mod tomb_compat;
 #[cfg(feature = "tomb-compat")]
 pub use tomb_compat::*;
 
-use crate::version::version;
+use crate::version::full_version;
+
+use tracing::info;
 
 // Pending needed improvements for the WASM components:
 //
@@ -32,7 +34,10 @@ pub fn wasm_init() -> Result<(), JsValue> {
         .build();
 
     tracing_wasm::set_as_global_default_with_config(wasm_log_config);
-    tracing::info!("successfully loaded banyanfs WASM module {}", version());
+    info!(
+        "successfully loaded banyanfs WASM module {}",
+        full_version()
+    );
 
     Ok(())
 }

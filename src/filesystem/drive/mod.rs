@@ -30,6 +30,8 @@ use crate::filesystem::nodes::{Node, NodeBuilder, NodeBuilderError, NodeId};
 pub struct Drive {
     current_key: Arc<SigningKey>,
     filesystem_id: FilesystemId,
+    private: bool,
+
     // todo: need to switch to a mutex, can't have state being modified during an encoding session
     // and the cooperative multitasking model of async/await means we can't guarantee that some
     // other task isn't going to tweak it
@@ -44,7 +46,19 @@ pub(crate) struct InnerDrive {
 }
 
 impl Drive {
-    pub async fn encode_private<W: AsyncWrite + Unpin + Send>(
+    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        rng: &mut impl CryptoRngCore,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        if self.private {
+            self.encode_private(rng, writer).await
+        } else {
+            unimplemented!("public encoding not implemented")
+        }
+    }
+
+    async fn encode_private<W: AsyncWrite + Unpin + Send>(
         &self,
         rng: &mut impl CryptoRngCore,
         writer: &mut W,
@@ -115,6 +129,7 @@ impl Drive {
         let drive = Self {
             current_key,
             filesystem_id,
+            private: true,
 
             inner: Arc::new(RwLock::new(InnerDrive {
                 access,

@@ -65,17 +65,13 @@ impl ApiClient {
 
 fn default_reqwest_client() -> Result<RClient, ApiClientError> {
     let mut default_headers = HeaderMap::new();
-
     default_headers.insert("Content-Type", HeaderValue::from_static("application/json"));
 
-    let user_agent = format!("banyanfs/{}", crate::version::version());
-    default_headers.insert(
-        "User-Agent",
-        HeaderValue::from_str(&user_agent).expect("valid user agent version"),
-    );
+    let user_agent = format!("banyanfs/{}", crate::version::minimal_version());
 
     let client = RClient::builder()
         .default_headers(default_headers)
+        .user_agent(user_agent)
         .build()?;
 
     Ok(client)

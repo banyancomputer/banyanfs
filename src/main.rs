@@ -27,7 +27,7 @@ async fn main() -> BanyanFsResult<()> {
         .with_filter(env_filter);
 
     tracing_subscriber::registry().with(stderr_layer).init();
-    debug!("running banyanfs {}", version());
+    debug!("running banyanfs {}", full_version());
 
     let mut rng = banyanfs::utils::crypto_rng();
 
@@ -114,7 +114,7 @@ async fn main() -> BanyanFsResult<()> {
         }
     };
 
-    if let Err(err) = drive.encode_private(&mut rng, &mut fh).await {
+    if let Err(err) = drive.encode(&mut rng, &mut fh).await {
         tracing::error!("failed to encode drive to file: {err}");
         return Ok(());
     }

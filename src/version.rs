@@ -1,4 +1,4 @@
-pub fn version() -> String {
+pub fn full_version() -> String {
     format!(
         "build-profile={} build-timestamp={} features={} repo-version={}",
         env!("BUILD_PROFILE"),
@@ -6,4 +6,8 @@ pub fn version() -> String {
         env!("BUILD_FEATURES"),
         env!("REPO_VERSION"),
     )
+}
+
+pub fn minimal_version() -> String {
+    format!("repo-version={}", env!("REPO_VERSION"),)
 }
