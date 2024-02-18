@@ -95,6 +95,11 @@ impl TombCompat {
     // checked, returns list of WasmBucket instances
     #[wasm_bindgen(js_name = listBuckets)]
     pub async fn list_buckets(&mut self) -> BanyanFsResult<js_sys::Array> {
+        let all_buckets = self
+            .client
+            .send_platform_request(crate::api::platform::GetAllDrivesRequest)
+            .await?;
+
         todo!()
     }
 

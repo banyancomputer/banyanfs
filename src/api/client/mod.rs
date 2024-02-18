@@ -57,7 +57,7 @@ impl ApiClient {
         })
     }
 
-    pub(crate) async fn send_core_request<R: ApiRequest>(
+    pub(crate) async fn send_platform_request<R: ApiRequest>(
         &self,
         request: &R,
     ) -> Result<Option<R::Response>, ApiError> {
@@ -69,7 +69,7 @@ impl ApiClient {
         let mut request_builder = self.client.request(request.method(), full_url);
 
         if let Some(auth) = &self.auth {
-            let token = auth.core_token().await?;
+            let token = auth.platform_token().await?;
             request_builder = request_builder.bearer_auth(token);
         }
 
@@ -119,25 +119,25 @@ pub(crate) struct ApiAuth {
     account_id: String,
     key: Arc<SigningKey>,
 
-    core_token: CoreToken,
+    platform_token: PlatformToken,
     storage_tokens: StorageTokens,
 }
 
 impl ApiAuth {
-    async fn core_token(&self) -> Result<String, CoreTokenError> {
-        self.core_token.get(&self.account_id, &self.key).await
+    async fn platform_token(&self) -> Result<String, PlatformTokenError> {
+        self.platform_token.get(&self.account_id, &self.key).await
     }
 
     pub fn new(account_id: impl Into<String>, key: Arc<SigningKey>) -> Self {
         let account_id = account_id.into();
-        let core_token = CoreToken::default();
+        let platform_token = PlatformToken::default();
         let storage_tokens = StorageTokens::default();
 
         Self {
             account_id,
             key,
 
-            core_token,
+            platform_token,
             storage_tokens,
         }
     }
@@ -150,14 +150,14 @@ impl ApiAuth {
 }
 
 #[derive(Clone, Default)]
-pub(crate) struct CoreToken(Arc<RwLock<Option<ExpiringToken>>>);
+pub(crate) struct PlatformToken(Arc<RwLock<Option<ExpiringToken>>>);
 
-impl CoreToken {
+impl PlatformToken {
     pub(crate) async fn get(
         &self,
         _id: &str,
         _key: &Arc<SigningKey>,
-    ) -> Result<String, CoreTokenError> {
+    ) -> Result<String, PlatformTokenError> {
         // If we already have token and it's not expired, return it
         if let Some(token) = &*self.0.read().await {
             if !token.is_expired() {
@@ -181,7 +181,7 @@ impl CoreToken {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum CoreTokenError {}
+pub(crate) enum PlatformTokenError {}
 
 #[derive(Clone, Default)]
 pub(crate) struct StorageTokens {
@@ -234,17 +234,17 @@ pub enum ApiError {
     #[error("network client experienced issue: {0}")]
     ClientError(#[from] reqwest::Error),
 
-    #[error("failed to generate token for core platform: {0}")]
-    CoreTokenError(#[from] CoreTokenError),
+    #[error("Request URL is invalid: {0}")]
+    InvalidUrl(#[from] url::ParseError),
 
     #[error("API returned {status_code} response with message: {message}")]
     Message { status_code: u16, message: String },
 
+    #[error("failed to generate token for platform platform: {0}")]
+    PlatformTokenError(#[from] PlatformTokenError),
+
     #[error("API request requires authentication but client is not authenticated")]
     RequiresAuth,
-
-    #[error("Request URL is invalid: {0}")]
-    InvalidUrl(#[from] url::ParseError),
 }
 
 #[derive(Debug, Deserialize)]
