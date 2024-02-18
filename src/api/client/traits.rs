@@ -4,12 +4,14 @@
 
 use serde::de::DeserializeOwned;
 
-pub(crate) trait RequestTrait {
+pub(crate) trait Request {
     type Response;
 }
 
-pub(crate) trait JsonFullRequestTrait: RequestTrait {
+pub(crate) trait FullRequest: Request {
     type Response: DeserializeOwned;
 }
 
-pub(crate) trait ResponseTrait: Sized {}
+pub(crate) trait StreamingRequest: Request {}
+
+pub(crate) trait FullStreamingRequest: FullRequest {}

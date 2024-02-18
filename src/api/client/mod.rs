@@ -5,7 +5,7 @@
 mod auth;
 mod traits;
 
-pub(crate) use traits::{RequestTrait, ResponseTrait};
+pub(crate) use traits::*;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -57,7 +57,7 @@ impl ApiClient {
 
     pub(crate) async fn call<T>(&self, request: &T) -> Result<T::Response, ApiError>
     where
-        T: RequestTrait,
+        T: Request,
     {
         todo!()
     }
@@ -65,13 +65,20 @@ impl ApiClient {
 
 fn default_reqwest_client() -> Result<RClient, ApiClientError> {
     let mut default_headers = HeaderMap::new();
+
     default_headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+
+    let user_agent = format!("banyanfs/{}", crate::version::version());
+    default_headers.insert(
+        "User-Agent",
+        HeaderValue::from_str(&user_agent).expect("valid user agent version"),
+    );
 
     let client = RClient::builder()
         .default_headers(default_headers)
         .build()?;
 
-    todo!()
+    Ok(client)
 }
 
 #[derive(Clone)]
