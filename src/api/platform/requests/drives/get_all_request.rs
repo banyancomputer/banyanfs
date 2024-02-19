@@ -5,10 +5,10 @@ use crate::api::client::ApiRequest;
 use crate::api::platform::ApiDrive;
 
 #[derive(Debug, Serialize)]
-pub struct GetAllDrivesRequest;
+pub struct GetAllRequest;
 
 #[async_trait]
-impl ApiRequest for GetAllDrivesRequest {
+impl ApiRequest for GetAllRequest {
     type Response = Vec<ApiDrive>;
 
     fn path(&self) -> String {

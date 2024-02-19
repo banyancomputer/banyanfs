@@ -127,7 +127,7 @@ impl TombCompat {
             ));
         }
 
-        let id = platform::drives::create(&self.client, &name, &public_key).await?;
+        let id = platform::requests::drives::create(&self.client, &name, &public_key).await?;
 
         let wasm_bucket = WasmBucket(TombBucket::from_components(id.clone(), name, sc, dk));
         let wasm_mount = WasmMount::new(id, self.clone());
@@ -164,7 +164,7 @@ impl TombCompat {
     // seems to be fine so far
     #[wasm_bindgen(js_name = listBuckets)]
     pub async fn list_buckets(&mut self) -> BanyanFsResult<js_sys::Array> {
-        let all_drives = crate::api::platform::drives::list_all(&self.client).await?;
+        let all_drives = crate::api::platform::requests::drives::get_all(&self.client).await?;
 
         let buckets = all_drives
             .into_iter()

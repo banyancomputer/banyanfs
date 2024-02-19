@@ -1,5 +1,4 @@
-pub mod drives;
-pub(crate) mod requests;
+pub mod requests;
 
 mod api_drive;
 mod drive_kind;

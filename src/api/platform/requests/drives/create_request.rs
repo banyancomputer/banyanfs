@@ -6,7 +6,7 @@ use crate::api::client::ApiRequest;
 use crate::api::platform::{ApiDrive, DriveKind, StorageClass};
 
 #[derive(Serialize)]
-pub(crate) struct CreateDriveRequest {
+pub(crate) struct CreateRequest {
     pub(crate) name: String,
 
     #[serde(rename = "type")]
@@ -19,7 +19,7 @@ pub(crate) struct CreateDriveRequest {
 }
 
 #[async_trait]
-impl ApiRequest for CreateDriveRequest {
+impl ApiRequest for CreateRequest {
     type Response = ApiDrive;
 
     fn method(&self) -> Method {

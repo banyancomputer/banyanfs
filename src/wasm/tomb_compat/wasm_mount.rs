@@ -1,22 +1,29 @@
+use async_std::sync::{Arc, RwLock};
+
 use crate::prelude::*;
 
 use js_sys::{Array, ArrayBuffer, Uint8Array};
 use wasm_bindgen::prelude::*;
 
+use crate::filesystem::Drive;
 use crate::wasm::tomb_compat::{TombCompat, WasmBucket, WasmBucketMetadata, WasmSnapshot};
 
 #[derive(Clone)]
 #[wasm_bindgen]
 pub struct WasmMount {
-    bucket_id: String,
     wasm_client: TombCompat,
+
+    bucket_id: String,
+    drive: Option<Arc<RwLock<Drive>>>,
 }
 
 impl WasmMount {
     pub(crate) fn new(bucket_id: String, wasm_client: TombCompat) -> Self {
         Self {
-            bucket_id,
             wasm_client,
+
+            bucket_id,
+            drive: None,
         }
     }
 }
@@ -50,7 +57,7 @@ impl WasmMount {
 
     // checked
     pub fn locked(&self) -> bool {
-        todo!()
+        self.drive.is_some()
     }
 
     // checked, returns list of WasmFsMetadataEntry instances

@@ -1,5 +1,10 @@
+mod create_request;
+mod get_all_request;
+
+use create_request::CreateRequest;
+use get_all_request::GetAllRequest;
+
 use crate::api::client::{ApiClient, ApiError};
-use crate::api::platform::requests::{CreateDriveRequest, GetAllDrivesRequest};
 use crate::api::platform::{ApiDrive, DriveId, DriveKind, StorageClass};
 use crate::codec::crypto::VerifyingKey;
 
@@ -12,7 +17,7 @@ pub async fn create(
         .to_spki()
         .map_err(|e| ApiError::InvalidData(e.to_string()))?;
 
-    let request = CreateDriveRequest {
+    let request = CreateRequest {
         name: name.to_string(),
         kind: DriveKind::Interactive,
         storage_class: StorageClass::Hot,
@@ -24,10 +29,7 @@ pub async fn create(
     Ok(created_drive.id)
 }
 
-pub async fn list_all(client: &ApiClient) -> Result<Vec<ApiDrive>, ApiError> {
-    let drives = client
-        .platform_request_with_response(GetAllDrivesRequest)
-        .await?;
-
+pub async fn get_all(client: &ApiClient) -> Result<Vec<ApiDrive>, ApiError> {
+    let drives = client.platform_request_with_response(GetAllRequest).await?;
     Ok(drives)
 }
