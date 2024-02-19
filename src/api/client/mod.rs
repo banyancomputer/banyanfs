@@ -61,6 +61,10 @@ impl ApiClient {
         })
     }
 
+    pub fn base_url(&self) -> Url {
+        self.base_url.clone()
+    }
+
     pub(crate) async fn platform_request<R: ApiRequest>(
         &self,
         request: R,
@@ -86,6 +90,8 @@ impl ApiClient {
 
         let response = request_builder.send().await?;
         let status = response.status();
+
+        debug!(response_status = ?status, "platform_request_response");
 
         if status.is_success() {
             if response.status() == StatusCode::NO_CONTENT {
