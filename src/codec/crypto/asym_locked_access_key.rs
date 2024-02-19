@@ -9,12 +9,6 @@ use nom::{IResult, Needed};
 use crate::codec::crypto::{AccessKey, AuthenticationTag, KeyId, Nonce, SigningKey, VerifyingKey};
 use crate::codec::AsyncEncodable;
 
-const ACCESS_KEY_RECORD_LENGTH: usize = KeyId::size()
-    + VerifyingKey::size()
-    + Nonce::size()
-    + AccessKey::size()
-    + AuthenticationTag::size();
-
 pub struct AsymLockedAccessKey {
     pub(crate) key_id: KeyId,
     pub(crate) dh_exchange_key: VerifyingKey,
@@ -59,13 +53,21 @@ impl AsymLockedAccessKey {
             Err(nom::Err::Incomplete(Needed::Size(_))) => {
                 // If there wasn't enough data for one of the records, return how much more data we
                 // _actually_ need before we can keep going.
-                let total_size = key_count as usize * ACCESS_KEY_RECORD_LENGTH;
+                let total_size = key_count as usize * Self::size();
                 return Err(nom::Err::Incomplete(Needed::new(total_size - input.len())));
             }
             Err(err) => return Err(err),
         };
 
         Ok((input, keys))
+    }
+
+    pub const fn size() -> usize {
+        KeyId::size()
+            + VerifyingKey::size()
+            + Nonce::size()
+            + AccessKey::size()
+            + AuthenticationTag::size()
     }
 
     pub fn unlock(&self, key: &SigningKey) -> Result<AccessKey, AsymLockedAccessKeyError> {

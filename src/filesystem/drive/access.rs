@@ -4,7 +4,7 @@ use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
 
-use crate::codec::crypto::{AccessKey, VerifyingKey};
+use crate::codec::crypto::{AccessKey, PermissionKeys, VerifyingKey};
 use crate::codec::header::KeyAccessSettings;
 use crate::codec::{ActorId, ActorSettings, AsyncEncodable};
 
@@ -50,65 +50,31 @@ impl DriveAccess {
             written_bytes += locked_key.encode(writer).await?;
         }
 
-        let fs_key = AccessKey::generate(rng);
-        let data_key = AccessKey::generate(rng);
-        let maintenance_key = AccessKey::generate(rng);
-
+        let permission_keys = PermissionKeys::generate(rng);
         let mut plaintext_buffer = Vec::new();
 
         for settings in actor_settings.iter() {
-            let key_access_settings = settings.actor_settings();
-
-            // first write out the settings for the specific actor
-            written_bytes += key_access_settings.encode(&mut plaintext_buffer).await?;
-
-            // then encrypt of fill in dummy data based on access
             let verifying_key = settings.verifying_key();
 
-            if key_access_settings.has_filesystem_key() {
-                // Byte indicating the key is present
-                plaintext_buffer.write_all(&[0x01]).await?;
+            // write key ID out
+            let key_id = verifying_key.key_id();
+            key_id.encode(&mut plaintext_buffer).await?;
 
-                let protected_key = fs_key.lock_for(rng, &verifying_key).map_err(|_| {
-                    StdError::new(StdErrorKind::Other, "unable to escrow filesystem key")
-                })?;
+            // write pubkey out
+            verifying_key.encode(&mut plaintext_buffer).await?;
 
-                tracing::info!(written_bytes, "before");
-                written_bytes += protected_key.encode(&mut plaintext_buffer).await?;
-                tracing::info!(written_bytes, "after");
-            } else {
-                plaintext_buffer.write_all(&[0x00]).await?;
-                todo!("need to write out empty keys");
-            }
+            // the actor's current clock
+            let actor_clock = settings.vector_clock();
+            actor_clock.encode(&mut plaintext_buffer).await?;
 
-            if key_access_settings.has_data_key() {
-                // Byte indicating the key is present
-                plaintext_buffer.write_all(&[0x01]).await?;
+            // the actor key settings
+            let actor_settings = settings.actor_settings();
+            actor_settings.encode(&mut plaintext_buffer).await?;
 
-                let protected_key = data_key.lock_for(rng, &verifying_key).map_err(|_| {
-                    StdError::new(StdErrorKind::Other, "unable to escrow filesystem key")
-                })?;
-
-                written_bytes += protected_key.encode(&mut plaintext_buffer).await?;
-            } else {
-                plaintext_buffer.write_all(&[0x00]).await?;
-                todo!("need to write out empty keys");
-            }
-
-            if key_access_settings.has_maintenance_key() {
-                // Byte indicating the key is present
-                plaintext_buffer.write_all(&[0x01]).await?;
-
-                let protected_key =
-                    maintenance_key.lock_for(rng, &verifying_key).map_err(|_| {
-                        StdError::new(StdErrorKind::Other, "unable to escrow filesystem key")
-                    })?;
-
-                written_bytes += protected_key.encode(&mut plaintext_buffer).await?;
-            } else {
-                plaintext_buffer.write_all(&[0x00]).await?;
-                todo!("need to write out empty keys");
-            }
+            // and the protection keys based on their access
+            permission_keys
+                .encode_for(rng, &mut plaintext_buffer, &actor_settings, &verifying_key)
+                .await?;
         }
 
         let (nonce, tag) = meta_key

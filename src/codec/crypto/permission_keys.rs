@@ -1,9 +1,10 @@
-use async_trait::async_trait;
+use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 use nom::number::streaming::le_u8;
 
-use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, SigningKey};
+use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, SigningKey, VerifyingKey};
+use crate::codec::header::KeyAccessSettings;
 use crate::codec::AsyncEncodable;
 
 const KEY_PRESENT_BIT: u8 = 0b0000_0001;
@@ -15,6 +16,53 @@ pub struct PermissionKeys {
 }
 
 impl PermissionKeys {
+    pub async fn encode_for<W: AsyncWrite + Unpin + Send>(
+        &self,
+        rng: &mut impl CryptoRngCore,
+        writer: &mut W,
+        key_access: &KeyAccessSettings,
+        verifying_key: &VerifyingKey,
+    ) -> std::io::Result<usize> {
+        let mut written_bytes = 0;
+
+        written_bytes += maybe_encode_key(
+            rng,
+            writer,
+            verifying_key,
+            key_access.has_filesystem_key(),
+            self.filesystem.as_ref(),
+        )
+        .await?;
+
+        written_bytes += maybe_encode_key(
+            rng,
+            writer,
+            verifying_key,
+            key_access.has_data_key(),
+            self.data.as_ref(),
+        )
+        .await?;
+
+        written_bytes += maybe_encode_key(
+            rng,
+            writer,
+            verifying_key,
+            key_access.has_maintenance_key(),
+            self.maintenance.as_ref(),
+        )
+        .await?;
+
+        Ok(written_bytes)
+    }
+
+    pub fn generate(rng: &mut impl CryptoRngCore) -> Self {
+        Self {
+            filesystem: Some(AccessKey::generate(rng)),
+            data: Some(AccessKey::generate(rng)),
+            maintenance: Some(AccessKey::generate(rng)),
+        }
+    }
+
     pub fn parse<'a>(input: &'a [u8], unlock_key: &SigningKey) -> nom::IResult<&'a [u8], Self> {
         let (input, filesystem) = maybe_parse_key(input)?;
         let filesystem = filesystem
@@ -50,11 +98,37 @@ impl PermissionKeys {
     }
 }
 
-#[async_trait]
-impl AsyncEncodable for PermissionKeys {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        todo!("PermissionKeys::encode")
+pub async fn maybe_encode_key<W: AsyncWrite + Unpin + Send>(
+    rng: &mut impl CryptoRngCore,
+    writer: &mut W,
+    verifying_key: &VerifyingKey,
+    allowed: bool,
+    access_key: Option<&AccessKey>,
+) -> std::io::Result<usize> {
+    let mut written_bytes = 0;
+
+    match access_key {
+        Some(key) if allowed => {
+            writer.write_all(&[0x01]).await?;
+            written_bytes += 1;
+
+            let protected_key = key.lock_for(rng, verifying_key).map_err(|_| {
+                std::io::Error::new(std::io::ErrorKind::Other, "failed to lock permission key")
+            })?;
+            written_bytes += protected_key.encode(writer).await?;
+        }
+        _ => {
+            writer.write_all(&[0x00]).await?;
+            written_bytes += 1;
+
+            // Write out empty bytes matching the normal size of a key
+            let empty_key = [0u8; AccessKey::size()];
+            writer.write_all(&empty_key).await?;
+            written_bytes += empty_key.len();
+        }
     }
+
+    Ok(written_bytes)
 }
 
 fn maybe_parse_key(input: &[u8]) -> nom::IResult<&[u8], Option<AsymLockedAccessKey>> {
@@ -65,7 +139,7 @@ fn maybe_parse_key(input: &[u8]) -> nom::IResult<&[u8], Option<AsymLockedAccessK
         Ok((input, Some(key)))
     } else {
         // still need to advance the input
-        let (input, _blank) = take(AccessKey::size())(input)?;
+        let (input, _blank) = take(AsymLockedAccessKey::size())(input)?;
         Ok((input, None))
     }
 }
