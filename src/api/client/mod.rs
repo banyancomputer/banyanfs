@@ -92,10 +92,10 @@ impl ApiClient {
                 Err(err) => {
                     tracing::error!("failed to parse response API: {}", err);
 
-                    return Err(ApiError::Message {
+                    Err(ApiError::Message {
                         status_code: status.as_u16(),
                         message: format!("failed to parse response: {err}"),
-                    });
+                    })
                 }
             }
         } else {
@@ -105,6 +105,16 @@ impl ApiClient {
                 status_code: status.as_u16(),
                 message: raw_error.message,
             })
+        }
+    }
+
+    pub(crate) async fn platform_request_with_response<R: ApiRequest>(
+        &self,
+        request: R,
+    ) -> Result<R::Response, ApiError> {
+        match self.platform_request(request).await? {
+            Some(resp) => Ok(resp),
+            None => Err(ApiError::UnexpectedResponse("response should not be empty")),
         }
     }
 }
@@ -175,13 +185,15 @@ impl PlatformToken {
         }
 
         // todo: generate a proper JWT here
-        let new_expiration = OffsetDateTime::now_utc() + time::Duration::minutes(5);
-        let new_token = String::new();
+        //let new_expiration = OffsetDateTime::now_utc() + time::Duration::minutes(5);
+        //let new_token = String::new();
 
-        let mut writable = self.0.write().await;
-        *writable = Some(ExpiringToken::new(new_token.clone(), new_expiration));
+        todo!();
 
-        Ok(new_token)
+        //let mut writable = self.0.write().await;
+        //*writable = Some(ExpiringToken::new(new_token.clone(), new_expiration));
+
+        //Ok(new_token)
     }
 
     pub(crate) fn new() -> Self {
@@ -190,7 +202,7 @@ impl PlatformToken {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum PlatformTokenError {}
+pub enum PlatformTokenError {}
 
 #[derive(Clone, Default)]
 pub(crate) struct StorageTokens {
@@ -242,6 +254,9 @@ impl ExpiringToken {
 pub enum ApiError {
     #[error("network client experienced issue: {0}")]
     ClientError(#[from] reqwest::Error),
+
+    #[error("the data provided the API client wasn't valid: {0}")]
+    InvalidData(String),
 
     #[error("Request URL is invalid: {0}")]
     InvalidUrl(#[from] url::ParseError),

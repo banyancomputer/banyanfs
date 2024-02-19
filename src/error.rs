@@ -1,8 +1,5 @@
 use std::fmt::{self, Display, Formatter};
 
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
-
 #[derive(Debug)]
 pub struct BanyanFsError(String);
 

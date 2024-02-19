@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::api::platform::drives::ApiDrive;
-use crate::api::platform::{DriveKind, StorageClass};
+use crate::api::platform::{ApiDrive, DriveKind, StorageClass};
 
 #[derive(Debug, Deserialize, Serialize)]
 #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]

@@ -24,9 +24,6 @@ pub mod prelude {
     pub use crate::filesystem::*;
     pub use crate::version::*;
 
-    pub use crate::codec::crypto::SigningKey;
-    pub use crate::codec::header::FormatHeader;
-
-    pub use crate::codec::AsyncEncodable;
-    pub use crate::codec::FilesystemId;
+    pub use crate::codec::crypto::{SigningKey, VerifyingKey};
+    pub use crate::codec::{AsyncEncodable, FilesystemId};
 }

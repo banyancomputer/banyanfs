@@ -19,6 +19,7 @@ pub use wasm_node_metadata::WasmNodeMetadata;
 pub use wasm_shared_file::WasmSharedFile;
 pub use wasm_snapshot::WasmSnapshot;
 
+use std::str::FromStr;
 use std::sync::Arc;
 
 use tracing::debug;
@@ -29,6 +30,9 @@ use zeroize::Zeroize;
 // have a namespace conflict with anything exported in the prelude, as nothing in this or any
 // submodules should be exported in the prelude.
 use crate::prelude::*;
+
+use crate::api::platform;
+use crate::api::platform::{DriveKind, StorageClass};
 
 #[wasm_bindgen(js_name = TombWasm)]
 pub struct TombCompat {
@@ -57,15 +61,61 @@ impl TombCompat {
     //}
 
     // new transfered and checked,
+    //
+    // note(sstelfox): we already have the private key, and that gives us the public key. I'm
+    // checking this to make sure there isn't any errors but we can drop these parameters. It never
+    // makes sense to create something other than a hot bucket so that can be removed, and in
+    // practice we only support interactive buckets. I'm going to validate them here but this API
+    // should be changed.
     #[wasm_bindgen(js_name = createBucketAndMount)]
     pub async fn create_bucket_and_mount(
         &mut self,
-        _name: String,
-        _storage_class: String,
-        _bucket_type: String,
-        _private_pem: String,
-        _public_pem: String,
+        name: String,
+        storage_class: String,
+        bucket_type: String,
+        mut private_key_pem: String,
+        public_key_pem: String,
     ) -> BanyanFsResult<WasmBucketMount> {
+        let private_key = match SigningKey::from_pkcs8_pem(&private_key_pem) {
+            Ok(key) => Arc::new(key),
+            Err(e) => panic!("Failed to create signing key: {}", e),
+        };
+        private_key_pem.zeroize();
+
+        let public_key = match VerifyingKey::from_spki(&public_key_pem) {
+            Ok(key) => key,
+            Err(e) => panic!("Failed to create public key: {}", e),
+        };
+
+        if self.key.key_id() != private_key.key_id() {
+            return Err(BanyanFsError::from(
+                "provided private key doesn't match initialized webkey",
+            ));
+        }
+
+        if private_key.key_id() != public_key.key_id() {
+            return Err(BanyanFsError::from(
+                "provided public key doesn't match provided private key",
+            ));
+        }
+
+        // Just confirm their valid and the kind we support
+        let sc = StorageClass::from_str(&storage_class)?;
+        if sc != StorageClass::Hot {
+            return Err(BanyanFsError::from(
+                "only hot storage is allowed to be created",
+            ));
+        }
+
+        let dk = DriveKind::from_str(&bucket_type)?;
+        if dk != DriveKind::Interactive {
+            return Err(BanyanFsError::from(
+                "only interactive buckets are allowed to be created",
+            ));
+        }
+
+        let id = platform::drives::create(&self.client, &name, &public_key).await?;
+
         todo!()
     }
 
