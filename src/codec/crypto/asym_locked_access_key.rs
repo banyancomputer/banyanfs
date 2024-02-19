@@ -68,7 +68,7 @@ impl AsymLockedAccessKey {
         Ok((input, keys))
     }
 
-    pub fn unlock(&self, key: &SigningKey) -> Result<AccessKey, AsymLockedAccessKeyError<&[u8]>> {
+    pub fn unlock(&self, key: &SigningKey) -> Result<AccessKey, AsymLockedAccessKeyError> {
         if self.key_id != key.verifying_key().key_id() {
             return Err(AsymLockedAccessKeyError::IncorrectKey);
         }
@@ -112,18 +112,18 @@ impl AsyncEncodable for AsymLockedAccessKey {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum AsymLockedAccessKeyError<I> {
+pub enum AsymLockedAccessKeyError {
     #[error("crypto error: {0}")]
     CryptoFailure(String),
 
     #[error("decoding data failed: {0}")]
-    FormatFailure(#[from] nom::Err<nom::error::Error<I>>),
+    FormatFailure(String),
 
     #[error("validation failed most likely due to the use of an incorrect key")]
     IncorrectKey,
 }
 
-impl<I> From<chacha20poly1305::Error> for AsymLockedAccessKeyError<I> {
+impl From<chacha20poly1305::Error> for AsymLockedAccessKeyError {
     fn from(err: chacha20poly1305::Error) -> Self {
         AsymLockedAccessKeyError::CryptoFailure(err.to_string())
     }

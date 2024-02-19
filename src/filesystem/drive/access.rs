@@ -112,7 +112,7 @@ impl DriveAccess {
         }
 
         let (nonce, tag) = meta_key
-            .encrypt_buffer(rng, &mut plaintext_buffer)
+            .encrypt_buffer(rng, &[], &mut plaintext_buffer)
             .map_err(|_| {
                 StdError::new(StdErrorKind::Other, "unable to encrypt escrowed key buffer")
             })?;
@@ -159,8 +159,9 @@ impl DriveAccess {
             KeyAccessSettings::Private {
                 filesystem_key_present,
                 data_key_present,
+                maintenance_key_present,
                 ..
-            } => filesystem_key_present && data_key_present,
+            } => filesystem_key_present && data_key_present && maintenance_key_present,
         }
     }
 

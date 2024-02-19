@@ -22,11 +22,12 @@ impl AccessKey {
         &self,
         nonce: Nonce,
         buffer: &mut [u8],
+        authenticated_data: &[u8],
         tag: AuthenticationTag,
     ) -> Result<(), AccessKeyError<&[u8]>> {
         XChaCha20Poly1305::new(self.chacha_key()).decrypt_in_place_detached(
             &nonce,
-            &[],
+            authenticated_data,
             buffer,
             &tag,
         )?;
@@ -37,12 +38,13 @@ impl AccessKey {
     pub fn encrypt_buffer(
         &self,
         rng: &mut impl CryptoRngCore,
+        authenticated_data: &[u8],
         buffer: &mut [u8],
     ) -> Result<(Nonce, AuthenticationTag), AccessKeyError<&[u8]>> {
         let cipher = XChaCha20Poly1305::new(self.chacha_key());
 
         let nonce = Nonce::generate(rng);
-        let raw_tag = cipher.encrypt_in_place_detached(&nonce, &[], buffer)?;
+        let raw_tag = cipher.encrypt_in_place_detached(&nonce, authenticated_data, buffer)?;
 
         let mut tag_bytes = [0u8; AuthenticationTag::size()];
         tag_bytes.copy_from_slice(raw_tag.as_bytes());
@@ -64,7 +66,7 @@ impl AccessKey {
 
         let mut payload = self.0;
         let (nonce, tag) = shared_secret
-            .encrypt_buffer(rng, &mut payload)
+            .encrypt_buffer(rng, &[], &mut payload)
             .map_err(|_| AccessKeyError::CryptoFailure)?;
 
         let key_id = verifying_key.key_id();
@@ -86,7 +88,7 @@ impl AccessKey {
         let mut payload = self.0;
 
         let (nonce, tag) = encryption_key
-            .encrypt_buffer(rng, &mut payload)
+            .encrypt_buffer(rng, &[], &mut payload)
             .map_err(|_| AccessKeyError::CryptoFailure)?;
 
         Ok(SymLockedAccessKey {
