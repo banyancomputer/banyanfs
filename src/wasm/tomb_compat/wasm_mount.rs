@@ -3,10 +3,23 @@ use crate::prelude::*;
 use js_sys::{Array, ArrayBuffer, Uint8Array};
 use wasm_bindgen::prelude::*;
 
-use crate::wasm::tomb_compat::{WasmBucket, WasmBucketMetadata, WasmSnapshot};
+use crate::wasm::tomb_compat::{TombCompat, WasmBucket, WasmBucketMetadata, WasmSnapshot};
 
+#[derive(Clone)]
 #[wasm_bindgen]
-pub struct WasmMount;
+pub struct WasmMount {
+    bucket_id: String,
+    wasm_client: TombCompat,
+}
+
+impl WasmMount {
+    pub(crate) fn new(bucket_id: String, wasm_client: TombCompat) -> Self {
+        Self {
+            bucket_id,
+            wasm_client,
+        }
+    }
+}
 
 #[wasm_bindgen]
 impl WasmMount {

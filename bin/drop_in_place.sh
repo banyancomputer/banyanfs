@@ -21,4 +21,4 @@ cp -f pkg/* ${INLINED_TOMB_DIR}/
 
 # Probably don't want to keep this around permanently, but its convenient for now
 (cd ${BANYAN_CORE_ROOT_DIR} && rm -f dist/assets/*)
-(cd ${BANYAN_CORE_FRONTEND_DIR} && yarn build)
+(cd ${BANYAN_CORE_FRONTEND_DIR} && yarn build --mode development)

@@ -1,29 +1,28 @@
 use wasm_bindgen::prelude::*;
 
+use crate::wasm::tomb_compat::models::TombBucket;
+
 #[wasm_bindgen]
-pub struct WasmBucket;
+#[derive(Clone)]
+pub struct WasmBucket(pub(crate) TombBucket);
 
 #[wasm_bindgen]
 impl WasmBucket {
-    //#[wasm_bindgen(getter)]
     #[wasm_bindgen(js_name = bucketType)]
     pub fn bucket_type(&self) -> String {
-        todo!()
+        self.0.kind()
     }
 
-    //#[wasm_bindgen(getter)]
     pub fn id(&self) -> String {
-        todo!()
+        self.0.id()
     }
 
-    //#[wasm_bindgen(getter)]
     pub fn name(&self) -> String {
-        todo!()
+        self.0.name()
     }
 
-    //#[wasm_bindgen(getter = storageClass)]
     #[wasm_bindgen(js_name = storageClass)]
     pub fn storage_class(&self) -> String {
-        todo!()
+        self.0.storage_class()
     }
 }

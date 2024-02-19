@@ -34,6 +34,9 @@ use crate::prelude::*;
 use crate::api::platform;
 use crate::api::platform::{DriveKind, StorageClass};
 
+use models::TombBucket;
+
+#[derive(Clone)]
 #[wasm_bindgen(js_name = TombWasm)]
 pub struct TombCompat {
     client: ApiClient,
@@ -78,14 +81,13 @@ impl TombCompat {
     ) -> BanyanFsResult<WasmBucketMount> {
         let private_key = match SigningKey::from_pkcs8_pem(&private_key_pem) {
             Ok(key) => Arc::new(key),
-            Err(e) => return Err(BanyanFsError::from("failed to load private key")),
+            Err(err) => {
+                return Err(BanyanFsError::from(format!(
+                    "failed to load private key: {err}"
+                )))
+            }
         };
         private_key_pem.zeroize();
-
-        let public_key = match VerifyingKey::from_spki(&public_key_pem) {
-            Ok(key) => key,
-            Err(e) => return Err(BanyanFsError::from("failed to load public key")),
-        };
 
         if self.key.key_id() != private_key.key_id() {
             tracing::warn!(init_key_id = ?self.key.key_id(), private_key_id = ?private_key.key_id(), "provided private key doesn't match initialized webkey");
@@ -94,6 +96,15 @@ impl TombCompat {
             //));
         }
 
+        let public_key = match VerifyingKey::from_spki(&public_key_pem) {
+            Ok(key) => key,
+            Err(err) => {
+                return Err(BanyanFsError::from(format!(
+                    "failed to load public key: {err}"
+                )))
+            }
+        };
+
         if private_key.key_id() != public_key.key_id() {
             tracing::warn!(private_key_id = ?private_key.key_id(), public_key_id = ?public_key.key_id(), "provided public key doesn't match provided private key");
             //return Err(BanyanFsError::from(
@@ -101,7 +112,7 @@ impl TombCompat {
             //));
         }
 
-        // Just confirm their valid and the kind we support
+        // Just confirm they're valid and the kind we support
         let sc = StorageClass::from_str(&storage_class)?;
         if sc != StorageClass::Hot {
             return Err(BanyanFsError::from(
@@ -116,9 +127,12 @@ impl TombCompat {
             ));
         }
 
-        let _id = platform::drives::create(&self.client, &name, &public_key).await?;
+        let id = platform::drives::create(&self.client, &name, &public_key).await?;
 
-        Ok(WasmBucketMount)
+        let wasm_bucket = WasmBucket(TombBucket::from_components(id.clone(), name, sc, dk));
+        let wasm_mount = WasmMount::new(id, self.clone());
+
+        Ok(WasmBucketMount::new(wasm_bucket, wasm_mount))
     }
 
     // checked, returns WasmBucketKey instance
@@ -149,16 +163,16 @@ impl TombCompat {
     // note(sstelfox): change return type from js_sys::Array to JsValue should be compatible but
     // seems to be fine so far
     #[wasm_bindgen(js_name = listBuckets)]
-    pub async fn list_buckets(&mut self) -> BanyanFsResult<JsValue> {
+    pub async fn list_buckets(&mut self) -> BanyanFsResult<js_sys::Array> {
         let all_drives = crate::api::platform::drives::list_all(&self.client).await?;
 
-        let tomb_buckets = all_drives
+        let buckets = all_drives
             .into_iter()
             .map(models::TombBucket::from)
-            .collect::<Vec<_>>();
-        let bucket_list = serde_wasm_bindgen::to_value(&tomb_buckets)?;
+            .map(|tb| JsValue::from(WasmBucket(tb)))
+            .collect::<js_sys::Array>();
 
-        Ok(bucket_list)
+        Ok(buckets)
     }
 
     // checked, returns list of WasmBucketKey instances
@@ -180,10 +194,27 @@ impl TombCompat {
     #[wasm_bindgen(js_name = mount)]
     pub async fn mount(
         &mut self,
-        _bucket_id: String,
-        _key_pem: String,
+        bucket_id: String,
+        mut private_key_pem: String,
     ) -> BanyanFsResult<WasmMount> {
-        todo!()
+        let private_key = match SigningKey::from_pkcs8_pem(&private_key_pem) {
+            Ok(key) => Arc::new(key),
+            Err(err) => {
+                return Err(BanyanFsError::from(format!(
+                    "failed to load private key: {err}"
+                )))
+            }
+        };
+        private_key_pem.zeroize();
+
+        if self.key.key_id() != private_key.key_id() {
+            tracing::warn!(init_key_id = ?self.key.key_id(), private_key_id = ?private_key.key_id(), "provided private key doesn't match initialized webkey");
+            //return Err(BanyanFsError::from(
+            //    "provided private key doesn't match initialized webkey",
+            //));
+        }
+
+        Ok(WasmMount::new(bucket_id, self.clone()))
     }
 
     // checked, returns itself, DANGER: needs to be fallible
@@ -197,11 +228,12 @@ impl TombCompat {
             Ok(key) => Arc::new(key),
             Err(e) => panic!("Failed to create signing key: {}", e),
         };
+
         private_key_pem.zeroize();
-
-        let client = ApiClient::authenticated(&api_endpoint, &account_id, key.clone()).unwrap();
-
         debug!(account_id, key_id = ?key.key_id(), "initialized new TombWasm instance");
+
+        let client = ApiClient::authenticated(&api_endpoint, &account_id, key.clone())
+            .expect("need return type fixed");
 
         Self { client, key }
     }

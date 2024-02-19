@@ -3,23 +3,25 @@ use wasm_bindgen::prelude::*;
 use crate::wasm::tomb_compat::{WasmBucket, WasmMount};
 
 #[wasm_bindgen]
-pub struct WasmBucketMount;
+pub struct WasmBucketMount {
+    bucket: WasmBucket,
+    mount: WasmMount,
+}
 
 #[wasm_bindgen]
 impl WasmBucketMount {
     #[wasm_bindgen(getter)]
     pub fn bucket(&self) -> WasmBucket {
-        todo!()
+        self.bucket.clone()
     }
 
     #[wasm_bindgen(getter)]
     pub fn mount(&self) -> WasmMount {
-        todo!()
+        self.mount.clone()
     }
 
-    //#[wasm_bindgen(constructor)]
     #[wasm_bindgen]
-    pub fn new(_bucket: WasmBucket, _mount: WasmMount) -> Self {
-        todo!()
+    pub fn new(bucket: WasmBucket, mount: WasmMount) -> Self {
+        Self { bucket, mount }
     }
 }

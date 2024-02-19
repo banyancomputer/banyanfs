@@ -27,10 +27,11 @@ use crate::prelude::BanyanFsError;
 
 pub(crate) const PLATFORM_AUDIENCE: &str = "banyan-platform";
 
+#[derive(Clone)]
 pub struct ApiClient {
     auth: Option<ApiAuth>,
     base_url: Url,
-    client: RClient,
+    client: reqwest::Client,
 }
 
 impl ApiClient {
