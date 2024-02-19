@@ -85,7 +85,8 @@ impl WasmMount {
         let readable_drive = unlocked_drive.read().await;
         let drive_root = readable_drive.root().await;
 
-        let _entries = drive_root.ls(&path_segments).await;
+        let path_references = path_segments.iter().map(|x| x.as_str()).collect::<Vec<_>>();
+        let _entries = drive_root.ls(&path_references).await;
 
         todo!()
     }
