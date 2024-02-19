@@ -9,12 +9,12 @@ pub(crate) struct CurrentUsage;
 
 #[derive(Deserialize)]
 pub struct CurrentUsageResponse {
-    pub(crate) data_size: i64,
-    pub(crate) meta_size: i64,
+    data_size: usize,
+    meta_size: usize,
 }
 
 impl CurrentUsageResponse {
-    pub fn total_size(&self) -> i64 {
+    pub fn total_usage(&self) -> usize {
         self.data_size + self.meta_size
     }
 }

@@ -147,16 +147,18 @@ impl TombCompat {
         todo!()
     }
 
-    // checked, returns Account::usage response
+    // checked, returns Account::usage response, changed return type from u64 to usize
     #[wasm_bindgen(js_name = getUsage)]
-    pub async fn get_usage(&mut self) -> BanyanFsResult<u64> {
-        todo!()
+    pub async fn get_usage(&mut self) -> BanyanFsResult<usize> {
+        let current_usage = platform::requests::account::current_usage(&self.client).await?;
+        Ok(current_usage.total_usage())
     }
 
-    // checked, returns Account::usage_limit response
+    // checked, returns Account::usage_limit response, changed return type from u64 to usize
     #[wasm_bindgen(js_name = getUsageLimit)]
-    pub async fn get_usage_limit(&mut self) -> BanyanFsResult<u64> {
-        todo!()
+    pub async fn get_usage_limit(&mut self) -> BanyanFsResult<usize> {
+        let current_usage = platform::requests::account::current_usage_limit(&self.client).await?;
+        Ok(current_usage.soft_hot_storage_limit())
     }
 
     // checked, returns list of WasmBucket instances

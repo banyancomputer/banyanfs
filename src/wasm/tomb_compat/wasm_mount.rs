@@ -52,12 +52,13 @@ impl WasmMount {
     // checked
     #[wasm_bindgen(js_name = hasSnapshot)]
     pub fn has_snapshot(&self) -> bool {
-        todo!()
+        tracing::warn!("not reporting snapshots as it hasn't been implemented yet");
+        false
     }
 
     // checked
     pub fn locked(&self) -> bool {
-        self.drive.is_some()
+        self.drive.is_none()
     }
 
     // checked, returns list of WasmFsMetadataEntry instances
