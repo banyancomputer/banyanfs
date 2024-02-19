@@ -19,6 +19,7 @@ use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::{Client as RClient, Method, Response, StatusCode, Url};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
+use tracing::{debug, Level};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::codec::crypto::SigningKey;
@@ -64,6 +65,8 @@ impl ApiClient {
         &self,
         request: R,
     ) -> Result<Option<R::Response>, ApiError> {
+        debug!(method = %request.method(), url = %request.path(), "platform_request");
+
         if request.requires_auth() && self.auth.is_none() {
             return Err(ApiError::RequiresAuth);
         }
@@ -186,6 +189,8 @@ impl PlatformToken {
             }
         }
 
+        tracing::debug!("generating new platform token");
+
         let verifying_key = key.verifying_key();
         let fingerprint = crate::api::client::utils::api_fingerprint_key(&verifying_key);
         let expiration = OffsetDateTime::now_utc() + std::time::Duration::from_secs(300);
@@ -205,8 +210,6 @@ impl PlatformToken {
         let mut jwt_key = ES384KeyPair::from_bytes(&key.to_bytes())?;
         jwt_key = jwt_key.with_key_id(&fingerprint);
         let token = jwt_key.sign(claims)?;
-
-        tracing::debug!(?token, "generated platform token");
 
         let mut writable = self.0.write().await;
         *writable = Some(ExpiringToken::new(token.clone(), expiration));
