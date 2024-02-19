@@ -1,8 +1,10 @@
 mod create_request;
 mod get_all_request;
+mod get_request;
 
 use create_request::CreateRequest;
 use get_all_request::GetAllRequest;
+use get_request::GetRequest;
 
 use crate::api::client::{ApiClient, ApiError};
 use crate::api::platform::{ApiDrive, DriveId, DriveKind, StorageClass};
@@ -27,6 +29,12 @@ pub async fn create(
     let created_drive = client.platform_request_with_response(request).await?;
 
     Ok(created_drive.id)
+}
+
+pub async fn get(client: &ApiClient, drive_id: String) -> Result<ApiDrive, ApiError> {
+    let request = GetRequest::new(drive_id);
+    let drive = client.platform_request_with_response(request).await?;
+    Ok(drive)
 }
 
 pub async fn get_all(client: &ApiClient) -> Result<Vec<ApiDrive>, ApiError> {

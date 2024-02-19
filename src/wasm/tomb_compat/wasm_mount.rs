@@ -26,6 +26,23 @@ impl WasmMount {
             drive: None,
         }
     }
+
+    pub(crate) async fn pull(bucket: WasmBucket, wasm_client: TombCompat) -> BanyanFsResult<Self> {
+        let drive = None;
+
+        // pull data, attempt to unlock it, fail with warning but still return an instance here
+        platform::requests::metadata::pull_current(wasm_client.client(), bucket.id().as_str())
+            .await?;
+
+        let mount = Self {
+            wasm_client,
+
+            bucket,
+            drive,
+        };
+
+        Ok(mount)
+    }
 }
 
 #[wasm_bindgen]

@@ -5,7 +5,7 @@ use crate::api::client::ApiRequest;
 use crate::api::platform::ApiDrive;
 
 #[derive(Debug, Serialize)]
-pub struct GetAllRequest;
+pub(crate) struct GetAllRequest;
 
 #[async_trait]
 impl ApiRequest for GetAllRequest {

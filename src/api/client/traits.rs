@@ -9,6 +9,9 @@ use serde::Serialize;
 
 use crate::api::client::ApiError;
 
+// todo(sstelfox): The request itself shouldn't require the Serialize implmentation, I should
+// support building a custom payload (and maybe an entire reqwest::Body for stream support). This
+// is a lazy hack for speed right now
 #[async_trait]
 pub(crate) trait ApiRequest: Serialize {
     type Response: DeserializeOwned + Sized;
@@ -27,15 +30,3 @@ pub(crate) trait ApiRequest: Serialize {
         true
     }
 }
-
-//#[async_trait]
-//pub(crate) trait ApiResponse: DeserializeOwned + Sized {
-//    async fn from_response(response: reqwest::Response) -> Result<Self, ApiError>;
-//}
-
-//#[async_trait]
-//impl<T: DeserializeOwned> ApiResponse for T {
-//    async fn from_response(response: reqwest::Response) -> Result<Self, ApiError> {
-//        response.json().await.map_err(ApiError::from)
-//    }
-//}

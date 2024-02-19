@@ -43,6 +43,12 @@ pub struct TombCompat {
     key: Arc<SigningKey>,
 }
 
+impl TombCompat {
+    pub(crate) fn client(&self) -> &ApiClient {
+        &self.client
+    }
+}
+
 #[wasm_bindgen(js_class = TombWasm)]
 impl TombCompat {
     // new transfered and checked
@@ -216,11 +222,14 @@ impl TombCompat {
             //));
         }
 
+        let drive = platform::requests::drives::get(&self.client, bucket_id.to_string()).await?;
+        let wasm_bucket = WasmBucket(TombBucket::from(drive));
+
         // todo: need to retrieve the bucket, retrieve the metadata, and attempt to unlock the
         // drive
+        let mount = WasmMount::pull(wasm_bucket.clone(), self.clone()).await?;
 
-        //Ok(WasmMount::new(bucket_id, self.clone()))
-        todo!()
+        Ok(mount)
     }
 
     // checked, returns itself, DANGER: needs to be fallible
