@@ -39,8 +39,9 @@ impl SigningKey {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, SigningKeyError> {
         let private_key =
-            SecretKey::from_sec1_der(bytes).map_err(|_| SigningKeyError::InvalidDerBytes)?;
+            SecretKey::from_bytes(bytes.into()).map_err(|_| SigningKeyError::InvalidBytes)?;
         let inner = ecdsa::SigningKey::from(private_key);
+
         Ok(Self { inner })
     }
 
@@ -75,10 +76,9 @@ impl SigningKey {
 
     pub fn to_bytes(&self) -> [u8; KEY_SIZE] {
         let private_key: SecretKey = self.inner.clone().into();
-        let private_key_bytes = private_key
-            .to_sec1_der()
-            .expect("valid key to be valid format");
+        let private_key_bytes = private_key.to_bytes();
 
+        debug_assert!(private_key_bytes.len() == KEY_SIZE);
         let mut private_key = [0u8; KEY_SIZE];
         private_key.copy_from_slice(&private_key_bytes);
 
@@ -135,8 +135,8 @@ impl RandomizedDigestSigner<sha2::Sha384, Signature> for SigningKey {
 // just 'CryptoError'.
 #[derive(Debug, thiserror::Error)]
 pub enum SigningKeyError {
-    #[error("failed to load DER encoded signing key")]
-    InvalidDerBytes,
+    #[error("failed to load encoded signing key")]
+    InvalidBytes,
 
     #[error("failed to decode private key from SEC1 encoded PEM")]
     PemDecodingFailed,

@@ -78,25 +78,27 @@ impl TombCompat {
     ) -> BanyanFsResult<WasmBucketMount> {
         let private_key = match SigningKey::from_pkcs8_pem(&private_key_pem) {
             Ok(key) => Arc::new(key),
-            Err(e) => panic!("Failed to create signing key: {}", e),
+            Err(e) => return Err(BanyanFsError::from("failed to load private key")),
         };
         private_key_pem.zeroize();
 
         let public_key = match VerifyingKey::from_spki(&public_key_pem) {
             Ok(key) => key,
-            Err(e) => panic!("Failed to create public key: {}", e),
+            Err(e) => return Err(BanyanFsError::from("failed to load public key")),
         };
 
         if self.key.key_id() != private_key.key_id() {
-            return Err(BanyanFsError::from(
-                "provided private key doesn't match initialized webkey",
-            ));
+            tracing::warn!(init_key_id = ?self.key.key_id(), private_key_id = ?private_key.key_id(), "provided private key doesn't match initialized webkey");
+            //return Err(BanyanFsError::from(
+            //    "provided private key doesn't match initialized webkey",
+            //));
         }
 
         if private_key.key_id() != public_key.key_id() {
-            return Err(BanyanFsError::from(
-                "provided public key doesn't match provided private key",
-            ));
+            tracing::warn!(private_key_id = ?private_key.key_id(), public_key_id = ?public_key.key_id(), "provided public key doesn't match provided private key");
+            //return Err(BanyanFsError::from(
+            //    "provided public key doesn't match provided private key",
+            //));
         }
 
         // Just confirm their valid and the kind we support

@@ -35,6 +35,8 @@ async fn main() -> BanyanFsResult<()> {
     let verifying_key = signing_key.verifying_key();
     let actor_id = verifying_key.actor_id();
 
+    let _ = signing_key.to_bytes();
+
     let drive = Drive::initialize_private(&mut rng, signing_key.clone()).unwrap();
     if !drive.has_read_access(actor_id).await {
         error!("key doesn't have access to the drive");
