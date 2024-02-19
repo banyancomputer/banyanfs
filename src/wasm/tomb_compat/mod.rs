@@ -130,7 +130,7 @@ impl TombCompat {
         let id = platform::requests::drives::create(&self.client, &name, &public_key).await?;
 
         let wasm_bucket = WasmBucket(TombBucket::from_components(id.clone(), name, sc, dk));
-        let wasm_mount = WasmMount::new(id, self.clone());
+        let wasm_mount = WasmMount::new(wasm_bucket.clone(), self.clone());
 
         Ok(WasmBucketMount::new(wasm_bucket, wasm_mount))
     }
@@ -216,7 +216,11 @@ impl TombCompat {
             //));
         }
 
-        Ok(WasmMount::new(bucket_id, self.clone()))
+        // todo: need to retrieve the bucket, retrieve the metadata, and attempt to unlock the
+        // drive
+
+        //Ok(WasmMount::new(bucket_id, self.clone()))
+        todo!()
     }
 
     // checked, returns itself, DANGER: needs to be fallible

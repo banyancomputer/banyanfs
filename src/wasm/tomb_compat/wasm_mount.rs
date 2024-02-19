@@ -13,16 +13,16 @@ use crate::wasm::tomb_compat::{TombCompat, WasmBucket, WasmBucketMetadata, WasmS
 pub struct WasmMount {
     wasm_client: TombCompat,
 
-    bucket_id: String,
+    bucket: WasmBucket,
     drive: Option<Arc<RwLock<Drive>>>,
 }
 
 impl WasmMount {
-    pub(crate) fn new(bucket_id: String, wasm_client: TombCompat) -> Self {
+    pub(crate) fn new(bucket: WasmBucket, wasm_client: TombCompat) -> Self {
         Self {
             wasm_client,
 
-            bucket_id,
+            bucket,
             drive: None,
         }
     }
@@ -62,7 +62,31 @@ impl WasmMount {
     }
 
     // checked, returns list of WasmFsMetadataEntry instances
-    pub async fn ls(&mut self, _path_segments: js_sys::Array) -> BanyanFsResult<js_sys::Array> {
+    pub async fn ls(&mut self, path_segments: js_sys::Array) -> BanyanFsResult<js_sys::Array> {
+        let path_segments = path_segments
+            .iter()
+            .map(|x| {
+                x.as_string().ok_or(BanyanFsError::from(
+                    "invalid path segment provided to wasm_mount#ls",
+                ))
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| BanyanFsError::from(e.to_string()))?;
+
+        let unlocked_drive = match &self.drive {
+            Some(drive) => drive,
+            None => {
+                return Err(BanyanFsError::from(
+                    "unable to list directory contents of a locked bucket",
+                ));
+            }
+        };
+
+        let readable_drive = unlocked_drive.read().await;
+        let drive_root = readable_drive.root().await;
+
+        let _entries = drive_root.ls(&path_segments).await;
+
         todo!()
     }
 
