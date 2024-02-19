@@ -83,9 +83,8 @@ impl ApiClient {
             request_builder = request_builder.bearer_auth(token);
         }
 
-        let request_builder = match request.payload() {
-            Some(payload) => request_builder.json(&payload),
-            None => request_builder,
+        if request.is_payload() {
+            request_builder = request_builder.json(&request)
         };
 
         let response = request_builder.send().await?;

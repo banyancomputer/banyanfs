@@ -10,9 +10,8 @@ use serde::Serialize;
 use crate::api::client::ApiError;
 
 #[async_trait]
-pub(crate) trait ApiRequest {
+pub(crate) trait ApiRequest: Serialize {
     type Response: DeserializeOwned + Sized;
-    type Payload: Serialize;
 
     fn method(&self) -> Method {
         Method::GET
@@ -20,8 +19,8 @@ pub(crate) trait ApiRequest {
 
     fn path(&self) -> String;
 
-    fn payload(&self) -> Option<Self::Payload> {
-        None
+    fn is_payload(&self) -> bool {
+        false
     }
 
     fn requires_auth(&self) -> bool {

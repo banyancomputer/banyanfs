@@ -116,9 +116,9 @@ impl TombCompat {
             ));
         }
 
-        let id = platform::drives::create(&self.client, &name, &public_key).await?;
+        let _id = platform::drives::create(&self.client, &name, &public_key).await?;
 
-        todo!()
+        Ok(WasmBucketMount)
     }
 
     // checked, returns WasmBucketKey instance

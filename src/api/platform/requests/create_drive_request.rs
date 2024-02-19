@@ -14,13 +14,12 @@ pub(crate) struct CreateDriveRequest {
 
     pub(crate) storage_class: StorageClass,
 
-    #[serde(rename = "initial_bucket_key")]
+    #[serde(rename = "initial_bucket_key_pem")]
     pub(crate) owner_key: String,
 }
 
 #[async_trait]
 impl ApiRequest for CreateDriveRequest {
-    type Payload = ();
     type Response = ApiDrive;
 
     fn method(&self) -> Method {
@@ -29,5 +28,9 @@ impl ApiRequest for CreateDriveRequest {
 
     fn path(&self) -> String {
         "/api/v1/buckets".to_string()
+    }
+
+    fn is_payload(&self) -> bool {
+        true
     }
 }
