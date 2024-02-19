@@ -67,16 +67,48 @@ impl DriveAccess {
 
             if key_access_settings.has_filesystem_key() {
                 // Byte indicating the key is present
-                writer.write_all(&[0x01]).await?;
-                written_bytes += 1;
+                plaintext_buffer.write_all(&[0x01]).await?;
 
                 let protected_key = fs_key.lock_for(rng, &verifying_key).map_err(|_| {
                     StdError::new(StdErrorKind::Other, "unable to escrow filesystem key")
                 })?;
-                written_bytes += protected_key.encode(writer).await?;
+
+                tracing::info!(written_bytes, "before");
+                written_bytes += protected_key.encode(&mut plaintext_buffer).await?;
+                tracing::info!(written_bytes, "after");
+            } else {
+                plaintext_buffer.write_all(&[0x00]).await?;
+                todo!("need to write out empty keys");
             }
 
-            // todo encrypt the keys
+            if key_access_settings.has_data_key() {
+                // Byte indicating the key is present
+                plaintext_buffer.write_all(&[0x01]).await?;
+
+                let protected_key = data_key.lock_for(rng, &verifying_key).map_err(|_| {
+                    StdError::new(StdErrorKind::Other, "unable to escrow filesystem key")
+                })?;
+
+                written_bytes += protected_key.encode(&mut plaintext_buffer).await?;
+            } else {
+                plaintext_buffer.write_all(&[0x00]).await?;
+                todo!("need to write out empty keys");
+            }
+
+            if key_access_settings.has_maintenance_key() {
+                // Byte indicating the key is present
+                plaintext_buffer.write_all(&[0x01]).await?;
+
+                let protected_key =
+                    maintenance_key.lock_for(rng, &verifying_key).map_err(|_| {
+                        StdError::new(StdErrorKind::Other, "unable to escrow filesystem key")
+                    })?;
+
+                written_bytes += protected_key.encode(&mut plaintext_buffer).await?;
+            } else {
+                plaintext_buffer.write_all(&[0x00]).await?;
+                todo!("need to write out empty keys");
+            }
         }
 
         let (nonce, tag) = meta_key

@@ -1,6 +1,9 @@
-use futures::{AsyncRead, AsyncReadExt};
+use std::ops::Deref;
 
-use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, SigningKey};
+use futures::{AsyncRead, AsyncReadExt};
+use nom::bytes::streaming::take;
+
+use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, AuthenticationTag, Nonce, SigningKey};
 use crate::codec::header::{IdentityHeader, KeyCount, PublicSettings};
 use crate::codec::meta::{ContentContext, FilesystemId};
 use crate::codec::parser::{
@@ -122,25 +125,25 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 let key_id = self.signing_key.key_id();
                 tracing::debug!(bytes_read, signing_key_id = ?key_id, ?locked_keys, "drive_loader::escrowed_access_keys");
 
-                let mut key_access_key = None;
+                let mut meta_key = None;
                 let relevant_keys = locked_keys.iter().filter(|k| k.key_id == key_id);
 
                 for potential_key in relevant_keys {
                     tracing::debug!(matching_key = ?potential_key, "drive_loader::escrowed_access_keys");
 
                     if let Ok(key) = potential_key.unlock(self.signing_key) {
-                        key_access_key = Some(key);
+                        meta_key = Some(key);
                         break;
                     }
                 }
 
-                let key_access_key = match key_access_key {
-                    Some(ak) => ak,
+                let meta_key = match meta_key {
+                    Some(mk) => mk,
                     None => return Err(DriveLoaderError::AccessUnavailable),
                 };
-                tracing::debug!(unlocked_key = ?key_access_key, "drive_loader::escrowed_access_keys");
+                tracing::debug!(unlocked_key = ?meta_key, "drive_loader::escrowed_access_keys");
 
-                self.state = DriveLoaderState::EncryptedPermissions(*key_count, key_access_key);
+                self.state = DriveLoaderState::EncryptedPermissions(*key_count, meta_key);
 
                 Ok(ProgressType::Advance(bytes_read))
             }
