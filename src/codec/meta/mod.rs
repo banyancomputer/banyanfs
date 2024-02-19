@@ -4,6 +4,7 @@ mod cid;
 mod content_context;
 mod filesystem_id;
 mod journal_checkpoint;
+mod meta_key;
 mod permanent_id;
 mod vector_clock;
 
@@ -12,6 +13,7 @@ pub use actor_settings::ActorSettings;
 pub use cid::Cid;
 pub use filesystem_id::FilesystemId;
 pub use journal_checkpoint::JournalCheckpoint;
+pub use meta_key::MetaKey;
 pub use permanent_id::PermanentId;
 pub use vector_clock::VectorClock;
 

@@ -5,8 +5,9 @@ use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::codec::crypto::{AccessKey, PermissionKeys, VerifyingKey};
-use crate::codec::header::KeyAccessSettings;
+use crate::codec::header::{KeyAccessSettings, KeyCount};
 use crate::codec::{ActorId, ActorSettings, AsyncEncodable};
+use crate::filesystem::drive::MetaKey;
 
 #[derive(Debug, Default)]
 pub struct DriveAccess {
@@ -20,26 +21,30 @@ impl DriveAccess {
             .map(|settings| settings.actor_settings())
     }
 
+    pub async fn parse_escrow<W: AsyncWrite + Unpin + Send>(
+        &mut self,
+        _reader: &mut W,
+        _key_count: u8,
+        _meta_key: &AccessKey,
+    ) -> std::io::Result<usize> {
+        todo!()
+    }
+
     pub async fn encode_escrow<W: AsyncWrite + Unpin + Send>(
         &self,
         rng: &mut impl CryptoRngCore,
         writer: &mut W,
+        meta_key: &MetaKey,
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
 
-        let key_count = self.actor_settings.len();
-        if key_count == 0 || key_count > u8::MAX as usize {
-            return Err(StdError::new(StdErrorKind::Other, "invalid number of keys"));
-        }
-        let key_count = key_count as u8;
+        let key_count = KeyCount::try_from(self.actor_settings.len())?;
+        written_bytes += key_count.encode(writer).await?;
 
-        writer.write_all(&[key_count]).await?;
-        written_bytes += 1;
-
+        // todo(sstelfox): begin cut section, this part needs to be separated out into its own decoder/encoder
         let mut actor_settings = self.actor_settings.values().collect::<Vec<_>>();
         actor_settings.sort_by_key(|settings| settings.verifying_key().actor_id());
 
-        let meta_key = AccessKey::generate(rng);
         for settings in actor_settings.iter() {
             let verifying_key = settings.verifying_key();
 
@@ -49,6 +54,7 @@ impl DriveAccess {
 
             written_bytes += locked_key.encode(writer).await?;
         }
+        // end cut section
 
         let permission_keys = PermissionKeys::generate(rng);
         let mut plaintext_buffer = Vec::new();

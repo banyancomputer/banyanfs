@@ -71,8 +71,13 @@ impl Drive {
         // Don't support ECC yet
         written_bytes += PublicSettings::new(false, true).encode(writer).await?;
 
+        let meta_key = MetaKey::generate(rng);
+
         let inner_read = self.inner.read().await;
-        written_bytes += inner_read.access.encode_escrow(rng, writer).await?;
+        written_bytes += inner_read
+            .access
+            .encode_escrow(rng, writer, &meta_key)
+            .await?;
 
         Ok(written_bytes)
     }

@@ -1,11 +1,8 @@
-use std::ops::Deref;
-
 use futures::{AsyncRead, AsyncReadExt};
-use nom::bytes::streaming::take;
 
-use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, AuthenticationTag, Nonce, SigningKey};
+use crate::codec::crypto::{AccessKey, SigningKey};
 use crate::codec::header::{IdentityHeader, KeyCount, PublicSettings};
-use crate::codec::meta::{ContentContext, FilesystemId};
+use crate::codec::meta::{ContentContext, FilesystemId, MetaKey};
 use crate::codec::parser::{
     ParserStateMachine, ProgressType, SegmentStreamer, StateError, StateResult,
 };
@@ -119,23 +116,9 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 Ok(ProgressType::Advance(bytes_read))
             }
             DriveLoaderState::EscrowedAccessKeys(key_count) => {
-                let (input, locked_keys) = AsymLockedAccessKey::parse_many(buffer, **key_count)?;
+                let (input, meta_key) =
+                    MetaKey::parse_access(buffer, **key_count, self.signing_key)?;
                 let bytes_read = buffer.len() - input.len();
-
-                let key_id = self.signing_key.key_id();
-                tracing::debug!(bytes_read, signing_key_id = ?key_id, ?locked_keys, "drive_loader::escrowed_access_keys");
-
-                let mut meta_key = None;
-                let relevant_keys = locked_keys.iter().filter(|k| k.key_id == key_id);
-
-                for potential_key in relevant_keys {
-                    tracing::debug!(matching_key = ?potential_key, "drive_loader::escrowed_access_keys");
-
-                    if let Ok(key) = potential_key.unlock(self.signing_key) {
-                        meta_key = Some(key);
-                        break;
-                    }
-                }
 
                 let meta_key = match meta_key {
                     Some(mk) => mk,
@@ -211,7 +194,7 @@ enum DriveLoaderState {
     KeyCount,
 
     EscrowedAccessKeys(KeyCount),
-    EncryptedPermissions(KeyCount, AccessKey),
+    EncryptedPermissions(KeyCount, MetaKey),
     PrivateContentPayload(ContentContext),
 
     PublicPermissions(KeyCount),
