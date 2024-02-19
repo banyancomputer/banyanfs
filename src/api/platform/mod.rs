@@ -1,7 +1,14 @@
+mod drive_kind;
+mod storage_class;
+
+pub use drive_kind::DriveKind;
+pub use storage_class::StorageClass;
+
 pub mod drives {
     use serde::{Deserialize, Serialize};
 
     use crate::api::client::{ApiClient, ApiError, ApiRequest};
+    use crate::api::platform::{DriveKind, StorageClass};
 
     #[derive(Debug, Deserialize, Serialize)]
     #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
@@ -10,9 +17,9 @@ pub mod drives {
         pub(crate) name: String,
 
         #[serde(rename = "type")]
-        pub(crate) kind: String,
+        pub(crate) kind: DriveKind,
 
-        pub(crate) storage_class: String,
+        pub(crate) storage_class: StorageClass,
     }
 
     pub struct GetAllDrivesRequest;
