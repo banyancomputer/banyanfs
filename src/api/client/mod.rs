@@ -195,8 +195,6 @@ impl PlatformToken {
             }
         }
 
-        tracing::debug!("generating new platform token");
-
         let verifying_key = key.verifying_key();
         let fingerprint = crate::api::client::utils::api_fingerprint_key(&verifying_key);
         let expiration = OffsetDateTime::now_utc() + std::time::Duration::from_secs(300);
@@ -206,7 +204,7 @@ impl PlatformToken {
         // JWTs ourselves.
         let current_ts = Clock::now_since_epoch();
         let mut claims = Claims::create(Duration::from_secs(330))
-            .with_audiences(HashSet::from_strings(&[PLATFORM_AUDIENCE]))
+            .with_audience(PLATFORM_AUDIENCE)
             .with_subject(id)
             .invalid_before(current_ts - Duration::from_secs(30));
 
@@ -216,6 +214,8 @@ impl PlatformToken {
         let mut jwt_key = ES384KeyPair::from_bytes(&key.to_bytes())?;
         jwt_key = jwt_key.with_key_id(&fingerprint);
         let token = jwt_key.sign(claims)?;
+
+        tracing::debug!("generated new platform token");
 
         let mut writable = self.0.write().await;
         *writable = Some(ExpiringToken::new(token.clone(), expiration));
