@@ -10,9 +10,9 @@ use crate::codec::{AsyncEncodable, ParserResult};
 const KEY_PRESENT_BIT: u8 = 0b0000_0001;
 
 pub struct PermissionKeys {
-    filesystem: Option<AccessKey>,
-    data: Option<AccessKey>,
-    maintenance: Option<AccessKey>,
+    pub(crate) filesystem: Option<AccessKey>,
+    pub(crate) data: Option<AccessKey>,
+    pub(crate) maintenance: Option<AccessKey>,
 }
 
 impl PermissionKeys {
@@ -101,7 +101,13 @@ impl PermissionKeys {
     }
 
     pub const fn size() -> usize {
-        AsymLockedAccessKey::size() * 3
+        3 + AsymLockedAccessKey::size() * 3
+    }
+}
+
+impl std::fmt::Debug for PermissionKeys {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PermissionKeys(fs:{}, d:{}, mt:{})", self.filesystem.is_some(), self.data.is_some(), self.maintenance.is_some())
     }
 }
 

@@ -5,7 +5,9 @@ use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 
-use crate::codec::crypto::{AuthenticationTag, KeyId, Nonce, PermissionKeys, VerifyingKey};
+use crate::codec::crypto::{
+    AuthenticationTag, KeyId, Nonce, PermissionKeys, SigningKey, VerifyingKey,
+};
 use crate::codec::header::KeyAccessSettings;
 use crate::codec::meta::VectorClock;
 use crate::codec::{ActorId, ActorSettings, AsyncEncodable, ParserResult};
@@ -14,6 +16,7 @@ use crate::filesystem::drive::MetaKey;
 #[derive(Debug, Default)]
 pub struct DriveAccess {
     actor_settings: HashMap<ActorId, ActorSettings>,
+    permission_keys: Option<PermissionKeys>,
 }
 
 impl DriveAccess {
@@ -23,20 +26,18 @@ impl DriveAccess {
             .map(|settings| settings.actor_settings())
     }
 
+    pub fn permission_keys(&self) -> Option<&PermissionKeys> {
+        self.permission_keys.as_ref()
+    }
+
     // todo: should use the filesystem ID as authenticated data with all the components
-    pub fn parse_permissions<'a>(
+    pub fn recover_permissions<'a>(
         input: &'a [u8],
         key_count: u8,
         meta_key: &MetaKey,
+        signing_key: &SigningKey,
     ) -> ParserResult<'a, Self> {
         let payload_size = key_count as usize * Self::size();
-
-        tracing::debug!(
-            nonce_size = Nonce::size(),
-            payload_size,
-            tag_size = AuthenticationTag::size(),
-            "parse_permission::needed"
-        );
 
         let (input, nonce) = Nonce::parse(input)?;
         let (input, crypt_slice) = take(payload_size)(input)?;
@@ -49,11 +50,50 @@ impl DriveAccess {
             return Err(nom::Err::Failure(err));
         }
 
-        let actor_settings = HashMap::new();
+        let mut actor_settings = HashMap::new();
+        let mut permission_keys = None;
+        let mut buffer_input = crypt_buffer.as_slice();
 
-        // todo(sstelfox): parse the data out of the encrypted buffer
+        for _ in 0..key_count {
+            let (buf_inp, key_id) = KeyId::parse(buffer_input).map_err(|_| {
+                nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
+            })?;
+            buffer_input = buf_inp;
 
-        Ok((input, Self { actor_settings }))
+            let (buf_inp, settings) = ActorSettings::parse_private(buffer_input).map_err(|_| {
+                nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
+            })?;
+            buffer_input = buf_inp;
+
+            let verifying_key = settings.verifying_key();
+            let actor_id = verifying_key.actor_id();
+            actor_settings.insert(actor_id, settings);
+
+            if key_id == verifying_key.key_id() {
+                match PermissionKeys::parse(buffer_input, signing_key) {
+                    Ok((buf_inp, keys)) => {
+                        permission_keys = Some(keys);
+                        buffer_input = buf_inp;
+                        continue;
+                    }
+                    Err(err) => tracing::error!("failed to access permission keys: {err}"),
+                };
+            }
+
+            buffer_input = buffer_input.split_at(PermissionKeys::size()).1;
+        }
+
+        if permission_keys.is_none() {
+            tracing::warn!("no matching permission keys found for provided key");
+        }
+
+        Ok((
+            input,
+            Self {
+                actor_settings,
+                permission_keys,
+            },
+        ))
     }
 
     pub async fn encode_permissions<W: AsyncWrite + Unpin + Send>(
@@ -141,6 +181,7 @@ impl DriveAccess {
     pub fn new() -> Self {
         Self {
             actor_settings: HashMap::new(),
+            permission_keys: None,
         }
     }
 

@@ -1,7 +1,5 @@
 use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::error::Error as NomError;
-use nom::error::ErrorKind;
 use nom::number::streaming::{le_u64, le_u8};
 
 use crate::codec::crypto::SymLockedAccessKey;

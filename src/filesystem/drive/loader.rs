@@ -135,13 +135,18 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 Ok(ProgressType::Advance(bytes_read))
             }
             DriveLoaderState::EncryptedPermissions(key_count, meta_key) => {
-                let (input, drive_access) =
-                    DriveAccess::parse_permissions(buffer, **key_count, meta_key)?;
+                let (input, drive_access) = DriveAccess::recover_permissions(
+                    buffer,
+                    **key_count,
+                    meta_key,
+                    self.signing_key,
+                )?;
                 let bytes_read = buffer.len() - input.len();
 
                 tracing::debug!(
                     bytes_read,
                     ?key_count,
+                    access = ?drive_access.permission_keys(),
                     "drive_loader::encrypted_permissions"
                 );
 
