@@ -3,9 +3,10 @@ use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
+use nom::bytes::streaming::take;
 
-use crate::codec::crypto::{AsymLockedAccessKey, KeyId, PermissionKeys, VerifyingKey};
-use crate::codec::header::{KeyAccessSettings, KeyCount};
+use crate::codec::crypto::{AuthenticationTag, KeyId, Nonce, PermissionKeys, VerifyingKey};
+use crate::codec::header::KeyAccessSettings;
 use crate::codec::meta::VectorClock;
 use crate::codec::{ActorId, ActorSettings, AsyncEncodable};
 use crate::filesystem::drive::MetaKey;
@@ -22,15 +23,33 @@ impl DriveAccess {
             .map(|settings| settings.actor_settings())
     }
 
-    pub fn parse_escrow<'a>(
-        _input: &'a [u8],
-        _key_count: u8,
-        _meta_key: &MetaKey,
+    // todo: should use the filesystem ID as authenticated data with all the components
+    pub fn parse_permissions<'a>(
+        input: &'a [u8],
+        key_count: u8,
+        meta_key: &MetaKey,
     ) -> nom::IResult<&'a [u8], Self> {
-        todo!()
+        let payload_size = key_count as usize * Self::size();
+
+        let (input, nonce) = Nonce::parse(input)?;
+        let (input, crypt_slice) = take(payload_size)(input)?;
+        let (input, tag) = AuthenticationTag::parse(input)?;
+
+        let mut crypt_buffer = crypt_slice.to_vec();
+        meta_key
+            .decrypt_buffer(nonce, &mut crypt_buffer, &[], tag)
+            .map_err(|_| {
+                nom::Err::Failure(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
+            })?;
+
+        let actor_settings = HashMap::new();
+
+        // todo(sstelfox): parse the data out of the encrypted buffer
+
+        Ok((input, Self { actor_settings }))
     }
 
-    pub async fn encode_escrow<W: AsyncWrite + Unpin + Send>(
+    pub async fn encode_permissions<W: AsyncWrite + Unpin + Send>(
         &self,
         rng: &mut impl CryptoRngCore,
         writer: &mut W,
@@ -38,30 +57,10 @@ impl DriveAccess {
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
 
-        let key_count = KeyCount::try_from(self.actor_settings.len())?;
-        written_bytes += key_count.encode(writer).await?;
-
-        // todo(sstelfox): begin cut section, this part needs to be separated out into its own decoder/encoder
-        let mut actor_settings = self.actor_settings.values().collect::<Vec<_>>();
-        actor_settings.sort_by_key(|settings| settings.verifying_key().actor_id());
-
-        for settings in actor_settings.iter() {
-            let verifying_key = settings.verifying_key();
-            let key_id = verifying_key.key_id();
-
-            let locked_key = meta_key
-                .lock_for(rng, &verifying_key)
-                .map_err(|_| StdError::new(StdErrorKind::Other, "unable to escrow meta key"))?;
-
-            written_bytes += key_id.encode(writer).await?;
-            written_bytes += locked_key.encode(writer).await?;
-        }
-        // end cut section
-
         let permission_keys = PermissionKeys::generate(rng);
         let mut plaintext_buffer = Vec::new();
 
-        for settings in actor_settings.iter() {
+        for settings in self.sorted_actor_settings().iter() {
             let verifying_key = settings.verifying_key();
 
             // write key ID out
@@ -90,15 +89,6 @@ impl DriveAccess {
             .map_err(|_| {
                 StdError::new(StdErrorKind::Other, "unable to encrypt escrowed key buffer")
             })?;
-
-        let entry_size = ActorSettings::size()
-            + KeyId::size()
-            + VerifyingKey::size()
-            + VectorClock::size()
-            + KeyAccessSettings::size()
-            + PermissionKeys::size();
-
-        tracing::info!(nonce_len = ?nonce.len(), tag_len = ?tag.len(), buffer_len = ?plaintext_buffer.len(), ?entry_size, "escrowed key buffer");
 
         written_bytes += nonce.encode(writer).await?;
         writer.write_all(plaintext_buffer.as_slice()).await?;
@@ -159,5 +149,20 @@ impl DriveAccess {
         let actor_settings = ActorSettings::new(key, settings);
 
         self.actor_settings.insert(actor_id, actor_settings);
+    }
+
+    pub fn sorted_actor_settings(&self) -> Vec<&ActorSettings> {
+        let mut actors: Vec<(&ActorId, &ActorSettings)> = self.actor_settings.iter().collect();
+        actors.sort_by(|(aid, _), (bid, _)| aid.key_id().cmp(&bid.key_id()));
+        actors.into_iter().map(|(_, settings)| settings).collect()
+    }
+
+    pub const fn size() -> usize {
+        ActorSettings::size()
+            + KeyId::size()
+            + VerifyingKey::size()
+            + VectorClock::size()
+            + KeyAccessSettings::size()
+            + PermissionKeys::size()
     }
 }

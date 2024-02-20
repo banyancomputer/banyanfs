@@ -72,11 +72,14 @@ impl Drive {
         written_bytes += PublicSettings::new(false, true).encode(writer).await?;
 
         let meta_key = MetaKey::generate(rng);
-
         let inner_read = self.inner.read().await;
+
+        let key_list = inner_read.access.sorted_actor_settings();
+
+        written_bytes += meta_key.encode_escrow(rng, writer, key_list).await?;
         written_bytes += inner_read
             .access
-            .encode_escrow(rng, writer, &meta_key)
+            .encode_permissions(rng, writer, &meta_key)
             .await?;
 
         Ok(written_bytes)

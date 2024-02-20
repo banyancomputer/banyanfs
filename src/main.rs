@@ -2,7 +2,7 @@ use banyanfs::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
 fn main() -> BanyanFsResult<()> {
-    Err(BanyanFsError("no main for wasm builds"))
+    Err(BanyanFsError::from("no main for wasm builds"))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -135,7 +135,8 @@ async fn main() -> BanyanFsResult<()> {
     let loaded_drive = match drive_loader.from_reader(&mut fh).await {
         Ok(d) => d,
         Err(err) => {
-            tracing::error!("failed to load drive: {err}");
+            tracing::error!("failed to load drive: {err:?}");
+            tracing::debug!(err.backtrace());
             return Ok(());
         }
     };

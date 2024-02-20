@@ -117,9 +117,9 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
             }
             DriveLoaderState::EscrowedAccessKeys(key_count) => {
                 let (input, meta_key) =
-                    MetaKey::parse_access(buffer, **key_count, self.signing_key)?;
-                let bytes_read = buffer.len() - input.len();
+                    MetaKey::parse_escrow(buffer, **key_count, self.signing_key)?;
 
+                let bytes_read = buffer.len() - input.len();
                 tracing::debug!(bytes_read, ?key_count, "drive_loader::escrowed_access_keys");
 
                 let meta_key = match meta_key {
@@ -133,8 +133,8 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 Ok(ProgressType::Advance(bytes_read))
             }
             DriveLoaderState::EncryptedPermissions(key_count, meta_key) => {
-                let (input, _permissions) =
-                    DriveAccess::parse_escrow(buffer, **key_count, meta_key)?;
+                let (input, access) =
+                    DriveAccess::parse_permissions(buffer, **key_count, meta_key)?;
                 let bytes_read = buffer.len() - input.len();
 
                 tracing::debug!(
@@ -143,7 +143,12 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                     "drive_loader::encrypted_permissions"
                 );
 
-                todo!()
+                self.state = DriveLoaderState::PrivateContent(access);
+
+                Ok(ProgressType::Advance(bytes_read))
+            }
+            DriveLoaderState::PrivateContent(access) => {
+                todo!("private content")
             }
             remaining => {
                 unimplemented!("parsing for state {remaining:?}");
@@ -207,10 +212,10 @@ enum DriveLoaderState {
 
     EscrowedAccessKeys(KeyCount),
     EncryptedPermissions(KeyCount, MetaKey),
-    PrivateContentPayload(ContentContext),
+    PrivateContent(DriveAccess),
 
     PublicPermissions(KeyCount),
-    PublicContentPayload(ContentContext),
+    PublicContent(DriveAccess),
 
     Signature,
     ErrorCorrection,
