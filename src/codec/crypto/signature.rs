@@ -1,10 +1,9 @@
 use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
-use nom::IResult;
 use p384::NistP384;
 
-use crate::codec::AsyncEncodable;
+use crate::codec::{AsyncEncodable, ParserResult};
 
 const SIGNATURE_SIZE: usize = 96;
 
@@ -18,15 +17,16 @@ impl Signature {
         Ok(Self { inner })
     }
 
-    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (remaining, signature_bytes) = take(SIGNATURE_SIZE)(input)?;
         let signature = match Signature::from_slice(signature_bytes) {
             Ok(signature) => signature,
             Err(_) => {
-                return Err(nom::Err::Failure(nom::error::Error::new(
-                    input,
-                    nom::error::ErrorKind::Verify,
-                )))
+                todo!()
+                //return Err(nom::Err::Failure(nom::error::Error::new(
+                //    input,
+                //    nom::error::ErrorKind::Verify,
+                //)))
             }
         };
 

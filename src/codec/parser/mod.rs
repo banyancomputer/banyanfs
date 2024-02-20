@@ -10,6 +10,10 @@ pub use state_error::StateError;
 
 use async_trait::async_trait;
 
+#[cfg(debug_assertions)]
+pub type ParserResult<'a, T> = nom::IResult<&'a [u8], T, nom::error::VerboseError<&'a [u8]>>;
+
+#[cfg(not(debug_assertions))]
 pub type ParserResult<'a, T> = nom::IResult<&'a [u8], T>;
 
 pub type StateResult<T, E> = Result<ProgressType<T>, E>;

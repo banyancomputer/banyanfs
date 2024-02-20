@@ -2,15 +2,14 @@ use std::ops::Deref;
 
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::number::streaming::le_u16;
-use nom::IResult;
 
-use crate::codec::AsyncEncodable;
+use crate::codec::{AsyncEncodable, ParserResult};
 
 #[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
 pub struct KeyId(u16);
 
 impl KeyId {
-    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+    pub(crate) fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, key_id) = le_u16(input)?;
         Ok((input, Self(key_id)))
     }

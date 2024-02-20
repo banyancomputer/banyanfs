@@ -135,8 +135,7 @@ async fn main() -> BanyanFsResult<()> {
     let loaded_drive = match drive_loader.from_reader(&mut fh).await {
         Ok(d) => d,
         Err(err) => {
-            tracing::error!("failed to load drive: {err:?}");
-            tracing::debug!(err.backtrace());
+            tracing::error!("failed to load drive: {err}");
             return Ok(());
         }
     };

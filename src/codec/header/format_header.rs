@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use futures::AsyncWrite;
 use nom::sequence::tuple;
 
-use crate::codec::AsyncEncodable;
+use crate::codec::{AsyncEncodable, ParserResult};
 
 use crate::codec::header::{IdentityHeader, PublicSettings};
 use crate::codec::FilesystemId;
@@ -15,7 +15,7 @@ pub struct FormatHeader {
 }
 
 impl FormatHeader {
-    pub fn parse_with_magic(input: &[u8]) -> nom::IResult<&[u8], Self> {
+    pub fn parse_with_magic(input: &[u8]) -> ParserResult<Self> {
         let mut header_parser = tuple((
             IdentityHeader::parse_with_magic,
             FilesystemId::parse,

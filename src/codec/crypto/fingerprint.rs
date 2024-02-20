@@ -3,7 +3,7 @@ use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 
 use crate::codec::crypto::{KeyId, VerifyingKey};
-use crate::codec::AsyncEncodable;
+use crate::codec::{AsyncEncodable, ParserResult};
 
 const FINGERPRINT_SIZE: usize = 32;
 
@@ -17,7 +17,7 @@ impl Fingerprint {
         KeyId::from(u16::from_le_bytes(key_id))
     }
 
-    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (remaining, id_bytes) = take(FINGERPRINT_SIZE)(input)?;
 
         let mut bytes = [0u8; FINGERPRINT_SIZE];

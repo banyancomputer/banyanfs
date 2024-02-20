@@ -4,11 +4,9 @@ use async_trait::async_trait;
 use chacha20poly1305::XNonce as ChaChaNonce;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
-use nom::combinator::all_consuming;
-use nom::IResult;
 use rand::Rng;
 
-use crate::codec::AsyncEncodable;
+use crate::codec::{AsyncEncodable, ParserResult};
 
 const NONCE_LENGTH: usize = 24;
 
@@ -25,18 +23,13 @@ impl Nonce {
         Self(rng.gen())
     }
 
-    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (remaining, slice) = take(NONCE_LENGTH)(input)?;
 
         let mut bytes = [0u8; NONCE_LENGTH];
         bytes.copy_from_slice(slice);
 
         Ok((remaining, Self(bytes)))
-    }
-
-    pub fn parse_complete(input: &[u8]) -> Result<Self, nom::Err<nom::error::Error<&[u8]>>> {
-        let (_, tag) = all_consuming(Self::parse)(input)?;
-        Ok(tag)
     }
 
     pub const fn size() -> usize {
@@ -76,9 +69,6 @@ mod tests {
 
         assert_eq!(remaining, &input[NONCE_LENGTH..]);
         assert_eq!(nonce.as_bytes(), &input[..NONCE_LENGTH]);
-
-        assert!(Nonce::parse_complete(&input).is_err());
-        assert!(Nonce::parse_complete(&input[..NONCE_LENGTH]).is_ok());
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]

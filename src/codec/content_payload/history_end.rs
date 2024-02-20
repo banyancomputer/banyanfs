@@ -1,9 +1,8 @@
 use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::number::streaming::le_u64;
-use nom::IResult;
 
-use crate::codec::{AsyncEncodable, Cid};
+use crate::codec::{AsyncEncodable, Cid, ParserResult};
 
 pub struct HistoryEnd {
     // todo: replace with vector type when we have it
@@ -12,7 +11,7 @@ pub struct HistoryEnd {
 }
 
 impl HistoryEnd {
-    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, journal_end_vector) = le_u64(input)?;
         let (input, merkle_root_cid) = Cid::parse(input)?;
 

@@ -5,11 +5,11 @@ use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::AsyncWrite;
 use nom::multi::count;
 use nom::sequence::tuple;
-use nom::{IResult, Needed};
+use nom::Needed;
 
 use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, KeyId, SigningKey};
 use crate::codec::header::KeyCount;
-use crate::codec::{ActorSettings, AsyncEncodable};
+use crate::codec::{ActorSettings, AsyncEncodable, ParserResult};
 
 pub struct MetaKey(AccessKey);
 
@@ -50,7 +50,7 @@ impl MetaKey {
         input: &'a [u8],
         key_count: u8,
         signing_key: &SigningKey,
-    ) -> IResult<&'a [u8], Option<Self>> {
+    ) -> ParserResult<'a, Option<Self>> {
         let mut asym_parser = count(
             tuple((KeyId::parse, AsymLockedAccessKey::parse)),
             key_count as usize,

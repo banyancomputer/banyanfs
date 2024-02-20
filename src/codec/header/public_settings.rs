@@ -1,10 +1,8 @@
 use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
-use nom::error::Error as NomError;
-use nom::error::ErrorKind;
 
-use crate::codec::AsyncEncodable;
+use crate::codec::{AsyncEncodable, ParserResult};
 
 const ECC_PRESENT_BIT: u8 = 0x02;
 
@@ -30,12 +28,13 @@ impl PublicSettings {
         }
     }
 
-    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, settings_byte) = take(1u8)(input)?;
         let settings_byte = settings_byte[0];
 
         if cfg!(feature = "strict") && (settings_byte & RESERVED_BITS) != 0 {
-            return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Verify)));
+            todo!()
+            //return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Verify)));
         }
 
         let ecc_present = (settings_byte & ECC_PRESENT_BIT) == ECC_PRESENT_BIT;

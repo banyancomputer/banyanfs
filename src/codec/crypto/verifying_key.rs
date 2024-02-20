@@ -5,14 +5,12 @@ use ecdsa::signature::rand_core::CryptoRngCore;
 use elliptic_curve::pkcs8::EncodePublicKey;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
-use nom::error::ErrorKind;
-use nom::{Err, IResult};
 use p384::ecdh::EphemeralSecret;
 use p384::{NistP384, PublicKey};
 
 use crate::codec::crypto::{AccessKey, Fingerprint, KeyId};
 use crate::codec::ActorId;
-use crate::codec::AsyncEncodable;
+use crate::codec::{AsyncEncodable, ParserResult};
 
 const KEY_SIZE: usize = 49;
 
@@ -67,7 +65,7 @@ impl VerifyingKey {
         self.fingerprint().key_id()
     }
 
-    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (remaining, slice) = take(KEY_SIZE)(input)?;
 
         let mut bytes = [0u8; KEY_SIZE];
@@ -77,7 +75,8 @@ impl VerifyingKey {
             Ok(key) => key,
             Err(err) => {
                 tracing::error!("failed to decode ECDSA key: {err}");
-                return Err(Err::Failure(nom::error::Error::new(input, ErrorKind::Fail)));
+                todo!()
+                //return Err(Err::Failure(nom::error::Error::new(input, ErrorKind::Fail)));
             }
         };
 

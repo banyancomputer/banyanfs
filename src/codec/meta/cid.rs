@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 
-use crate::codec::AsyncEncodable;
+use crate::codec::{AsyncEncodable, ParserResult};
 
 const CID_LENGTH: usize = 32;
 
@@ -14,7 +14,7 @@ impl Cid {
         &self.0
     }
 
-    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (remaining, cid_bytes) = take(CID_LENGTH)(input)?;
 
         let mut bytes = [0u8; CID_LENGTH];

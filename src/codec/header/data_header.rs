@@ -3,6 +3,7 @@ use nom::number::streaming::le_u8;
 use nom::sequence::tuple;
 
 use crate::codec::header::BANYAN_DATA_MAGIC;
+use crate::codec::ParserResult;
 
 const ECC_PRESENT_BIT: u8 = 0b0100_0000;
 
@@ -20,7 +21,7 @@ impl DataHeader {
         self.data_options
     }
 
-    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, (version, data_options)) = tuple((le_u8, DataOptions::parse))(input)?;
 
         let data_header = DataHeader {
@@ -31,7 +32,7 @@ impl DataHeader {
         Ok((input, data_header))
     }
 
-    pub fn parse_with_magic(input: &[u8]) -> nom::IResult<&[u8], Self> {
+    pub fn parse_with_magic(input: &[u8]) -> ParserResult<Self> {
         let (input, (_magic, data_header)) =
             tuple((banyan_data_magic_tag, DataHeader::parse))(input)?;
         Ok((input, data_header))
@@ -58,7 +59,7 @@ impl DataOptions {
         self.ecc_present
     }
 
-    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, version_byte) = take(1u8)(input)?;
         let option_byte = version_byte[0];
 
@@ -102,6 +103,6 @@ pub enum BlockSize {
     Bulk,
 }
 
-fn banyan_data_magic_tag(input: &[u8]) -> nom::IResult<&[u8], &[u8]> {
+fn banyan_data_magic_tag(input: &[u8]) -> ParserResult<&[u8]> {
     tag(BANYAN_DATA_MAGIC)(input)
 }

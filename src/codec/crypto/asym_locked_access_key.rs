@@ -2,12 +2,10 @@ use async_trait::async_trait;
 use chacha20poly1305::{AeadInPlace, KeyInit, XChaCha20Poly1305};
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
-use nom::multi::count;
 use nom::sequence::tuple;
-use nom::{IResult, Needed};
 
-use crate::codec::crypto::{AccessKey, AuthenticationTag, KeyId, Nonce, SigningKey, VerifyingKey};
-use crate::codec::AsyncEncodable;
+use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce, SigningKey, VerifyingKey};
+use crate::codec::{AsyncEncodable, ParserResult};
 
 pub struct AsymLockedAccessKey {
     pub(crate) dh_exchange_key: VerifyingKey,
@@ -17,7 +15,7 @@ pub struct AsymLockedAccessKey {
 }
 
 impl AsymLockedAccessKey {
-    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, (dh_exchange_key, nonce, raw_cipher_text, tag)) = tuple((
             VerifyingKey::parse,
             Nonce::parse,

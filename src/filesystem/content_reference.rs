@@ -3,7 +3,7 @@ use futures::{AsyncWrite, AsyncWriteExt};
 use nom::multi::count;
 use nom::number::streaming::le_u32;
 
-use crate::codec::{AsyncEncodable, Cid};
+use crate::codec::{AsyncEncodable, Cid, ParserResult};
 
 #[derive(Clone, Debug)]
 pub struct ContentReference {
@@ -13,7 +13,7 @@ pub struct ContentReference {
 }
 
 impl ContentReference {
-    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (remaining, data_block_cid) = Cid::parse(input)?;
 
         let (remaining, offset) = le_u32(remaining)?;
@@ -28,7 +28,7 @@ impl ContentReference {
         Ok((remaining, content_reference))
     }
 
-    pub fn parse_many(input: &[u8], ref_count: u8) -> nom::IResult<&[u8], Vec<Self>> {
+    pub fn parse_many(input: &[u8], ref_count: u8) -> ParserResult<Vec<Self>> {
         count(Self::parse, ref_count as usize)(input)
     }
 

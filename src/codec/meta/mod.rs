@@ -1,7 +1,6 @@
 mod actor_id;
 mod actor_settings;
 mod cid;
-mod content_context;
 mod filesystem_id;
 mod journal_checkpoint;
 mod meta_key;
@@ -16,5 +15,3 @@ pub use journal_checkpoint::JournalCheckpoint;
 pub use meta_key::MetaKey;
 pub use permanent_id::PermanentId;
 pub use vector_clock::VectorClock;
-
-pub(crate) use content_context::ContentContext;

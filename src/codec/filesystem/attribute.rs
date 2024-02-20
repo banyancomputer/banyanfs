@@ -3,15 +3,12 @@ use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
-use nom::error::{Error as NomError, ErrorKind};
 use nom::multi::count;
 use nom::number::streaming::{le_u64, le_u8};
-use nom::IResult;
 use time::OffsetDateTime;
 
 use crate::codec::filesystem::FilePermissions;
-use crate::codec::ActorId;
-use crate::codec::AsyncEncodable;
+use crate::codec::{ActorId, AsyncEncodable, ParserResult};
 
 const ATTRIBUTE_OWNER_TYPE_ID: u8 = 0x01;
 
@@ -39,20 +36,24 @@ pub enum Attribute {
 }
 
 impl Attribute {
-    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (remaining, type_byte) = le_u8(input)?;
 
         let parsed = match type_byte {
             ATTRIBUTE_CUSTOM_TYPE_ID => {
                 let (remaining, key_len) = le_u8(remaining)?;
                 let (remaining, key_bytes) = take(key_len)(remaining)?;
-                let key = String::from_utf8(key_bytes.to_vec())
-                    .map_err(|_| nom::Err::Failure(NomError::new(input, ErrorKind::Verify)))?;
+                let key = String::from_utf8(key_bytes.to_vec()).map_err(|_| {
+                    todo!()
+                    //nom::Err::Failure(NomError::new(input, ErrorKind::Verify))
+                })?;
 
                 let (remaining, value_len) = le_u8(remaining)?;
                 let (remaining, value_bytes) = take(value_len)(remaining)?;
-                let value = String::from_utf8(value_bytes.to_vec())
-                    .map_err(|_| nom::Err::Failure(NomError::new(input, ErrorKind::Verify)))?;
+                let value = String::from_utf8(value_bytes.to_vec()).map_err(|_| {
+                    todo!()
+                    //nom::Err::Failure(NomError::new(input, ErrorKind::Verify))
+                })?;
 
                 (remaining, Self::Custom { key, value })
             }
@@ -71,8 +72,10 @@ impl Attribute {
                 let (remaining, unix_milliseconds) = le_u64(remaining)?;
 
                 let unix_nanos = unix_milliseconds as i128 * 1_000_000;
-                let time = OffsetDateTime::from_unix_timestamp_nanos(unix_nanos)
-                    .map_err(|_| nom::Err::Failure(NomError::new(input, ErrorKind::Verify)))?;
+                let time = OffsetDateTime::from_unix_timestamp_nanos(unix_nanos).map_err(|_| {
+                    todo!()
+                    //nom::Err::Failure(NomError::new(input, ErrorKind::Verify))
+                })?;
 
                 (remaining, Self::CreatedAt(time))
             }
@@ -80,8 +83,10 @@ impl Attribute {
                 let (remaining, unix_milliseconds) = le_u64(remaining)?;
 
                 let unix_nanos = unix_milliseconds as i128 * 1_000_000;
-                let time = OffsetDateTime::from_unix_timestamp_nanos(unix_nanos)
-                    .map_err(|_| nom::Err::Failure(NomError::new(input, ErrorKind::Verify)))?;
+                let time = OffsetDateTime::from_unix_timestamp_nanos(unix_nanos).map_err(|_| {
+                    todo!()
+                    //nom::Err::Failure(NomError::new(input, ErrorKind::Verify))
+                })?;
 
                 (remaining, Self::ModifiedAt(time))
             }
@@ -89,18 +94,23 @@ impl Attribute {
                 let (remaining, mime_len) = le_u8(remaining)?;
                 let (remaining, mime_bytes) = take(mime_len)(remaining)?;
 
-                let mime_str = String::from_utf8(mime_bytes.to_vec())
-                    .map_err(|_| nom::Err::Failure(NomError::new(input, ErrorKind::Verify)))?;
+                let mime_str = String::from_utf8(mime_bytes.to_vec()).map_err(|_| {
+                    todo!()
+                    //nom::Err::Failure(NomError::new(input, ErrorKind::Verify))
+                })?;
 
                 (remaining, Self::MimeType(mime_str))
             }
-            _ => return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Tag))),
+            _ => {
+                todo!()
+                //return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Tag))),
+            }
         };
 
         Ok(parsed)
     }
 
-    pub fn parse_many(input: &[u8], attribute_count: u8) -> IResult<&[u8], Vec<Self>> {
+    pub fn parse_many(input: &[u8], attribute_count: u8) -> ParserResult<Vec<Self>> {
         count(Self::parse, attribute_count as usize)(input)
     }
 }

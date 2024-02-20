@@ -1,9 +1,8 @@
 use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
-use nom::error::Error as NomError;
 
-use crate::codec::AsyncEncodable;
+use crate::codec::{AsyncEncodable, ParserResult};
 
 #[derive(Debug, PartialEq)]
 pub enum NodeType {
@@ -16,7 +15,7 @@ pub enum NodeType {
 }
 
 impl NodeType {
-    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self, NomError<&[u8]>> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, node_type) = take(1u8)(input)?;
         let node_type = node_type[0];
 

@@ -4,9 +4,8 @@ use async_std::sync::RwLock;
 use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::number::streaming::le_u64;
-use nom::IResult;
 
-use crate::codec::AsyncEncodable;
+use crate::codec::{AsyncEncodable, ParserResult};
 
 #[derive(Clone, Debug)]
 pub struct VectorClock(Arc<RwLock<u64>>);
@@ -16,7 +15,7 @@ impl VectorClock {
         Self::from(0)
     }
 
-    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, value) = le_u64(input)?;
         Ok((input, Self::from(value)))
     }

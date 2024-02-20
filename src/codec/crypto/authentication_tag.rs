@@ -4,10 +4,8 @@ use async_trait::async_trait;
 use chacha20poly1305::Tag as ChaChaTag;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
-use nom::combinator::all_consuming;
-use nom::IResult;
 
-use crate::codec::AsyncEncodable;
+use crate::codec::{AsyncEncodable, ParserResult};
 
 const TAG_LENGTH: usize = 16;
 
@@ -19,18 +17,13 @@ impl AuthenticationTag {
         &self.0
     }
 
-    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (remaining, slice) = take(TAG_LENGTH)(input)?;
 
         let mut bytes = [0u8; TAG_LENGTH];
         bytes.copy_from_slice(slice);
 
         Ok((remaining, Self(bytes)))
-    }
-
-    pub fn parse_complete(input: &[u8]) -> Result<Self, nom::Err<nom::error::Error<&[u8]>>> {
-        let (_, tag) = all_consuming(Self::parse)(input)?;
-        Ok(tag)
     }
 
     pub const fn size() -> usize {

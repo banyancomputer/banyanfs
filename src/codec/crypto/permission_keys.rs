@@ -5,7 +5,7 @@ use nom::number::streaming::le_u8;
 
 use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, SigningKey, VerifyingKey};
 use crate::codec::header::KeyAccessSettings;
-use crate::codec::AsyncEncodable;
+use crate::codec::{AsyncEncodable, ParserResult};
 
 const KEY_PRESENT_BIT: u8 = 0b0000_0001;
 
@@ -63,13 +63,14 @@ impl PermissionKeys {
         }
     }
 
-    pub fn parse<'a>(input: &'a [u8], unlock_key: &SigningKey) -> nom::IResult<&'a [u8], Self> {
+    pub fn parse<'a>(input: &'a [u8], unlock_key: &SigningKey) -> ParserResult<'a, Self> {
         let (input, filesystem) = maybe_parse_key(input)?;
         let filesystem = filesystem
             .map(|key| key.unlock(unlock_key))
             .transpose()
             .map_err(|_| {
-                nom::Err::Failure(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
+                //nom::Err::Failure(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
+                todo!()
             })?;
 
         let (input, data) = maybe_parse_key(input)?;
@@ -77,7 +78,8 @@ impl PermissionKeys {
             .map(|key| key.unlock(unlock_key))
             .transpose()
             .map_err(|_| {
-                nom::Err::Failure(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
+                //nom::Err::Failure(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
+                todo!()
             })?;
 
         let (input, maintenance) = maybe_parse_key(input)?;
@@ -85,7 +87,8 @@ impl PermissionKeys {
             .map(|key| key.unlock(unlock_key))
             .transpose()
             .map_err(|_| {
-                nom::Err::Failure(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
+                //nom::Err::Failure(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
+                todo!()
             })?;
 
         let permission_keys = Self {
@@ -135,7 +138,7 @@ pub async fn maybe_encode_key<W: AsyncWrite + Unpin + Send>(
     Ok(written_bytes)
 }
 
-fn maybe_parse_key(input: &[u8]) -> nom::IResult<&[u8], Option<AsymLockedAccessKey>> {
+fn maybe_parse_key(input: &[u8]) -> ParserResult<Option<AsymLockedAccessKey>> {
     let (input, presence_flag) = le_u8(input)?;
 
     if presence_flag & KEY_PRESENT_BIT != 0 {

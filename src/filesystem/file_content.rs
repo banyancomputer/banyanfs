@@ -5,7 +5,7 @@ use nom::error::ErrorKind;
 use nom::number::streaming::{le_u64, le_u8};
 
 use crate::codec::crypto::SymLockedAccessKey;
-use crate::codec::AsyncEncodable;
+use crate::codec::{AsyncEncodable, ParserResult};
 use crate::filesystem::ContentReference;
 
 const FILE_CONTENT_TYPE_STUB: u8 = 0x01;
@@ -33,7 +33,7 @@ impl FileContent {
         matches!(self, FileContent::Encrypted { .. })
     }
 
-    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (remaining, content_type) = le_u8(input)?;
 
         let parsed = match content_type {
@@ -59,7 +59,8 @@ impl FileContent {
                 )
             }
             _ => {
-                return Err(nom::Err::Error(NomError::new(input, ErrorKind::Tag)));
+                todo!()
+                //return Err(nom::Err::Error(NomError::new(input, ErrorKind::Tag)));
             }
         };
 

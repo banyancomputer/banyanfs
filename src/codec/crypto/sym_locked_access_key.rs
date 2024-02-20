@@ -4,7 +4,7 @@ use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 
 use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce};
-use crate::codec::AsyncEncodable;
+use crate::codec::{AsyncEncodable, ParserResult};
 
 #[derive(Clone)]
 pub struct SymLockedAccessKey {
@@ -14,7 +14,7 @@ pub struct SymLockedAccessKey {
 }
 
 impl SymLockedAccessKey {
-    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (remaining, nonce) = Nonce::parse(input)?;
 
         let (remaining, cipher_text) = take(AccessKey::size())(remaining)?;

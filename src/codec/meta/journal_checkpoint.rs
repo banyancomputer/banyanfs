@@ -1,6 +1,5 @@
-use nom::IResult;
-
 use crate::codec::meta::{Cid, VectorClock};
+use crate::codec::ParserResult;
 
 #[derive(Debug)]
 pub struct JournalCheckpoint {
@@ -9,7 +8,7 @@ pub struct JournalCheckpoint {
 }
 
 impl JournalCheckpoint {
-    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, merkle_root_cid) = Cid::parse(input)?;
         let (input, vector) = VectorClock::parse(input)?;
 

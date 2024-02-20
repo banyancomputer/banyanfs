@@ -4,13 +4,13 @@ use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 
-use crate::codec::AsyncEncodable;
+use crate::codec::{AsyncEncodable, ParserResult};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct KeyCount(u8);
 
 impl KeyCount {
-    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, count) = take(1u8)(input)?;
         Ok((input, Self(count[0])))
     }

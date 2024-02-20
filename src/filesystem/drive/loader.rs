@@ -2,7 +2,7 @@ use futures::{AsyncRead, AsyncReadExt};
 
 use crate::codec::crypto::SigningKey;
 use crate::codec::header::{IdentityHeader, KeyCount, PublicSettings};
-use crate::codec::meta::{ContentContext, FilesystemId, MetaKey};
+use crate::codec::meta::{FilesystemId, MetaKey};
 use crate::codec::parser::{
     ParserStateMachine, ProgressType, SegmentStreamer, StateError, StateResult,
 };
@@ -14,6 +14,7 @@ pub struct DriveLoader<'a> {
 
     filesystem_id: Option<FilesystemId>,
     public_settings: Option<PublicSettings>,
+    drive_access: Option<DriveAccess>,
 }
 
 impl<'a> DriveLoader<'a> {
@@ -24,6 +25,7 @@ impl<'a> DriveLoader<'a> {
 
             filesystem_id: None,
             public_settings: None,
+            drive_access: None,
         }
     }
 
@@ -133,7 +135,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 Ok(ProgressType::Advance(bytes_read))
             }
             DriveLoaderState::EncryptedPermissions(key_count, meta_key) => {
-                let (input, access) =
+                let (input, drive_access) =
                     DriveAccess::parse_permissions(buffer, **key_count, meta_key)?;
                 let bytes_read = buffer.len() - input.len();
 
@@ -143,11 +145,12 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                     "drive_loader::encrypted_permissions"
                 );
 
-                self.state = DriveLoaderState::PrivateContent(access);
+                self.drive_access = Some(drive_access);
+                self.state = DriveLoaderState::PrivateContent;
 
                 Ok(ProgressType::Advance(bytes_read))
             }
-            DriveLoaderState::PrivateContent(access) => {
+            DriveLoaderState::PrivateContent => {
                 todo!("private content")
             }
             remaining => {
@@ -188,16 +191,17 @@ impl StateError for DriveLoaderError {
     }
 }
 
-impl<E> From<nom::Err<E>> for DriveLoaderError {
+impl<E: std::fmt::Debug> From<nom::Err<E>> for DriveLoaderError {
     fn from(err: nom::Err<E>) -> Self {
         match err {
             nom::Err::Incomplete(nom::Needed::Size(n)) => {
                 DriveLoaderError::Incomplete(Some(n.get()))
             }
             nom::Err::Incomplete(_) => DriveLoaderError::Incomplete(None),
-            _ => DriveLoaderError::ParserFailure(
-                "failed to parse data, hard error types live here".to_string(),
-            ),
+            err => {
+                let err_msg = format!("failed to parse data: {:?}", err);
+                DriveLoaderError::ParserFailure(err_msg)
+            }
         }
     }
 }
@@ -212,10 +216,10 @@ enum DriveLoaderState {
 
     EscrowedAccessKeys(KeyCount),
     EncryptedPermissions(KeyCount, MetaKey),
-    PrivateContent(DriveAccess),
+    PrivateContent,
 
     PublicPermissions(KeyCount),
-    PublicContent(DriveAccess),
+    PublicContent,
 
     Signature,
     ErrorCorrection,

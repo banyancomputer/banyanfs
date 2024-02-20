@@ -1,11 +1,8 @@
 use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::error::Error as NomError;
-use nom::error::ErrorKind;
 use nom::number::streaming::le_u8;
-use nom::IResult;
 
-use crate::codec::AsyncEncodable;
+use crate::codec::{AsyncEncodable, ParserResult};
 
 const DIRECTORY_PERMISSIONS_RESERVED_MASK: u8 = 0b1111_1100;
 
@@ -28,11 +25,12 @@ impl DirectoryPermissions {
         self.immutable
     }
 
-    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, byte) = le_u8(input)?;
 
         if cfg!(feature = "strict") && byte & DIRECTORY_PERMISSIONS_RESERVED_MASK != 0 {
-            return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Tag)));
+            todo!()
+            //return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Tag)));
         }
 
         let owner_write_only = byte & DIRECTORY_PERMISSIONS_OWNER_WRITE_ONLY != 0;

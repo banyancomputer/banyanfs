@@ -1,10 +1,9 @@
 use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::number::streaming::le_u64;
-use nom::IResult;
 
 use crate::codec::header::ContentOptions;
-use crate::codec::{AsyncEncodable, Cid};
+use crate::codec::{AsyncEncodable, Cid, ParserResult};
 
 pub struct HistoryStart {
     // todo: replace with vector type when we have it
@@ -15,7 +14,7 @@ pub struct HistoryStart {
 }
 
 impl HistoryStart {
-    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, journal_start_vector) = le_u64(input)?;
         let (input, cid) = Cid::parse(input)?;
         let (input, content_options) = ContentOptions::parse(input)?;

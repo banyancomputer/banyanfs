@@ -1,12 +1,10 @@
 use async_trait::async_trait;
+use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
-use nom::error::Error as NomError;
-use nom::error::ErrorKind;
-use rand::RngCore;
 use uuid::{NoContext, Timestamp, Uuid};
 
-use crate::codec::AsyncEncodable;
+use crate::codec::{AsyncEncodable, ParserResult};
 
 const ID_LENGTH: usize = 16;
 
@@ -14,14 +12,14 @@ const ID_LENGTH: usize = 16;
 pub struct FilesystemId([u8; ID_LENGTH]);
 
 impl FilesystemId {
-    pub fn generate(_rng: &mut impl RngCore) -> Self {
+    pub fn generate(_rng: &mut impl CryptoRngCore) -> Self {
         // todo: this needs to use the provided rng
         let ts = Timestamp::now(NoContext);
         let uuid = Uuid::new_v7(ts);
         Self(uuid.to_bytes_le())
     }
 
-    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (remaining, id_bytes) = take(ID_LENGTH)(input)?;
 
         // All zeros and all ones are disallowed, this isn't actually harmful though so we'll only
@@ -29,7 +27,8 @@ impl FilesystemId {
         if cfg!(feature = "strict")
             && (id_bytes.iter().all(|&b| b == 0x00) || id_bytes.iter().all(|&b| b == 0xff))
         {
-            return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Verify)));
+            todo!()
+            //return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Verify)));
         }
 
         // todo(sstelfox): parse into an actually UUID, validate the version, probably store the

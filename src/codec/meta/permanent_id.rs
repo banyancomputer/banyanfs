@@ -4,7 +4,7 @@ use futures::io::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 use rand::Rng;
 
-use crate::codec::AsyncEncodable;
+use crate::codec::{AsyncEncodable, ParserResult};
 
 const PERMANENT_ID_SIZE: usize = 8;
 
@@ -16,7 +16,7 @@ impl PermanentId {
         Self(rng.gen())
     }
 
-    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (remaining, id_bytes) = take(PERMANENT_ID_SIZE)(input)?;
 
         let mut bytes = [0u8; PERMANENT_ID_SIZE];

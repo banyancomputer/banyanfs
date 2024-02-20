@@ -4,6 +4,7 @@ use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
+use nom::error::{context, VerboseError};
 
 use crate::codec::crypto::{AuthenticationTag, KeyId, Nonce, PermissionKeys, VerifyingKey};
 use crate::codec::header::KeyAccessSettings;
@@ -28,8 +29,15 @@ impl DriveAccess {
         input: &'a [u8],
         key_count: u8,
         meta_key: &MetaKey,
-    ) -> nom::IResult<&'a [u8], Self> {
+    ) -> nom::IResult<&'a [u8], Self, VerboseError<&'a [u8]>> {
         let payload_size = key_count as usize * Self::size();
+
+        tracing::debug!(
+            nonce_size = Nonce::size(),
+            payload_size,
+            tag_size = AuthenticationTag::size(),
+            "parse_permission::needed"
+        );
 
         let (input, nonce) = Nonce::parse(input)?;
         let (input, crypt_slice) = take(payload_size)(input)?;
@@ -39,7 +47,8 @@ impl DriveAccess {
         meta_key
             .decrypt_buffer(nonce, &mut crypt_buffer, &[], tag)
             .map_err(|_| {
-                nom::Err::Failure(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
+                todo!()
+                //nom::Err::Failure(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
             })?;
 
         let actor_settings = HashMap::new();
@@ -94,6 +103,8 @@ impl DriveAccess {
         writer.write_all(plaintext_buffer.as_slice()).await?;
         written_bytes += plaintext_buffer.len();
         written_bytes += tag.encode(writer).await?;
+
+        tracing::debug!(written_bytes, "encode_permissions::complete");
 
         Ok(written_bytes)
     }
@@ -158,8 +169,7 @@ impl DriveAccess {
     }
 
     pub const fn size() -> usize {
-        ActorSettings::size()
-            + KeyId::size()
+        KeyId::size()
             + VerifyingKey::size()
             + VectorClock::size()
             + KeyAccessSettings::size()

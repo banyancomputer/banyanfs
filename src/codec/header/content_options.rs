@@ -1,11 +1,8 @@
 use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::error::Error as NomError;
-use nom::error::ErrorKind;
 use nom::number::streaming::le_u8;
-use nom::IResult;
 
-use crate::codec::AsyncEncodable;
+use crate::codec::{AsyncEncodable, ParserResult};
 
 const CONTENT_OPTIONS_RESERVED_MASK: u8 = 0b1110_0000;
 
@@ -29,11 +26,12 @@ pub struct ContentOptions {
 }
 
 impl ContentOptions {
-    pub fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, byte) = le_u8(input)?;
 
         if cfg!(feature = "strict") && byte & CONTENT_OPTIONS_RESERVED_MASK != 0 {
-            return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Tag)));
+            todo!()
+            //return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Tag)));
         }
 
         let realized_view = byte & CONTENT_OPTIONS_REALIZED_VIEW_BIT != 0;

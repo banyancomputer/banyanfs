@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use futures::AsyncWrite;
 
 use crate::codec::crypto::{Fingerprint, KeyId};
-use crate::codec::AsyncEncodable;
+use crate::codec::{AsyncEncodable, ParserResult};
 
 // todo(sstelfox) likely need a vector clock here...
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
@@ -13,7 +13,7 @@ impl ActorId {
         self.0.key_id()
     }
 
-    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (remaining, fingerprint) = Fingerprint::parse(input)?;
         Ok((remaining, ActorId(fingerprint)))
     }
