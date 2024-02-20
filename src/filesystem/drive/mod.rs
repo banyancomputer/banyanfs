@@ -13,7 +13,7 @@ pub use operations::OperationError;
 
 pub(crate) use walk_state::WalkState;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 use std::sync::Arc;
 
@@ -86,8 +86,7 @@ impl Drive {
         };
 
         let mut plaintext_buffer = Vec::new();
-
-        // todo: encode data nodes
+        written_bytes += inner_read.encode_nodes(&mut plaintext_buffer).await?;
 
         let filesystem_length = Nonce::size() + plaintext_buffer.len() + AuthenticationTag::size();
 
@@ -208,8 +207,45 @@ impl InnerDrive {
             .as_ref()
             .ok_or(StdError::new(StdErrorKind::Other, "no data key"))?;
 
-        for (_, node) in self.nodes.iter() {
-            written_bytes += node.encode(writer, data_key).await?;
+        // Walk the nodes starting from the root, encoding them one at a time, we want to make sure
+        // we only encode things once and do so in a consistent order to ensure our content is
+        // reproducible. This will silently discard any disconnected leaf nodes. Loops are
+        // tolerated.
+
+        let mut seen_ids = HashSet::new();
+        let mut outstanding_ids = vec![self.root_node_id];
+        //let mut data_ids = Vec::new();
+
+        let mut node_encoding_buffer = Vec::new();
+
+        while let Some(node_id) = outstanding_ids.pop() {
+            let node = self.nodes.get(node_id).ok_or_else(|| {
+                StdError::new(StdErrorKind::Other, "node ID missing from internal nodes")
+            })?;
+
+            // Deduplicate nodes as we go through them
+            let permanent_id = node.permanent_id();
+            if seen_ids.contains(&permanent_id) {
+                continue;
+            }
+            seen_ids.insert(permanent_id);
+
+            permanent_id.encode(&mut node_encoding_buffer).await?;
+            node.owner_id().encode(&mut node_encoding_buffer).await?;
+
+            let created_at_millis = (node.created_at().unix_timestamp_nanos() / 1_000_000) as u64;
+            let created_at_bytes = created_at_millis.to_le_bytes();
+            node_encoding_buffer.write_all(&created_at_bytes).await?;
+
+            let modified_at_millis = (node.modified_at().unix_timestamp_nanos() / 1_000_000) as u64;
+            let modified_at_bytes = modified_at_millis.to_le_bytes();
+            node_encoding_buffer.write_all(&modified_at_bytes).await?;
+
+            //todo!("these need the encode method done");
+            //node.name().encode(&mut node_encoding_buffer).await?;
+
+            writer.write_all(&node_encoding_buffer).await?;
+            written_bytes += node_encoding_buffer.len();
         }
 
         Ok(written_bytes)

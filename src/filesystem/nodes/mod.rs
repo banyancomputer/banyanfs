@@ -9,10 +9,8 @@ pub use node_name::{NodeName, NodeNameError};
 
 use std::collections::HashMap;
 
-use futures::io::{AsyncWrite, AsyncWriteExt};
 use time::OffsetDateTime;
 
-use crate::codec::crypto::AccessKey;
 use crate::codec::meta::{ActorId, PermanentId};
 
 pub(crate) type NodeId = usize;
@@ -21,28 +19,20 @@ pub struct Node {
     id: NodeId,
     parent_id: Option<NodeId>,
 
-    owner_id: ActorId,
-    permanent_id: PermanentId,
+    pub(crate) permanent_id: PermanentId,
+    pub(crate) owner_id: ActorId,
 
-    created_at: OffsetDateTime,
-    modified_at: OffsetDateTime,
+    pub(crate) created_at: OffsetDateTime,
+    pub(crate) modified_at: OffsetDateTime,
 
-    name: NodeName,
-    metadata: HashMap<String, Vec<u8>>,
-    kind: NodeKind,
+    pub(crate) name: NodeName,
+    pub(crate) metadata: HashMap<String, Vec<u8>>,
+    pub(crate) kind: NodeKind,
 }
 
 impl Node {
-    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-        data_key: &AccessKey,
-    ) -> std::io::Result<usize> {
-        let mut written_bytes = 0;
-
-        todo!();
-
-        Ok(written_bytes)
+    pub fn created_at(&self) -> OffsetDateTime {
+        self.created_at
     }
 
     pub fn id(&self) -> NodeId {
@@ -59,6 +49,10 @@ impl Node {
 
     pub fn kind_mut(&mut self) -> &mut NodeKind {
         &mut self.kind
+    }
+
+    pub fn modified_at(&self) -> OffsetDateTime {
+        self.modified_at
     }
 
     pub fn name(&self) -> NodeName {
@@ -90,12 +84,14 @@ impl std::fmt::Debug for Node {
                 .field(&self.id)
                 .field(&self.owner_id)
                 .field(&self.permanent_id)
+                .field(&self.name)
                 .finish(),
             NodeKind::File { .. } => f
                 .debug_tuple("NodeFile")
                 .field(&self.id)
                 .field(&self.owner_id)
                 .field(&self.permanent_id)
+                .field(&self.name)
                 .finish(),
         }
     }
