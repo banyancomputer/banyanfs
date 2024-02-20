@@ -198,11 +198,15 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
 
                 let mut content = content.to_vec();
 
-                fs_key
-                    .decrypt_buffer(nonce, &mut content, &[], tag)
-                    .map_err(|_| {
-                        DriveLoaderError::InternalKeyError("fs key couldn't access content")
-                    })?;
+                tracing::debug!(content = ?content, "drive_loader::private_content::encrypted");
+                let _ = fs_key.decrypt_buffer(nonce, &mut content, &[], tag);
+                tracing::debug!(content = ?content, "drive_loader::private_content::decrypted");
+
+                //fs_key
+                //    .decrypt_buffer(nonce, &mut content, &[], tag)
+                //    .map_err(|_| {
+                //        DriveLoaderError::InternalKeyError("fs key couldn't access content")
+                //    })?;
 
                 tracing::debug!("drive_loader::private_content::decrypted");
 
