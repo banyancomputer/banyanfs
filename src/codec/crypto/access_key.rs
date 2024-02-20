@@ -25,13 +25,8 @@ impl AccessKey {
         authenticated_data: &[u8],
         tag: AuthenticationTag,
     ) -> Result<(), AccessKeyError<&[u8]>> {
-        XChaCha20Poly1305::new(self.chacha_key()).decrypt_in_place_detached(
-            &nonce,
-            authenticated_data,
-            buffer,
-            &tag,
-        )?;
-
+        let cipher = XChaCha20Poly1305::new(self.chacha_key());
+        cipher.decrypt_in_place_detached(&nonce, authenticated_data, buffer, &tag)?;
         Ok(())
     }
 
