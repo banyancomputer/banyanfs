@@ -2,11 +2,13 @@ use std::ops::Deref;
 
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::AsyncWrite;
+use nom::multi::count;
+use nom::sequence::tuple;
+use nom::{IResult, Needed};
 
-use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, SigningKey};
+use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, KeyId, SigningKey};
 use crate::codec::meta::ActorSettings;
 
-#[derive(Debug)]
 pub struct MetaKey(AccessKey);
 
 impl MetaKey {
@@ -26,17 +28,31 @@ impl MetaKey {
         input: &'a [u8],
         key_count: u8,
         signing_key: &SigningKey,
-    ) -> nom::IResult<&'a [u8], Option<Self>> {
-        let (input, locked_keys) = AsymLockedAccessKey::parse_many(input, key_count)?;
+    ) -> IResult<&'a [u8], Option<Self>> {
+        let mut asym_parser = count(
+            tuple((KeyId::parse, AsymLockedAccessKey::parse)),
+            key_count as usize,
+        );
+
+        let (input, locked_keys) = match asym_parser(input) {
+            Ok(res) => res,
+            Err(nom::Err::Incomplete(Needed::Size(_))) => {
+                let record_size = KeyId::size() + AsymLockedAccessKey::size();
+                let total_size = key_count as usize * record_size;
+
+                return Err(nom::Err::Incomplete(Needed::new(total_size - input.len())));
+            }
+            Err(err) => return Err(err),
+        };
 
         let key_id = signing_key.key_id();
-        let _span = tracing::debug_span!("parse_access", signing_key_id = ?key_id).entered();
+        let _span = tracing::debug_span!("parse_access", ?key_id).entered();
 
         let mut meta_key = None;
-        let relevant_keys = locked_keys.iter().filter(|k| k.key_id == key_id);
+        let relevant_keys = locked_keys.iter().filter(|(kid, _)| *kid == key_id);
 
-        for potential_key in relevant_keys {
-            tracing::trace!(potential_key = ?potential_key.key_id(), "candidate_check");
+        for (key_id, potential_key) in relevant_keys {
+            tracing::info!(candidate_key_id = ?key_id, "found_candidate");
 
             if let Ok(key) = potential_key.unlock(signing_key) {
                 tracing::info!("successful_decrypt");
@@ -46,6 +62,12 @@ impl MetaKey {
         }
 
         Ok((input, meta_key))
+    }
+}
+
+impl std::fmt::Debug for MetaKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MetaKey(*redacted*)")
     }
 }
 

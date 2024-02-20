@@ -69,14 +69,11 @@ impl AccessKey {
             .encrypt_buffer(rng, &[], &mut payload)
             .map_err(|_| AccessKeyError::CryptoFailure)?;
 
-        let key_id = verifying_key.key_id();
-
         Ok(AsymLockedAccessKey {
             dh_exchange_key,
             nonce,
             cipher_text: payload,
             tag,
-            key_id,
         })
     }
 

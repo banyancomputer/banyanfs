@@ -96,6 +96,10 @@ impl PermissionKeys {
 
         Ok((input, permission_keys))
     }
+
+    pub const fn size() -> usize {
+        AsymLockedAccessKey::size() * 3
+    }
 }
 
 pub async fn maybe_encode_key<W: AsyncWrite + Unpin + Send>(

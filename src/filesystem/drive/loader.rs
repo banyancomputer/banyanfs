@@ -1,12 +1,12 @@
 use futures::{AsyncRead, AsyncReadExt};
 
-use crate::codec::crypto::{AccessKey, SigningKey};
+use crate::codec::crypto::SigningKey;
 use crate::codec::header::{IdentityHeader, KeyCount, PublicSettings};
 use crate::codec::meta::{ContentContext, FilesystemId, MetaKey};
 use crate::codec::parser::{
     ParserStateMachine, ProgressType, SegmentStreamer, StateError, StateResult,
 };
-use crate::filesystem::Drive;
+use crate::filesystem::{Drive, DriveAccess};
 
 pub struct DriveLoader<'a> {
     signing_key: &'a SigningKey,
@@ -120,6 +120,8 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                     MetaKey::parse_access(buffer, **key_count, self.signing_key)?;
                 let bytes_read = buffer.len() - input.len();
 
+                tracing::debug!(bytes_read, ?key_count, "drive_loader::escrowed_access_keys");
+
                 let meta_key = match meta_key {
                     Some(mk) => mk,
                     None => return Err(DriveLoaderError::AccessUnavailable),
@@ -130,7 +132,17 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
 
                 Ok(ProgressType::Advance(bytes_read))
             }
-            DriveLoaderState::EncryptedPermissions(_key_count, _access_key) => {
+            DriveLoaderState::EncryptedPermissions(key_count, meta_key) => {
+                let (input, _permissions) =
+                    DriveAccess::parse_escrow(buffer, **key_count, meta_key)?;
+                let bytes_read = buffer.len() - input.len();
+
+                tracing::debug!(
+                    bytes_read,
+                    ?key_count,
+                    "drive_loader::encrypted_permissions"
+                );
+
                 todo!()
             }
             remaining => {

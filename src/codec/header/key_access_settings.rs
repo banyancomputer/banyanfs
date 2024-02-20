@@ -204,6 +204,10 @@ impl KeyAccessSettings {
 
         Ok((input, settings))
     }
+
+    pub const fn size() -> usize {
+        1
+    }
 }
 
 #[async_trait]

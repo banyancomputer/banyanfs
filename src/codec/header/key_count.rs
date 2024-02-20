@@ -9,6 +9,17 @@ use crate::codec::AsyncEncodable;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct KeyCount(u8);
 
+impl KeyCount {
+    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
+        let (input, count) = take(1u8)(input)?;
+        Ok((input, Self(count[0])))
+    }
+
+    pub const fn size() -> usize {
+        1
+    }
+}
+
 impl Deref for KeyCount {
     type Target = u8;
 
@@ -35,13 +46,6 @@ impl TryFrom<usize> for KeyCount {
         }
 
         Ok(Self(value as u8))
-    }
-}
-
-impl KeyCount {
-    pub fn parse(input: &[u8]) -> nom::IResult<&[u8], Self> {
-        let (input, count) = take(1u8)(input)?;
-        Ok((input, Self(count[0])))
     }
 }
 

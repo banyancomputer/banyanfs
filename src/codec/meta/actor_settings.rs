@@ -14,6 +14,10 @@ impl ActorSettings {
         self.access_settings.clone()
     }
 
+    pub const fn size() -> usize {
+        VerifyingKey::size() + KeyAccessSettings::size() + VectorClock::size()
+    }
+
     pub fn new(verifying_key: VerifyingKey, access_settings: KeyAccessSettings) -> Self {
         let vector_clock = VectorClock::init();
 

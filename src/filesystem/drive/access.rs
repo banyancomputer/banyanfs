@@ -4,8 +4,9 @@ use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
 
-use crate::codec::crypto::{AccessKey, PermissionKeys, VerifyingKey};
+use crate::codec::crypto::{AsymLockedAccessKey, KeyId, PermissionKeys, VerifyingKey};
 use crate::codec::header::{KeyAccessSettings, KeyCount};
+use crate::codec::meta::VectorClock;
 use crate::codec::{ActorId, ActorSettings, AsyncEncodable};
 use crate::filesystem::drive::MetaKey;
 
@@ -21,12 +22,11 @@ impl DriveAccess {
             .map(|settings| settings.actor_settings())
     }
 
-    pub async fn parse_escrow<W: AsyncWrite + Unpin + Send>(
-        &mut self,
-        _reader: &mut W,
+    pub fn parse_escrow<'a>(
+        _input: &'a [u8],
         _key_count: u8,
-        _meta_key: &AccessKey,
-    ) -> std::io::Result<usize> {
+        _meta_key: &MetaKey,
+    ) -> nom::IResult<&'a [u8], Self> {
         todo!()
     }
 
@@ -47,11 +47,13 @@ impl DriveAccess {
 
         for settings in actor_settings.iter() {
             let verifying_key = settings.verifying_key();
+            let key_id = verifying_key.key_id();
 
             let locked_key = meta_key
                 .lock_for(rng, &verifying_key)
                 .map_err(|_| StdError::new(StdErrorKind::Other, "unable to escrow meta key"))?;
 
+            written_bytes += key_id.encode(writer).await?;
             written_bytes += locked_key.encode(writer).await?;
         }
         // end cut section
@@ -88,6 +90,15 @@ impl DriveAccess {
             .map_err(|_| {
                 StdError::new(StdErrorKind::Other, "unable to encrypt escrowed key buffer")
             })?;
+
+        let entry_size = ActorSettings::size()
+            + KeyId::size()
+            + VerifyingKey::size()
+            + VectorClock::size()
+            + KeyAccessSettings::size()
+            + PermissionKeys::size();
+
+        tracing::info!(nonce_len = ?nonce.len(), tag_len = ?tag.len(), buffer_len = ?plaintext_buffer.len(), ?entry_size, "escrowed key buffer");
 
         written_bytes += nonce.encode(writer).await?;
         writer.write_all(plaintext_buffer.as_slice()).await?;
