@@ -46,7 +46,7 @@ impl DirectoryHandle {
     }
 
     #[instrument(level = Level::DEBUG, skip(self))]
-    pub async fn ls(self, path: &[&str]) -> Result<Vec<(NodeName, PermanentId)>, OperationError> {
+    pub async fn ls(&self, path: &[&str]) -> Result<Vec<(NodeName, PermanentId)>, OperationError> {
         debug!(cwd_id = self.cwd_id, "directory::ls");
 
         // These behaviors are slightly different mostly in the error cases, in the first case we
@@ -206,7 +206,7 @@ impl DirectoryHandle {
                     // When we're not recursing and there are more path components left, we have to
                     // abort early
                     if !recursive && !remaining_path.is_empty() {
-                        debug!("drive::mkdir::not_recursive");
+                        debug!(?remaining_path, "drive::mkdir::not_recursive");
                         return Err(OperationError::PathNotFound);
                     }
 
@@ -240,6 +240,16 @@ impl DirectoryHandle {
         }
 
         Err(OperationError::PathTooDeep)
+    }
+
+    #[instrument(skip(self, _rng))]
+    pub async fn mv(
+        &mut self,
+        _rng: &mut impl CryptoRngCore,
+        _src_path: &[&str],
+        _dst_path: &[&str],
+    ) -> Result<(), OperationError> {
+        todo!()
     }
 }
 

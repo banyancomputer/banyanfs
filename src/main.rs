@@ -46,12 +46,15 @@ async fn main() -> BanyanFsResult<()> {
     if drive.has_write_access(actor_id).await {
         let mut root = drive.root().await;
 
-        if let Err(err) = root.mkdir(&mut rng, &["testing", "paths"], true).await {
+        if let Err(err) = root
+            .mkdir(&mut rng, &["testing", "paths", "deeply", "@#($%*%)"], true)
+            .await
+        {
             error!("failed to create directory: {}", err);
             return Ok(());
         }
 
-        let testing_dir = match root.cd(&["testing"]).await {
+        let mut testing_dir = match root.cd(&["testing"]).await {
             Ok(dir) => dir,
             Err(err) => {
                 error!("failed to switch directory: {}", err);
@@ -59,8 +62,19 @@ async fn main() -> BanyanFsResult<()> {
             }
         };
 
+        if let Err(err) = testing_dir
+            .mkdir(&mut rng, &["paths", "deeply", "second"], false)
+            .await
+        {
+            error!("failed to create same directory: {}", err);
+            return Ok(());
+        }
+
         // duplicate path as before, folders should already exist and not cause any error
-        if let Err(err) = root.mkdir(&mut rng, &["testing", "paths"], false).await {
+        if let Err(err) = testing_dir
+            .mkdir(&mut rng, &["paths", "deeply"], false)
+            .await
+        {
             error!("failed to create same directory: {}", err);
             return Ok(());
         }
@@ -75,7 +89,7 @@ async fn main() -> BanyanFsResult<()> {
 
         // get a fresh handle on the root directory
         let root = drive.root().await;
-        match root.ls(&["testing"]).await {
+        match root.ls(&["testing", "paths", "deeply"]).await {
             Ok(contents) => {
                 let names: Vec<NodeName> = contents.into_iter().map(|(name, _)| name).collect();
                 info!(?names, "contents");
@@ -142,10 +156,10 @@ async fn main() -> BanyanFsResult<()> {
 
     tracing::info!("loaded drive");
 
-    let root_dir = loaded_drive.root().await;
+    let mut root_dir = loaded_drive.root().await;
 
     // todo: should add convenient methods on the drive itself for the directory operations
-    match root_dir.ls(&["testing"]).await {
+    match root_dir.ls(&["testing", "paths", "deeply"]).await {
         Ok(dir_contents) => {
             let names: Vec<NodeName> = dir_contents.into_iter().map(|(name, _)| name).collect();
             tracing::info!("dir_contents: {names:?}");
@@ -154,6 +168,14 @@ async fn main() -> BanyanFsResult<()> {
             tracing::error!("failed to list directory from loaded drive: {err}");
             return Ok(());
         }
+    }
+
+    if let Err(err) = root_dir
+        .mv(&mut rng, &["testing", "paths"], &["new base documents"])
+        .await
+    {
+        tracing::error!("failed to rename file in loaded drive: {err}");
+        return Ok(());
     }
 
     Ok(())
