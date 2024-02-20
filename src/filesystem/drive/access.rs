@@ -4,12 +4,11 @@ use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
-use nom::error::{context, VerboseError};
 
 use crate::codec::crypto::{AuthenticationTag, KeyId, Nonce, PermissionKeys, VerifyingKey};
 use crate::codec::header::KeyAccessSettings;
 use crate::codec::meta::VectorClock;
-use crate::codec::{ActorId, ActorSettings, AsyncEncodable};
+use crate::codec::{ActorId, ActorSettings, AsyncEncodable, ParserResult};
 use crate::filesystem::drive::MetaKey;
 
 #[derive(Debug, Default)]
@@ -29,7 +28,7 @@ impl DriveAccess {
         input: &'a [u8],
         key_count: u8,
         meta_key: &MetaKey,
-    ) -> nom::IResult<&'a [u8], Self, VerboseError<&'a [u8]>> {
+    ) -> ParserResult<'a, Self> {
         let payload_size = key_count as usize * Self::size();
 
         tracing::debug!(
@@ -44,12 +43,11 @@ impl DriveAccess {
         let (input, tag) = AuthenticationTag::parse(input)?;
 
         let mut crypt_buffer = crypt_slice.to_vec();
-        meta_key
-            .decrypt_buffer(nonce, &mut crypt_buffer, &[], tag)
-            .map_err(|_| {
-                todo!()
-                //nom::Err::Failure(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
-            })?;
+        if let Err(err) = meta_key.decrypt_buffer(nonce, &mut crypt_buffer, &[], tag) {
+            tracing::error!("failed to decrypt permission buffer: {err}");
+            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
+            return Err(nom::Err::Failure(err));
+        }
 
         let actor_settings = HashMap::new();
 
@@ -71,25 +69,16 @@ impl DriveAccess {
 
         for settings in self.sorted_actor_settings().iter() {
             let verifying_key = settings.verifying_key();
-
-            // write key ID out
             let key_id = verifying_key.key_id();
             key_id.encode(&mut plaintext_buffer).await?;
 
-            // write pubkey out
-            verifying_key.encode(&mut plaintext_buffer).await?;
+            settings.encode(&mut plaintext_buffer).await?;
 
-            // the actor's current clock
-            let actor_clock = settings.vector_clock();
-            actor_clock.encode(&mut plaintext_buffer).await?;
-
-            // the actor key settings
-            let actor_settings = settings.actor_settings();
-            actor_settings.encode(&mut plaintext_buffer).await?;
+            let key_settings = settings.actor_settings();
 
             // and the protection keys based on their access
             permission_keys
-                .encode_for(rng, &mut plaintext_buffer, &actor_settings, &verifying_key)
+                .encode_for(rng, &mut plaintext_buffer, &key_settings, &verifying_key)
                 .await?;
         }
 
