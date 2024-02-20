@@ -8,8 +8,11 @@ pub use node_kind::NodeKind;
 pub use node_name::{NodeName, NodeNameError};
 
 use std::collections::HashMap;
+
+use futures::io::{AsyncWrite, AsyncWriteExt};
 use time::OffsetDateTime;
 
+use crate::codec::crypto::AccessKey;
 use crate::codec::meta::{ActorId, PermanentId};
 
 pub(crate) type NodeId = usize;
@@ -18,19 +21,30 @@ pub struct Node {
     id: NodeId,
     parent_id: Option<NodeId>,
 
-    name: NodeName,
-
     owner_id: ActorId,
     permanent_id: PermanentId,
 
     created_at: OffsetDateTime,
     modified_at: OffsetDateTime,
 
-    kind: NodeKind,
+    name: NodeName,
     metadata: HashMap<String, Vec<u8>>,
+    kind: NodeKind,
 }
 
 impl Node {
+    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+        data_key: &AccessKey,
+    ) -> std::io::Result<usize> {
+        let mut written_bytes = 0;
+
+        todo!();
+
+        Ok(written_bytes)
+    }
+
     pub fn id(&self) -> NodeId {
         self.id
     }

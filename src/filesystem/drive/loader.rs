@@ -159,9 +159,10 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
             }
             DriveLoaderState::PrivateContent => {
                 let (input, mut content_length) = content_length(buffer)?;
-
                 let (input, nonce) = Nonce::parse(input)?;
-                content_length -= (Nonce::size() + AuthenticationTag::size()) as u64;
+
+                content_length -= Nonce::size() as u64;
+                content_length -= AuthenticationTag::size() as u64;
 
                 // todo(sstelfox): we ideally want to stream this data and selectively parse
                 // things, but that has impacts on the encryption which would need to be managed
@@ -172,7 +173,14 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 let (input, tag) = AuthenticationTag::parse(input)?;
                 let bytes_read = buffer.len() - input.len();
 
-                tracing::debug!(bytes_read, "drive_loader::private_content");
+                tracing::debug!(
+                    bytes_read,
+                    payload_size = content_length,
+                    "drive_loader::private_content::payload_size"
+                );
+
+                // todo: calculate hash over buffer[..bytes_read] and validate signature over
+                // length, nonce, content, tag (need to also generate this)
 
                 let drive_access = self
                     .drive_access

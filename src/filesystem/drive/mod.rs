@@ -40,13 +40,6 @@ pub struct Drive {
     inner: Arc<RwLock<InnerDrive>>,
 }
 
-pub(crate) struct InnerDrive {
-    access: DriveAccess,
-    pub(crate) nodes: Slab<Node>,
-    pub(crate) root_node_id: NodeId,
-    pub(crate) permanent_id_map: HashMap<PermanentId, NodeId>,
-}
-
 impl Drive {
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
@@ -187,6 +180,43 @@ impl Drive {
         drop(inner_read);
 
         DirectoryHandle::new(self.current_key.clone(), root_node_id, self.inner.clone()).await
+    }
+}
+
+pub(crate) struct InnerDrive {
+    access: DriveAccess,
+
+    pub(crate) nodes: Slab<Node>,
+    pub(crate) root_node_id: NodeId,
+    pub(crate) permanent_id_map: HashMap<PermanentId, NodeId>,
+}
+
+impl InnerDrive {
+    pub(crate) async fn encode_nodes<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let mut written_bytes = 0;
+
+        let all_perms = self
+            .access
+            .permission_keys()
+            .ok_or(StdError::new(StdErrorKind::Other, "no permission keys"))?;
+
+        let data_key = all_perms
+            .data
+            .as_ref()
+            .ok_or(StdError::new(StdErrorKind::Other, "no data key"))?;
+
+        for (_, node) in self.nodes.iter() {
+            written_bytes += node.encode(writer, data_key).await?;
+        }
+
+        Ok(written_bytes)
+    }
+
+    pub fn parse_nodes(input: &[u8]) -> ParserResult<Self> {
+        todo!()
     }
 }
 

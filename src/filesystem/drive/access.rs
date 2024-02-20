@@ -140,8 +140,6 @@ impl DriveAccess {
         written_bytes += plaintext_buffer.len();
         written_bytes += tag.encode(writer).await?;
 
-        tracing::debug!(written_bytes, "encode_permissions::complete");
-
         Ok(written_bytes)
     }
 
