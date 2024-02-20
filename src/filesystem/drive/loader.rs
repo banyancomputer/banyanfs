@@ -1,10 +1,12 @@
 use futures::{AsyncRead, AsyncReadExt};
+use nom::bytes::streaming::take;
+use nom::number::streaming::le_u64;
 
-use crate::codec::crypto::SigningKey;
+use crate::codec::crypto::{AuthenticationTag, Nonce, SigningKey};
 use crate::codec::header::{IdentityHeader, KeyCount, PublicSettings};
 use crate::codec::meta::{FilesystemId, MetaKey};
 use crate::codec::parser::{
-    ParserStateMachine, ProgressType, SegmentStreamer, StateError, StateResult,
+    ParserResult, ParserStateMachine, ProgressType, SegmentStreamer, StateError, StateResult,
 };
 use crate::filesystem::{Drive, DriveAccess};
 
@@ -156,6 +158,46 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 Ok(ProgressType::Advance(bytes_read))
             }
             DriveLoaderState::PrivateContent => {
+                let (input, mut content_length) = content_length(buffer)?;
+
+                let (input, nonce) = Nonce::parse(input)?;
+                content_length -= (Nonce::size() + AuthenticationTag::size()) as u64;
+
+                // todo(sstelfox): we ideally want to stream this data and selectively parse
+                // things, but that has impacts on the encryption which would need to be managed
+                // carefully. Since this only covers the realized view of the filesystem (the
+                // metadata) and no file content this shouldn't grow very large.
+                let (input, content) = content_chunk(input, content_length as usize)?;
+
+                let (input, tag) = AuthenticationTag::parse(input)?;
+                let bytes_read = buffer.len() - input.len();
+
+                tracing::debug!(bytes_read, "drive_loader::private_content");
+
+                let drive_access = self
+                    .drive_access
+                    .as_ref()
+                    .ok_or(DriveLoaderError::KeyNotAvailable("missing drive access"))?;
+
+                let all_perms = drive_access
+                    .permission_keys()
+                    .ok_or(DriveLoaderError::KeyNotAvailable("permission keys missing"))?;
+
+                let fs_key = all_perms
+                    .filesystem
+                    .as_ref()
+                    .ok_or(DriveLoaderError::KeyNotAvailable("fs key missing"))?;
+
+                let mut content = content.to_vec();
+
+                fs_key
+                    .decrypt_buffer(nonce, &mut content, &[], tag)
+                    .map_err(|_| {
+                        DriveLoaderError::InternalKeyError("fs key couldn't access content")
+                    })?;
+
+                tracing::debug!("drive_loader::private_content::decrypted");
+
                 todo!("private content")
             }
             remaining => {
@@ -165,16 +207,30 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
     }
 }
 
+fn content_chunk(input: &[u8], content_length: usize) -> ParserResult<&[u8]> {
+    take(content_length)(input)
+}
+
+fn content_length(input: &[u8]) -> ParserResult<u64> {
+    le_u64(input)
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum DriveLoaderError {
+    #[error("the provided signing key does not have access to this encrypted filesystem")]
+    AccessUnavailable,
+
     #[error("additional data needed to continue parsing")]
     Incomplete(Option<usize>),
+
+    #[error("failed to decrypt internal data with associated key: {0}")]
+    InternalKeyError(&'static str),
 
     #[error("an I/O error occurred: {0}")]
     IoError(#[from] std::io::Error),
 
-    #[error("the provided signing key does not have access to this encrypted filesystem")]
-    AccessUnavailable,
+    #[error("key expected to be available was missing when it was needed: {0}")]
+    KeyNotAvailable(&'static str),
 
     #[error("failed to parse drive data: {0}")]
     ParserFailure(String),

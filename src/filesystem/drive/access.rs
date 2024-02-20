@@ -13,7 +13,7 @@ use crate::codec::meta::VectorClock;
 use crate::codec::{ActorId, ActorSettings, AsyncEncodable, ParserResult};
 use crate::filesystem::drive::MetaKey;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct DriveAccess {
     actor_settings: HashMap<ActorId, ActorSettings>,
     permission_keys: Option<PermissionKeys>,
@@ -24,6 +24,13 @@ impl DriveAccess {
         self.actor_settings
             .get(&actor_id)
             .map(|settings| settings.actor_settings())
+    }
+
+    pub fn init_private(rng: &mut impl CryptoRngCore) -> Self {
+        Self {
+            actor_settings: HashMap::new(),
+            permission_keys: Some(PermissionKeys::generate(rng)),
+        }
     }
 
     pub fn permission_keys(&self) -> Option<&PermissionKeys> {

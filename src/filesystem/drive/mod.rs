@@ -14,11 +14,12 @@ pub use operations::OperationError;
 pub(crate) use walk_state::WalkState;
 
 use std::collections::HashMap;
+use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 use std::sync::Arc;
 
 use async_std::sync::RwLock;
 use elliptic_curve::rand_core::CryptoRngCore;
-use futures::io::AsyncWrite;
+use futures::io::{AsyncWrite, AsyncWriteExt};
 use slab::Slab;
 use tracing::debug;
 
@@ -30,6 +31,7 @@ use crate::filesystem::nodes::{Node, NodeBuilder, NodeBuilderError, NodeId};
 pub struct Drive {
     current_key: Arc<SigningKey>,
     filesystem_id: FilesystemId,
+
     private: bool,
 
     // todo: need to switch to a mutex, can't have state being modified during an encoding session
@@ -82,6 +84,35 @@ impl Drive {
             .encode_permissions(rng, writer, &meta_key)
             .await?;
 
+        let fs_key = match inner_read.access.permission_keys() {
+            Some(pk) => match &pk.filesystem {
+                Some(fk) => fk,
+                None => return Err(StdError::new(StdErrorKind::Other, "no filesystem key")),
+            },
+            None => return Err(StdError::new(StdErrorKind::Other, "no filesystem key")),
+        };
+
+        let mut plaintext_buffer = Vec::new();
+
+        // todo: encode data nodes
+
+        let filesystem_length = Nonce::size() + plaintext_buffer.len() + AuthenticationTag::size();
+
+        let encoded_length_bytes = (filesystem_length as u64).to_le_bytes();
+        writer.write_all(&encoded_length_bytes).await?;
+        written_bytes += encoded_length_bytes.len();
+
+        // todo: use filesystem ID and encoded length bytes as AD
+
+        let (nonce, tag) = fs_key
+            .encrypt_buffer(rng, &[], &mut plaintext_buffer)
+            .map_err(|_| StdError::new(StdErrorKind::Other, "unable to encrypt filesystem"))?;
+
+        written_bytes += nonce.encode(writer).await?;
+        writer.write_all(plaintext_buffer.as_slice()).await?;
+        written_bytes += plaintext_buffer.len();
+        written_bytes += tag.encode(writer).await?;
+
         Ok(written_bytes)
     }
 
@@ -115,7 +146,7 @@ impl Drive {
             .with_all_access()
             .build();
 
-        let mut access = DriveAccess::default();
+        let mut access = DriveAccess::init_private(rng);
         access.register_actor(verifying_key, kas);
 
         let mut nodes = Slab::with_capacity(32);
