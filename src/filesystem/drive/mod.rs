@@ -74,10 +74,15 @@ impl Drive {
         let key_list = inner_read.access.sorted_actor_settings();
 
         written_bytes += meta_key.encode_escrow(rng, writer, key_list).await?;
+
+        // todo: the following need to be split up so content options and journal start can be
+        // included
         written_bytes += inner_read
             .access
             .encode_permissions(rng, writer, &meta_key)
             .await?;
+        //content_options.encode(&mut plaintext_buffer).await?;
+        //inner_read.journal_start.encode(&mut plaintext_buffer).await?;
 
         let filesystem_key = inner_read
             .access
@@ -85,27 +90,18 @@ impl Drive {
             .and_then(|pk| pk.filesystem.as_ref())
             .ok_or(StdError::new(StdErrorKind::Other, "no filesystem key"))?;
 
-        let mut payload_side_buffer = Vec::new();
+        let mut buffer = EncryptedBuffer::default();
+        inner_read.encode(&mut *buffer).await?;
 
-        let mut plaintext_buffer = Vec::new();
-        inner_read.encode(&mut plaintext_buffer).await?;
-
-        let filesystem_length = Nonce::size() + plaintext_buffer.len() + AuthenticationTag::size();
-        let encoded_length_bytes = (filesystem_length as u64).to_le_bytes();
-        payload_side_buffer.write_all(&encoded_length_bytes).await?;
+        let buffer_length = buffer.encrypted_len() as u64;
+        let length_bytes = buffer_length.to_le_bytes();
+        writer.write_all(&length_bytes).await?;
+        written_bytes += length_bytes.len();
 
         // todo: use filesystem ID and encoded length bytes as AD
-
-        let (nonce, tag) = filesystem_key
-            .encrypt_buffer(rng, &[], &mut plaintext_buffer)
-            .map_err(|_| StdError::new(StdErrorKind::Other, "unable to encrypt filesystem"))?;
-
-        nonce.encode(&mut payload_side_buffer).await?;
-        payload_side_buffer.write_all(&plaintext_buffer).await?;
-        tag.encode(&mut payload_side_buffer).await?;
-
-        writer.write_all(&payload_side_buffer).await?;
-        written_bytes += payload_side_buffer.len();
+        written_bytes += buffer
+            .encrypt_and_encode(writer, rng, &[], filesystem_key)
+            .await?;
 
         Ok(written_bytes)
     }

@@ -1,6 +1,7 @@
 mod access_key;
 mod asym_locked_access_key;
 mod authentication_tag;
+mod encrypted_buffer;
 mod fingerprint;
 mod key_id;
 mod nonce;
@@ -9,6 +10,8 @@ mod signature;
 mod signing_key;
 mod sym_locked_access_key;
 mod verifying_key;
+
+pub(crate) use encrypted_buffer::EncryptedBuffer;
 
 pub use access_key::AccessKey;
 pub use asym_locked_access_key::AsymLockedAccessKey;

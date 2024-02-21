@@ -138,6 +138,8 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 Ok(ProgressType::Advance(bytes_read))
             }
             DriveLoaderState::EncryptedPermissions(key_count, meta_key) => {
+                // todo(sstelfox): this needs to be split up as it now contains three things
+                //let (content_ref, content_options) = ContentOptions::parse(&content)?;
                 let (input, drive_access) = DriveAccess::recover_permissions(
                     buffer,
                     **key_count,
