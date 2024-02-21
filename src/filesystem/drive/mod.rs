@@ -258,6 +258,41 @@ impl InnerDrive {
 
             node.name().encode(&mut node_encoding_buffer).await?;
 
+            let metadata_entries = node.metadata.len();
+            if metadata_entries > u8::MAX as usize {
+                return Err(StdError::new(
+                    StdErrorKind::Other,
+                    "too many metadata entries",
+                ));
+            }
+
+            let entry_count = metadata_entries as u8;
+            node_encoding_buffer.write_all(&[entry_count]).await?;
+
+            for (key, val) in node.metadata.iter() {
+                let key_bytes = key.as_bytes();
+                let key_bytes_len = key_bytes.len();
+
+                if key_bytes_len > u8::MAX as usize {
+                    return Err(StdError::new(StdErrorKind::Other, "metadata key too long"));
+                }
+                let key_bytes_len = key_bytes_len as u8;
+
+                node_encoding_buffer.write_all(&[key_bytes_len]).await?;
+                node_encoding_buffer.write_all(key_bytes).await?;
+
+                let val_bytes_len = val.len();
+                if val_bytes_len > u8::MAX as usize {
+                    return Err(StdError::new(StdErrorKind::Other, "metadata val too long"));
+                }
+                let val_bytes_len = val_bytes_len as u8;
+
+                node_encoding_buffer.write_all(&[val_bytes_len]).await?;
+                node_encoding_buffer.write_all(val).await?;
+            }
+
+            node.kind.encode(&mut node_encoding_buffer).await?;
+
             writer.write_all(&node_encoding_buffer).await?;
             written_bytes += node_encoding_buffer.len();
         }

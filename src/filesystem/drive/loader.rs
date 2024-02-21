@@ -123,6 +123,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 Ok(ProgressType::Advance(bytes_read))
             }
             DriveLoaderState::EscrowedAccessKeys(key_count) => {
+                // todo(sstelfox): switch to EncryptedBuffer
                 let (input, meta_key) =
                     MetaKey::parse_escrow(buffer, **key_count, self.signing_key)?;
 

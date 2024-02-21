@@ -182,10 +182,6 @@ impl DriveAccess {
     }
 
     pub const fn size() -> usize {
-        KeyId::size()
-            + VerifyingKey::size()
-            + VectorClock::size()
-            + KeyAccessSettings::size()
-            + PermissionKeys::size()
+        KeyId::size() + ActorSettings::size() + PermissionKeys::size()
     }
 }

@@ -50,9 +50,9 @@ impl ActorSettings {
             (agent_len as u8, full_agent)
         };
 
-        //writer.write_all(&[len as u8]).await?;
-        //writer.write_all(&bytes).await?;
-        //written_bytes += 1 + SOFTWARE_AGENT_BYTE_STR_SIZE;
+        writer.write_all(&[len]).await?;
+        writer.write_all(&bytes).await?;
+        written_bytes += 1 + SOFTWARE_AGENT_BYTE_STR_SIZE;
 
         Ok(written_bytes)
     }
@@ -76,11 +76,9 @@ impl ActorSettings {
         let (input, vector_clock) = VectorClock::parse(input)?;
         let (input, access_settings) = KeyAccessSettings::parse_private(input)?;
 
-        //let (input, agent_len) = le_u8(input)?;
-        //let (input, agent_fixed) = take(SOFTWARE_AGENT_BYTE_STR_SIZE)(input)?;
-        //let agent = agent_fixed[..agent_len as usize].to_vec();
-
-        let agent = Vec::new();
+        let (input, agent_len) = le_u8(input)?;
+        let (input, agent_fixed) = take(SOFTWARE_AGENT_BYTE_STR_SIZE)(input)?;
+        let agent = agent_fixed[..agent_len as usize].to_vec();
 
         let actor_settings = Self {
             verifying_key,
@@ -93,9 +91,11 @@ impl ActorSettings {
     }
 
     pub const fn size() -> usize {
-        VerifyingKey::size() + VectorClock::size() + KeyAccessSettings::size()
-        //+ 1
-        //+ SOFTWARE_AGENT_BYTE_STR_SIZE
+        VerifyingKey::size()
+            + VectorClock::size()
+            + KeyAccessSettings::size()
+            + 1
+            + SOFTWARE_AGENT_BYTE_STR_SIZE
     }
 
     pub fn vector_clock(&self) -> VectorClock {
