@@ -33,8 +33,8 @@ impl PublicSettings {
         let settings_byte = settings_byte[0];
 
         if cfg!(feature = "strict") && (settings_byte & RESERVED_BITS) != 0 {
-            todo!()
-            //return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Verify)));
+            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
+            return Err(nom::Err::Failure(err));
         }
 
         let ecc_present = (settings_byte & ECC_PRESENT_BIT) == ECC_PRESENT_BIT;

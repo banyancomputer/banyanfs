@@ -121,3 +121,33 @@ impl<I> From<chacha20poly1305::Error> for AccessKeyError<I> {
         AccessKeyError::CryptoFailure
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn test_encryption_roundtrip() {
+        let mut rng = crate::utils::crypto_rng();
+
+        let reference_pt = b"nothing hidden".to_vec();
+        let mut buffer = reference_pt.clone();
+        let access_key = AccessKey::generate(&mut rng);
+
+        let (nonce, tag) = access_key
+            .encrypt_buffer(&mut rng, &[], &mut buffer)
+            .expect("encryption success");
+
+        assert_ne!(&reference_pt, &buffer);
+
+        access_key
+            .decrypt_buffer(nonce, &mut buffer, &[], tag)
+            .expect("decryption success");
+
+        assert_eq!(&reference_pt, &buffer);
+    }
+}
