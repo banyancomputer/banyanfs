@@ -131,7 +131,7 @@ mod tests {
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
-    fn test_encryption_roundtrip() {
+    fn test_encryption_buffer_roundtrip() {
         let mut rng = crate::utils::crypto_rng();
 
         let reference_pt = b"nothing hidden".to_vec();

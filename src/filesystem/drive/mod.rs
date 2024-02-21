@@ -101,7 +101,7 @@ impl Drive {
             .map_err(|_| StdError::new(StdErrorKind::Other, "unable to encrypt filesystem"))?;
 
         written_bytes += nonce.encode(writer).await?;
-        writer.write_all(plaintext_buffer.as_slice()).await?;
+        writer.write_all(&plaintext_buffer).await?;
         written_bytes += plaintext_buffer.len();
         written_bytes += tag.encode(writer).await?;
 
