@@ -67,14 +67,12 @@ impl MetaKey {
             Err(err) => return Err(err),
         };
 
-        let key_id = signing_key.key_id();
-        let _span = tracing::debug_span!("parse_access", ?key_id).entered();
-
+        let signing_key_id = signing_key.key_id();
         let mut meta_key = None;
-        let relevant_keys = locked_keys.iter().filter(|(kid, _)| *kid == key_id);
 
-        for (key_id, potential_key) in relevant_keys {
-            tracing::info!(candidate_key_id = ?key_id, "found_candidate");
+        for (key_id, potential_key) in locked_keys.iter().filter(|(kid, _)| *kid == signing_key_id)
+        {
+            tracing::trace!(candidate_key_id = ?key_id, "found_candidate");
 
             if let Ok(key) = potential_key.unlock(signing_key) {
                 meta_key = Some(Self::from(key));

@@ -182,38 +182,21 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 // todo: calculate hash over buffer[..bytes_read] and validate signature over
                 // length, nonce, content, tag (need to also generate this)
 
-                let drive_access = self
+                let filesystem_key = self
                     .drive_access
                     .as_ref()
-                    .ok_or(DriveLoaderError::KeyNotAvailable("missing drive access"))?;
-
-                let all_perms = drive_access
-                    .permission_keys()
+                    .and_then(|a| a.permission_keys())
+                    .and_then(|pk| pk.filesystem.as_ref())
                     .ok_or(DriveLoaderError::KeyNotAvailable("permission keys missing"))?;
 
-                let fs_key = all_perms
-                    .filesystem
-                    .as_ref()
-                    .ok_or(DriveLoaderError::KeyNotAvailable("fs key missing"))?;
-
                 let mut content = content.to_vec();
-                tracing::debug!(
-                    key = ?fs_key.as_bytes(),
-                    nonce = ?nonce.as_bytes(),
-                    content = ?content,
-                    auth_tag = ?tag.as_bytes(),
-                    "drive_loader::private_content::encrypted");
-
-                fs_key
+                filesystem_key
                     .decrypt_buffer(nonce, &[], &mut content, tag)
                     .map_err(|_| {
                         DriveLoaderError::InternalKeyError("fs key couldn't access content")
                     })?;
 
                 todo!("private content")
-            }
-            remaining => {
-                unimplemented!("parsing for state {remaining:?}");
             }
         }
     }
@@ -272,7 +255,7 @@ impl<E: std::fmt::Debug> From<nom::Err<E>> for DriveLoaderError {
             }
             nom::Err::Incomplete(_) => DriveLoaderError::Incomplete(None),
             err => {
-                let err_msg = format!("failed to parse data: {:?}", err);
+                let err_msg = format!("parse verification detected failure: {:?}", err);
                 DriveLoaderError::ParserFailure(err_msg)
             }
         }

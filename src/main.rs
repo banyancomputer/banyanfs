@@ -135,7 +135,7 @@ async fn main() -> BanyanFsResult<()> {
         return Ok(());
     }
 
-    tracing::info!("persisted drive");
+    tracing::debug!("persisted drive");
 
     let mut fh = match tokio::fs::File::open("fixtures/minimal.bfs").await {
         Ok(fh) => fh.compat(),

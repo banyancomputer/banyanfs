@@ -21,7 +21,7 @@ use async_std::sync::RwLock;
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
 use slab::Slab;
-use tracing::{debug, trace};
+use tracing::trace;
 
 use crate::codec::crypto::*;
 use crate::codec::header::*;
@@ -77,14 +77,11 @@ impl Drive {
             .encode_permissions(rng, writer, &meta_key)
             .await?;
 
-        let fs_key = match inner_read.access.permission_keys() {
-            Some(pk) => match &pk.filesystem {
-                Some(fk) => fk,
-                None => return Err(StdError::new(StdErrorKind::Other, "no filesystem key")),
-            },
-            None => return Err(StdError::new(StdErrorKind::Other, "no filesystem key")),
-        };
-        tracing::error!(key = ?fs_key.as_bytes(), "raw post-encrypted nodes");
+        let filesystem_key = inner_read
+            .access
+            .permission_keys()
+            .and_then(|pk| pk.filesystem.as_ref())
+            .ok_or(StdError::new(StdErrorKind::Other, "no filesystem key"))?;
 
         let mut payload_side_buffer = Vec::new();
 
@@ -97,14 +94,9 @@ impl Drive {
 
         // todo: use filesystem ID and encoded length bytes as AD
 
-        // todo(sstelfox): the filesystem key appears wrong at this particular poitn and I need to
-        // figure out why...
-
-        let (nonce, tag) = fs_key
+        let (nonce, tag) = filesystem_key
             .encrypt_buffer(rng, &[], &mut plaintext_buffer)
             .map_err(|_| StdError::new(StdErrorKind::Other, "unable to encrypt filesystem"))?;
-
-        tracing::error!(key = ?fs_key.as_bytes(), nonce = ?nonce.as_bytes(), content = ?plaintext_buffer, auth_tag = ?tag.as_bytes(), "raw post-encrypted nodes");
 
         nonce.encode(&mut payload_side_buffer).await?;
         payload_side_buffer.write_all(&plaintext_buffer).await?;
@@ -146,7 +138,7 @@ impl Drive {
             .with_all_access()
             .build();
 
-        let mut access = DriveAccess::init_private(rng);
+        let mut access = DriveAccess::init_private(rng, actor_id);
         access.register_actor(verifying_key, kas);
 
         let mut nodes = Slab::with_capacity(32);
@@ -209,6 +201,12 @@ impl InnerDrive {
             .access
             .permission_keys()
             .ok_or(StdError::new(StdErrorKind::Other, "no permission keys"))?;
+
+        // todo(sstelfox): there is a complex use case here that needs to be handled. Someone with
+        // access to the filesystem and maintenance key, but without the data key can make changes
+        // as long as they preserve the data key they loaded the filesystem with. Ideally data
+        // wrapping keys would be rotated everytime there was a full save but that won't work for
+        // now. Both these cases can be iteratively added on later to the library.
 
         let data_key = all_perms
             .data

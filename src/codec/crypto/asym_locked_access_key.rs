@@ -53,8 +53,6 @@ impl AsymLockedAccessKey {
             &self.tag,
         )?;
 
-        tracing::info!(unlocked_key = ?key_payload, "unlocked access key");
-
         Ok(AccessKey::from(key_payload))
     }
 }

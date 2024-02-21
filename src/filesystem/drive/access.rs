@@ -15,6 +15,7 @@ use crate::filesystem::drive::MetaKey;
 
 #[derive(Debug)]
 pub struct DriveAccess {
+    current_actor_id: ActorId,
     actor_settings: HashMap<ActorId, ActorSettings>,
     permission_keys: Option<PermissionKeys>,
 }
@@ -26,8 +27,9 @@ impl DriveAccess {
             .map(|settings| settings.actor_settings())
     }
 
-    pub fn init_private(rng: &mut impl CryptoRngCore) -> Self {
+    pub fn init_private(rng: &mut impl CryptoRngCore, current_actor_id: ActorId) -> Self {
         Self {
+            current_actor_id,
             actor_settings: HashMap::new(),
             permission_keys: Some(PermissionKeys::generate(rng)),
         }
@@ -76,8 +78,6 @@ impl DriveAccess {
             let actor_id = verifying_key.actor_id();
             actor_settings.insert(actor_id, settings);
 
-            // todo(sstelfox): still corrupted or otherwise incorrect here...
-
             if key_id == verifying_key.key_id() {
                 match PermissionKeys::parse(buffer_input, signing_key) {
                     Ok((buf_inp, keys)) => {
@@ -96,13 +96,15 @@ impl DriveAccess {
             tracing::warn!("no matching permission keys found for provided key");
         }
 
-        Ok((
-            input,
-            Self {
-                actor_settings,
-                permission_keys,
-            },
-        ))
+        let current_actor_id = signing_key.actor_id();
+
+        let drive_access = Self {
+            current_actor_id,
+            actor_settings,
+            permission_keys,
+        };
+
+        Ok((input, drive_access))
     }
 
     pub async fn encode_permissions<W: AsyncWrite + Unpin + Send>(
@@ -113,15 +115,27 @@ impl DriveAccess {
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
 
-        let permission_keys = PermissionKeys::generate(rng);
+        let permission_keys = match &self.permission_keys {
+            Some(keys) => keys,
+            None => {
+                return Err(StdError::new(
+                    StdErrorKind::InvalidData,
+                    "no permission keys available for encoding",
+                ))
+            }
+        };
         let mut plaintext_buffer = Vec::new();
 
         for settings in self.sorted_actor_settings().iter() {
             let verifying_key = settings.verifying_key();
+
             let key_id = verifying_key.key_id();
             key_id.encode(&mut plaintext_buffer).await?;
 
-            settings.encode(&mut plaintext_buffer).await?;
+            let reset_agent_version = self.current_actor_id == verifying_key.actor_id();
+            settings
+                .encode(&mut plaintext_buffer, reset_agent_version)
+                .await?;
 
             let key_settings = settings.actor_settings();
 
@@ -185,8 +199,9 @@ impl DriveAccess {
         }
     }
 
-    pub fn new() -> Self {
+    pub fn new(current_actor_id: ActorId) -> Self {
         Self {
+            current_actor_id,
             actor_settings: HashMap::new(),
             permission_keys: None,
         }

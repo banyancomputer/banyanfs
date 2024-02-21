@@ -14,10 +14,6 @@ const ACCESS_KEY_LENGTH: usize = 32;
 pub struct AccessKey([u8; ACCESS_KEY_LENGTH]);
 
 impl AccessKey {
-    pub(crate) fn as_bytes(&self) -> &[u8; ACCESS_KEY_LENGTH] {
-        &self.0
-    }
-
     pub(crate) fn chacha_key(&self) -> &ChaChaKey {
         ChaChaKey::from_slice(&self.0)
     }
@@ -62,8 +58,6 @@ impl AccessKey {
         verifying_key: &VerifyingKey,
     ) -> Result<AsymLockedAccessKey, AccessKeyError<&[u8]>> {
         let (dh_exchange_key, shared_secret) = verifying_key.ephemeral_dh_exchange(rng);
-
-        tracing::info!(locked_key = ?self.0.as_bytes(), key_id = ?verifying_key.key_id(), "locking access key with pubkey");
 
         let mut payload = self.0;
         let (nonce, tag) = shared_secret

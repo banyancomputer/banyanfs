@@ -26,7 +26,7 @@ impl PermissionKeys {
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
 
-        tracing::info!("permission encoding start");
+        tracing::trace!("permission encoding start");
 
         written_bytes += maybe_encode_key(
             rng,
@@ -130,8 +130,6 @@ pub async fn maybe_encode_key<W: AsyncWrite + Unpin + Send>(
         Some(key) if allowed => {
             writer.write_all(&[0x01]).await?;
             written_bytes += 1;
-
-            tracing::info!(key_bytes = ?key.as_bytes(), "writing key");
 
             let protected_key = key.lock_for(rng, verifying_key).map_err(|_| {
                 std::io::Error::new(std::io::ErrorKind::Other, "failed to lock permission key")
