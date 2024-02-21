@@ -58,7 +58,7 @@ impl ActorSettings {
     }
 
     pub fn new(verifying_key: VerifyingKey, access_settings: KeyAccessSettings) -> Self {
-        let vector_clock = VectorClock::init();
+        let vector_clock = VectorClock::initialize();
 
         let (len, agent_fixed) = current_version_byte_str();
         let agent = agent_fixed[..len as usize].to_vec();

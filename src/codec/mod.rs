@@ -1,4 +1,3 @@
-pub mod content_payload;
 pub mod crypto;
 pub mod filesystem;
 pub mod header;

@@ -9,6 +9,8 @@ const CID_LENGTH: usize = 32;
 pub struct Cid([u8; CID_LENGTH]);
 
 impl Cid {
+    pub const IDENTITY: Cid = Cid([0u8; CID_LENGTH]);
+
     pub fn as_bytes(&self) -> &[u8; CID_LENGTH] {
         &self.0
     }

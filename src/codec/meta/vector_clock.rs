@@ -20,7 +20,7 @@ impl VectorClock {
         Ok(clock_bytes.len())
     }
 
-    pub fn init() -> Self {
+    pub fn initialize() -> Self {
         Self::from(0)
     }
 
