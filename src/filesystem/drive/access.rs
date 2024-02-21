@@ -85,7 +85,7 @@ impl DriveAccess {
             permission_keys,
         };
 
-        Ok((input, drive_access))
+        Ok((buf_slice, drive_access))
     }
 
     pub async fn encode<W: AsyncWrite + Unpin + Send>(

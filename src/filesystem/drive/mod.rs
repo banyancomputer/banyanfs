@@ -265,7 +265,7 @@ impl InnerDrive {
         Ok(written_bytes)
     }
 
-    pub fn parse(_input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(_input: &[u8], _journal_start: JournalCheckpoint) -> ParserResult<Self> {
         todo!()
     }
 }

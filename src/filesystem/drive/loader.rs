@@ -1,5 +1,7 @@
+use std::sync::Arc;
+
+use async_std::sync::RwLock;
 use futures::{AsyncRead, AsyncReadExt};
-use nom::bytes::streaming::take;
 use nom::number::streaming::le_u64;
 use tracing::{debug, trace};
 
@@ -9,7 +11,7 @@ use crate::codec::meta::{FilesystemId, JournalCheckpoint, MetaKey};
 use crate::codec::parser::{
     ParserResult, ParserStateMachine, ProgressType, SegmentStreamer, StateError, StateResult,
 };
-use crate::filesystem::{Drive, DriveAccess};
+use crate::filesystem::{Drive, DriveAccess, InnerDrive};
 
 pub struct DriveLoader<'a> {
     signing_key: &'a SigningKey,
@@ -133,40 +135,53 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 };
 
                 trace!("drive_loader::escrowed_access_keys::unlocked");
-                self.state = DriveLoaderState::EncryptedPermissions(*key_count, meta_key);
+                self.state = DriveLoaderState::EncryptedHeader(*key_count, meta_key);
 
                 Ok(ProgressType::Advance(bytes_read))
             }
-            DriveLoaderState::EncryptedPermissions(key_count, meta_key) => {
-                // todo(sstelfox): this needs to be split up as it now contains three things
-                //let (content_ref, content_options) = ContentOptions::parse(&content)?;
-
+            DriveLoaderState::EncryptedHeader(key_count, meta_key) => {
                 let payload_size = (**key_count as usize * DriveAccess::size())
                     + ContentOptions::size()
                     + JournalCheckpoint::size();
 
-                let (input, hdr) =
+                trace!(payload_size, "drive_loader::encrypted_header");
+                let (input, header_buffer) =
                     EncryptedBuffer::parse_and_decrypt(buffer, payload_size, &[], meta_key)?;
 
-                let (hdr_ref, drive_access) =
-                    DriveAccess::parse(&hdr, **key_count, self.signing_key)?;
-                let (hdr_ref, content_options) = ContentOptions::parse(hdr_ref)?;
-                let (hdr_ref, journal_checkpoint) = JournalCheckpoint::parse(hdr_ref)?;
-                debug_assert!(hdr_ref.is_empty());
+                let mut header = header_buffer.as_ref();
 
-                let bytes_read = buffer.len() - input.len();
+                let (remaining, drive_access) =
+                    DriveAccess::parse(header, **key_count, self.signing_key)?;
+                let bytes_read = header.len() - remaining.len();
+                (_, header) = header.split_at(bytes_read);
+                trace!(bytes_read, "drive_loader::encrypted_header::drive_access");
+
+                let (remaining, content_options) = ContentOptions::parse(header)?;
+                let bytes_read = header.len() - remaining.len();
+                (_, header) = header.split_at(bytes_read);
                 trace!(
                     bytes_read,
-                    ?key_count,
-                    "drive_loader::encrypted_permissions"
+                    "drive_loader::encrypted_header::content_options"
                 );
 
+                let (remaining, journal_start) = JournalCheckpoint::parse(header)?;
+                let bytes_read = header.len() - remaining.len();
+                trace!(
+                    bytes_read,
+                    "drive_loader::encrypted_header::journal_checkpoint"
+                );
+
+                debug_assert!(remaining.is_empty());
+
                 self.drive_access = Some(drive_access);
-                self.state = DriveLoaderState::PrivateContent(content_options);
+                self.state = DriveLoaderState::PrivateContent(content_options, journal_start);
+
+                let bytes_read = buffer.len() - input.len();
+                trace!(bytes_read, "drive_loader::encrypted_header::complete");
 
                 Ok(ProgressType::Advance(bytes_read))
             }
-            DriveLoaderState::PrivateContent(content_options) => {
+            DriveLoaderState::PrivateContent(content_options, journal_start) => {
                 if content_options.include_filesystem() {
                     let (input, mut payload_size) = content_length(buffer)?;
 
@@ -190,22 +205,38 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                     // todo(sstelfox): authenticated data should include filesystem ID, and length
                     // bytes
 
-                    let (input, filesystem_bytes) = EncryptedBuffer::parse_and_decrypt(
+                    let (input, fs_buffer) = EncryptedBuffer::parse_and_decrypt(
                         input,
                         payload_size as usize,
                         &[],
                         filesystem_key,
                     )?;
+
+                    let (remaining, inner_drive) =
+                        InnerDrive::parse(&fs_buffer, journal_start.clone())?;
+                    debug_assert!(remaining.is_empty());
+
+                    let drive = Drive {
+                        current_key: Arc::new(self.signing_key.clone()),
+                        filesystem_id: self.filesystem_id.expect("to have been set"),
+                        private: true,
+                        inner: Arc::new(RwLock::new(inner_drive)),
+                    };
+
+                    // todo handle journal entries
+
+                    let bytes_read = buffer.len() - input.len();
+                    trace!(bytes_read, "drive_loader::encrypted_payload::complete");
+
+                    return Ok(ProgressType::Ready(bytes_read, drive));
                 }
+
+                // todo handle data segments
 
                 unimplemented!("further content");
             }
         }
     }
-}
-
-fn content_chunk(input: &[u8], content_length: usize) -> ParserResult<&[u8]> {
-    take(content_length)(input)
 }
 
 fn content_length(input: &[u8]) -> ParserResult<u64> {
@@ -273,8 +304,8 @@ enum DriveLoaderState {
     KeyCount,
 
     EscrowedAccessKeys(KeyCount),
-    EncryptedPermissions(KeyCount, MetaKey),
-    PrivateContent(ContentOptions),
+    EncryptedHeader(KeyCount, MetaKey),
+    PrivateContent(ContentOptions, JournalCheckpoint),
     //PublicPermissions(KeyCount),
     //PublicContent,
 
