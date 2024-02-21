@@ -1,6 +1,7 @@
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
 use futures::{AsyncWrite, AsyncWriteExt};
+use nom::number::streaming::le_u8;
 
 use crate::codec::ParserResult;
 
@@ -80,7 +81,24 @@ impl NodeName {
     }
 
     pub fn parse(input: &[u8]) -> ParserResult<Self> {
-        todo!()
+        let (input, name_type) = le_u8(input)?;
+
+        match name_type {
+            NAME_TYPE_ROOT_ID => Ok((input, Self(NodeNameInner::Root))),
+            NAME_TYPE_NAMED_ID => {
+                let (input, name_length) = le_u8(input)?;
+                let (input, name) = nom::bytes::streaming::take(name_length as usize)(input)?;
+
+                let name = String::from_utf8(name.to_vec()).map_err(|_| {
+                    nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
+                })?;
+                Ok((input, Self(NodeNameInner::Named(name))))
+            }
+            _ => {
+                let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
+                Err(nom::Err::Failure(err))
+            }
+        }
     }
 
     pub(crate) fn root() -> Self {
@@ -126,8 +144,29 @@ mod tests {
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
-    #[ignore]
-    async fn test_naming_round_trip() {
-        todo!()
+    async fn test_root_round_trip() {
+        let original = NodeName::root();
+
+        let mut buffer = Vec::new();
+        original.encode(&mut buffer).await.unwrap();
+        assert_eq!(buffer, &[0x00]);
+
+        let (remaining, parsed) = NodeName::parse(&buffer).unwrap();
+        assert!(!remaining.is_empty());
+        assert_eq!(original, parsed);
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_named_round_trip() {
+        let original = NodeName::named("hello".to_string()).unwrap();
+
+        let mut buffer = Vec::new();
+        original.encode(&mut buffer).await.unwrap();
+        assert_eq!(buffer, &[0x01, 0x05, b'h', b'e', b'l', b'l', b'o']);
+
+        let (remaining, parsed) = NodeName::parse(&buffer).unwrap();
+        assert!(!remaining.is_empty());
+        assert_eq!(original, parsed);
     }
 }

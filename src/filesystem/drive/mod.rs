@@ -195,9 +195,9 @@ pub(crate) struct InnerDrive {
     access: DriveAccess,
 
     journal_start: JournalCheckpoint,
+    pub(crate) root_node_id: NodeId,
 
     pub(crate) nodes: Slab<Node>,
-    pub(crate) root_node_id: NodeId,
     pub(crate) permanent_id_map: HashMap<PermanentId, NodeId>,
 }
 
@@ -208,20 +208,17 @@ impl InnerDrive {
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
 
-        let all_perms = self
-            .access
-            .permission_keys()
-            .ok_or(StdError::new(StdErrorKind::Other, "no permission keys"))?;
-
         // todo(sstelfox): there is a complex use case here that needs to be handled. Someone with
         // access to the filesystem and maintenance key, but without the data key can make changes
-        // as long as they preserve the data key they loaded the filesystem with. Ideally data
-        // wrapping keys would be rotated everytime there was a full save but that won't work for
+        // as long as they preserve the data key they loaded the filesystem with.
+        //
+        // Ideally data wrapping keys would be rotated everytime there was a full save but that won't work for
         // now. Both these cases can be iteratively added on later to the library.
 
-        let data_key = all_perms
-            .data
-            .as_ref()
+        let data_key = self
+            .access
+            .permission_keys()
+            .and_then(|pk| pk.data.as_ref())
             .ok_or(StdError::new(StdErrorKind::Other, "no data key"))?;
 
         // Walk the nodes starting from the root, encoding them one at a time, we want to make sure
@@ -232,8 +229,6 @@ impl InnerDrive {
         let mut seen_ids = HashSet::new();
         let mut outstanding_ids = vec![self.root_node_id];
         //let mut data_ids = Vec::new();
-
-        let mut node_encoding_buffer = Vec::new();
 
         while let Some(node_id) = outstanding_ids.pop() {
             let node = self.nodes.get(node_id).ok_or_else(|| {
@@ -247,54 +242,24 @@ impl InnerDrive {
             }
             seen_ids.insert(permanent_id);
 
-            permanent_id.encode(&mut node_encoding_buffer).await?;
-            node.owner_id().encode(&mut node_encoding_buffer).await?;
+            let (written, children) = node.encode(writer, data_key).await?;
 
-            let created_at_bytes = node.created_at().to_le_bytes();
-            node_encoding_buffer.write_all(&created_at_bytes).await?;
+            for child_permanent_id in children.into_iter() {
+                if seen_ids.contains(&child_permanent_id) {
+                    continue;
+                }
 
-            let modified_at_bytes = node.modified_at().to_le_bytes();
-            node_encoding_buffer.write_all(&modified_at_bytes).await?;
+                let child_node_id = self.permanent_id_map.get(&permanent_id).ok_or_else(|| {
+                    StdError::new(
+                        StdErrorKind::Other,
+                        "referenced child's permanent ID missing from internal nodes",
+                    )
+                })?;
 
-            node.name().encode(&mut node_encoding_buffer).await?;
-
-            let metadata_entries = node.metadata.len();
-            if metadata_entries > u8::MAX as usize {
-                return Err(StdError::new(
-                    StdErrorKind::Other,
-                    "too many metadata entries",
-                ));
+                outstanding_ids.push(*child_node_id);
             }
 
-            let entry_count = metadata_entries as u8;
-            node_encoding_buffer.write_all(&[entry_count]).await?;
-
-            for (key, val) in node.metadata.iter() {
-                let key_bytes = key.as_bytes();
-                let key_bytes_len = key_bytes.len();
-
-                if key_bytes_len > u8::MAX as usize {
-                    return Err(StdError::new(StdErrorKind::Other, "metadata key too long"));
-                }
-                let key_bytes_len = key_bytes_len as u8;
-
-                node_encoding_buffer.write_all(&[key_bytes_len]).await?;
-                node_encoding_buffer.write_all(key_bytes).await?;
-
-                let val_bytes_len = val.len();
-                if val_bytes_len > u8::MAX as usize {
-                    return Err(StdError::new(StdErrorKind::Other, "metadata val too long"));
-                }
-                let val_bytes_len = val_bytes_len as u8;
-
-                node_encoding_buffer.write_all(&[val_bytes_len]).await?;
-                node_encoding_buffer.write_all(val).await?;
-            }
-
-            node.kind.encode(&mut node_encoding_buffer).await?;
-
-            writer.write_all(&node_encoding_buffer).await?;
-            written_bytes += node_encoding_buffer.len();
+            written_bytes += written;
         }
 
         Ok(written_bytes)

@@ -31,9 +31,11 @@ impl NodeBuilder {
             id,
             parent_id: self.parent_id,
 
+            cid: None,
+            permanent_id: PermanentId::generate(rng),
+
             name: self.name,
             owner_id,
-            permanent_id: PermanentId::generate(rng),
 
             created_at: current_ts,
             modified_at: current_ts,
