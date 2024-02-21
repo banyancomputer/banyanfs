@@ -46,8 +46,19 @@ impl VerifyingKey {
         Fingerprint::from(self)
     }
 
-    pub fn from_bytes(_bytes: &[u8]) -> Result<Self, VerifyingKeyError> {
-        todo!()
+    pub fn from_bytes(encoded_bytes: &[u8]) -> Result<Self, VerifyingKeyError> {
+        let mut bytes = [0u8; KEY_SIZE];
+        bytes.copy_from_slice(encoded_bytes);
+
+        let encoded_point = ecdsa::EncodedPoint::<NistP384>::from_bytes(encoded_bytes)
+            .map_err(|_| VerifyingKeyError::InvalidByteEncoding)?;
+
+        let key = match ecdsa::VerifyingKey::from_encoded_point(&encoded_point) {
+            Ok(key) => key,
+            Err(err) => return Err(VerifyingKeyError::InvalidEncodedPoint(err)),
+        };
+
+        Ok(Self { inner: key })
     }
 
     #[cfg(feature = "pem")]
@@ -75,8 +86,8 @@ impl VerifyingKey {
             Ok(key) => key,
             Err(err) => {
                 tracing::error!("failed to decode ECDSA key: {err}");
-                todo!()
-                //return Err(Err::Failure(nom::error::Error::new(input, ErrorKind::Fail)));
+                let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
+                return Err(nom::Err::Failure(err));
             }
         };
 
@@ -89,6 +100,7 @@ impl VerifyingKey {
 
     pub fn to_bytes(&self) -> [u8; KEY_SIZE] {
         let compressed_public_key = self.inner.to_encoded_point(true);
+        debug_assert!(compressed_public_key.len() == KEY_SIZE);
 
         let mut public_key = [0u8; KEY_SIZE];
         public_key.copy_from_slice(compressed_public_key.as_bytes());
@@ -138,8 +150,11 @@ impl From<ecdsa::VerifyingKey<NistP384>> for VerifyingKey {
 
 #[derive(Debug, thiserror::Error)]
 pub enum VerifyingKeyError {
-    #[error("failed to decode verifying key from compressed bytes: {0}")]
-    InvalidByteEncoding(elliptic_curve::Error),
+    #[error("failed to extract encoded point for verifying key from compressed bytes")]
+    InvalidByteEncoding,
+
+    #[error("failed to convert encoded point into a valid verifying key: {0}")]
+    InvalidEncodedPoint(ecdsa::Error),
 
     #[error("failed to load SPKI fomatted verifying key: {0}")]
     InvalidSpki(elliptic_curve::pkcs8::spki::Error),

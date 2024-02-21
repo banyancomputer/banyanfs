@@ -157,8 +157,8 @@ impl KeyAccessSettings {
         let (input, byte) = le_u8(input)?;
 
         if cfg!(feature = "strict") && byte & PRIVATE_RESERVED_MASK != 0 {
-            todo!()
-            //return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Tag)));
+            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
+            return Err(nom::Err::Failure(err));
         }
 
         let protected = byte & PROTECTED_BIT != 0;
@@ -186,8 +186,8 @@ impl KeyAccessSettings {
         let (input, byte) = le_u8(input)?;
 
         if cfg!(feature = "strict") && byte & PUBLIC_RESERVED_MASK != 0 {
-            todo!()
-            //return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Tag)));
+            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
+            return Err(nom::Err::Failure(err));
         }
 
         let protected = byte & PROTECTED_BIT != 0;

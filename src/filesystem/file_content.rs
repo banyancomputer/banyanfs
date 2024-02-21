@@ -57,8 +57,8 @@ impl FileContent {
                 )
             }
             _ => {
-                todo!()
-                //return Err(nom::Err::Error(NomError::new(input, ErrorKind::Tag)));
+                let err = nom::error::make_error(input, nom::error::ErrorKind::Tag);
+                return Err(nom::Err::Failure(err));
             }
         };
 

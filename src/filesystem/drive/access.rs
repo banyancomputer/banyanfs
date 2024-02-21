@@ -76,9 +76,16 @@ impl DriveAccess {
             let actor_id = verifying_key.actor_id();
             actor_settings.insert(actor_id, settings);
 
+            // todo(sstelfox): still corrupted or otherwise incorrect here...
+
             if key_id == verifying_key.key_id() {
                 match PermissionKeys::parse(buffer_input, signing_key) {
                     Ok((buf_inp, keys)) => {
+                        tracing::debug!(
+                            "fskey: {:?}",
+                            keys.filesystem.as_ref().map(|k| k.as_bytes())
+                        );
+
                         permission_keys = Some(keys);
                         buffer_input = buf_inp;
                         continue;

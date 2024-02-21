@@ -9,8 +9,6 @@ pub use node_name::{NodeName, NodeNameError};
 
 use std::collections::HashMap;
 
-use time::OffsetDateTime;
-
 use crate::codec::meta::{ActorId, PermanentId};
 
 pub(crate) type NodeId = usize;
@@ -22,8 +20,8 @@ pub struct Node {
     pub(crate) permanent_id: PermanentId,
     pub(crate) owner_id: ActorId,
 
-    pub(crate) created_at: OffsetDateTime,
-    pub(crate) modified_at: OffsetDateTime,
+    pub(crate) created_at: u64,
+    pub(crate) modified_at: u64,
 
     pub(crate) name: NodeName,
     pub(crate) metadata: HashMap<String, Vec<u8>>,
@@ -31,7 +29,7 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn created_at(&self) -> OffsetDateTime {
+    pub fn created_at(&self) -> u64 {
         self.created_at
     }
 
@@ -51,7 +49,7 @@ impl Node {
         &mut self.kind
     }
 
-    pub fn modified_at(&self) -> OffsetDateTime {
+    pub fn modified_at(&self) -> u64 {
         self.modified_at
     }
 

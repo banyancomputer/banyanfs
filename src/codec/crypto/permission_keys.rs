@@ -70,8 +70,7 @@ impl PermissionKeys {
             .map(|key| key.unlock(unlock_key))
             .transpose()
             .map_err(|_| {
-                //nom::Err::Failure(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
-                todo!()
+                nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
             })?;
 
         let (input, data) = maybe_parse_key(input)?;
@@ -79,8 +78,7 @@ impl PermissionKeys {
             .map(|key| key.unlock(unlock_key))
             .transpose()
             .map_err(|_| {
-                //nom::Err::Failure(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
-                todo!()
+                nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
             })?;
 
         let (input, maintenance) = maybe_parse_key(input)?;
@@ -88,8 +86,7 @@ impl PermissionKeys {
             .map(|key| key.unlock(unlock_key))
             .transpose()
             .map_err(|_| {
-                //nom::Err::Failure(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
-                todo!()
+                nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
             })?;
 
         let permission_keys = Self {
@@ -173,7 +170,7 @@ mod tests {
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_permission_keys_roundtrip() {
         let mut rng = crate::utils::crypto_rng();

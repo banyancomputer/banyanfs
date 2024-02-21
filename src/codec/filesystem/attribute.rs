@@ -5,7 +5,6 @@ use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 use nom::multi::count;
 use nom::number::streaming::{le_u64, le_u8};
-use time::OffsetDateTime;
 
 use crate::codec::filesystem::FilePermissions;
 use crate::codec::{ActorId, AsyncEncodable, ParserResult};
@@ -26,8 +25,8 @@ pub enum Attribute {
     Owner(ActorId),
     Permissions(FilePermissions),
 
-    CreatedAt(OffsetDateTime),
-    ModifiedAt(OffsetDateTime),
+    CreatedAt(u64),
+    ModifiedAt(u64),
 
     MimeType(String),
 
@@ -44,15 +43,13 @@ impl Attribute {
                 let (remaining, key_len) = le_u8(remaining)?;
                 let (remaining, key_bytes) = take(key_len)(remaining)?;
                 let key = String::from_utf8(key_bytes.to_vec()).map_err(|_| {
-                    todo!()
-                    //nom::Err::Failure(NomError::new(input, ErrorKind::Verify))
+                    nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
                 })?;
 
                 let (remaining, value_len) = le_u8(remaining)?;
                 let (remaining, value_bytes) = take(value_len)(remaining)?;
                 let value = String::from_utf8(value_bytes.to_vec()).map_err(|_| {
-                    todo!()
-                    //nom::Err::Failure(NomError::new(input, ErrorKind::Verify))
+                    nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
                 })?;
 
                 (remaining, Self::Custom { key, value })
@@ -70,40 +67,25 @@ impl Attribute {
             }
             ATTRIBUTE_CREATED_AT_TYPE_ID => {
                 let (remaining, unix_milliseconds) = le_u64(remaining)?;
-
-                let unix_nanos = unix_milliseconds as i128 * 1_000_000;
-                let time = OffsetDateTime::from_unix_timestamp_nanos(unix_nanos).map_err(|_| {
-                    todo!()
-                    //nom::Err::Failure(NomError::new(input, ErrorKind::Verify))
-                })?;
-
-                (remaining, Self::CreatedAt(time))
+                (remaining, Self::CreatedAt(unix_milliseconds))
             }
             ATTRIBUTE_MODIFIED_AT_TYPE_ID => {
                 let (remaining, unix_milliseconds) = le_u64(remaining)?;
-
-                let unix_nanos = unix_milliseconds as i128 * 1_000_000;
-                let time = OffsetDateTime::from_unix_timestamp_nanos(unix_nanos).map_err(|_| {
-                    todo!()
-                    //nom::Err::Failure(NomError::new(input, ErrorKind::Verify))
-                })?;
-
-                (remaining, Self::ModifiedAt(time))
+                (remaining, Self::ModifiedAt(unix_milliseconds))
             }
             ATTRIBUTE_MIME_TYPE_TYPE_ID => {
                 let (remaining, mime_len) = le_u8(remaining)?;
                 let (remaining, mime_bytes) = take(mime_len)(remaining)?;
 
                 let mime_str = String::from_utf8(mime_bytes.to_vec()).map_err(|_| {
-                    todo!()
-                    //nom::Err::Failure(NomError::new(input, ErrorKind::Verify))
+                    nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
                 })?;
 
                 (remaining, Self::MimeType(mime_str))
             }
             _ => {
-                todo!()
-                //return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Tag))),
+                let err = nom::error::make_error(input, nom::error::ErrorKind::Tag);
+                return Err(nom::Err::Failure(err));
             }
         };
 
@@ -161,16 +143,14 @@ impl AsyncEncodable for Attribute {
                 written_bytes += 1 + permissions.encode(writer).await?;
             }
             Self::CreatedAt(time) => {
-                let unix_milliseconds: u64 = (time.unix_timestamp_nanos() / 1_000_000) as u64;
-                let ts_bytes = unix_milliseconds.to_le_bytes();
+                let ts_bytes = time.to_le_bytes();
 
                 writer.write_all(&[ATTRIBUTE_CREATED_AT_TYPE_ID]).await?;
                 writer.write_all(&ts_bytes).await?;
                 written_bytes += 1 + ts_bytes.len();
             }
             Self::ModifiedAt(time) => {
-                let unix_milliseconds: u64 = (time.unix_timestamp_nanos() / 1_000_000) as u64;
-                let ts_bytes = unix_milliseconds.to_le_bytes();
+                let ts_bytes = time.to_le_bytes();
 
                 writer.write_all(&[ATTRIBUTE_MODIFIED_AT_TYPE_ID]).await?;
                 writer.write_all(&ts_bytes).await?;

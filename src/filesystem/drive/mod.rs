@@ -237,12 +237,10 @@ impl InnerDrive {
             permanent_id.encode(&mut node_encoding_buffer).await?;
             node.owner_id().encode(&mut node_encoding_buffer).await?;
 
-            let created_at_millis = (node.created_at().unix_timestamp_nanos() / 1_000_000) as u64;
-            let created_at_bytes = created_at_millis.to_le_bytes();
+            let created_at_bytes = node.created_at().to_le_bytes();
             node_encoding_buffer.write_all(&created_at_bytes).await?;
 
-            let modified_at_millis = (node.modified_at().unix_timestamp_nanos() / 1_000_000) as u64;
-            let modified_at_bytes = modified_at_millis.to_le_bytes();
+            let modified_at_bytes = node.modified_at().to_le_bytes();
             node_encoding_buffer.write_all(&modified_at_bytes).await?;
 
             //todo!("these need the encode method done");
@@ -255,7 +253,7 @@ impl InnerDrive {
         Ok(written_bytes)
     }
 
-    pub fn parse_nodes(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse_nodes(_input: &[u8]) -> ParserResult<Self> {
         todo!()
     }
 }

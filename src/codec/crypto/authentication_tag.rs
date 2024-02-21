@@ -62,9 +62,9 @@ mod tests {
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
-    #[cfg_attr(not(target_arch = "wasm32"), test)]
-    fn test_authentication_tag_parsing() {
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_authentication_tag_parsing() {
         let mut rng = rand::thread_rng();
         let input: [u8; TAG_LENGTH + 4] = rng.gen();
         let (remaining, tag) = AuthenticationTag::parse(&input).unwrap();
@@ -73,9 +73,9 @@ mod tests {
         assert_eq!(tag.as_bytes(), &input[..TAG_LENGTH]);
     }
 
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
-    #[cfg_attr(not(target_arch = "wasm32"), test)]
-    fn test_authentication_tag_parsing_stream_too_short() {
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_authentication_tag_parsing_stream_too_short() {
         let input = [0u8; TAG_LENGTH - 1];
         let result = AuthenticationTag::parse(&input);
         assert!(matches!(result, Err(nom::Err::Incomplete(_))));

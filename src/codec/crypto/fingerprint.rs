@@ -68,9 +68,9 @@ pub mod tests {
 
     const REFERENCE_FINGERPRINT_BYTES: &[u8; 32] = b"UUUUUUUUaaaaaaaaUUUUUUUUaaaaaaaa";
 
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
-    #[cfg_attr(not(target_arch = "wasm32"), test)]
-    fn test_fingerprint_debug_fmt() {
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_fingerprint_debug_fmt() {
         let fingerprint = Fingerprint::from(*REFERENCE_FINGERPRINT_BYTES);
         let fmt_str = format!("{:?}", fingerprint);
 
@@ -80,9 +80,9 @@ pub mod tests {
         );
     }
 
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
-    #[cfg_attr(not(target_arch = "wasm32"), test)]
-    fn test_key_id_from_fingerprint() {
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_key_id_from_fingerprint() {
         let fingerprint = Fingerprint::from(*REFERENCE_FINGERPRINT_BYTES);
         let key_id = fingerprint.key_id();
         assert_eq!(key_id, KeyId::from(0x5555));

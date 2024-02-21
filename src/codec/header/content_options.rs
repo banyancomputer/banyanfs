@@ -30,8 +30,8 @@ impl ContentOptions {
         let (input, byte) = le_u8(input)?;
 
         if cfg!(feature = "strict") && byte & CONTENT_OPTIONS_RESERVED_MASK != 0 {
-            todo!()
-            //return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Tag)));
+            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
+            return Err(nom::Err::Failure(err));
         }
 
         let realized_view = byte & CONTENT_OPTIONS_REALIZED_VIEW_BIT != 0;

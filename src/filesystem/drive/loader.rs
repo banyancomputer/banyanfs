@@ -130,8 +130,8 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                     Some(mk) => mk,
                     None => return Err(DriveLoaderError::AccessUnavailable),
                 };
-                tracing::debug!(unlocked_key = ?meta_key, "drive_loader::escrowed_access_keys");
 
+                tracing::debug!("drive_loader::escrowed_access_keys::unlocked");
                 self.state = DriveLoaderState::EncryptedPermissions(*key_count, meta_key);
 
                 Ok(ProgressType::Advance(bytes_read))

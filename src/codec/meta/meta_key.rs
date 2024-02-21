@@ -77,7 +77,6 @@ impl MetaKey {
             tracing::info!(candidate_key_id = ?key_id, "found_candidate");
 
             if let Ok(key) = potential_key.unlock(signing_key) {
-                tracing::info!("successful_decrypt");
                 meta_key = Some(Self::from(key));
                 break;
             }

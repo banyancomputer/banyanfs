@@ -13,7 +13,7 @@ pub struct FilesystemId([u8; ID_LENGTH]);
 
 impl FilesystemId {
     pub fn generate(_rng: &mut impl CryptoRngCore) -> Self {
-        // todo: this needs to use the provided rng
+        // todo: this needs to use the provided rng to generate
         let ts = Timestamp::now(NoContext);
         let uuid = Uuid::new_v7(ts);
         Self(uuid.to_bytes_le())
@@ -27,8 +27,8 @@ impl FilesystemId {
         if cfg!(feature = "strict")
             && (id_bytes.iter().all(|&b| b == 0x00) || id_bytes.iter().all(|&b| b == 0xff))
         {
-            todo!()
-            //return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Verify)));
+            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
+            return Err(nom::Err::Failure(err));
         }
 
         // todo(sstelfox): parse into an actually UUID, validate the version, probably store the

@@ -15,8 +15,8 @@ impl IdentityHeader {
 
         // Only version one is valid
         if version != 0x01 {
-            todo!()
-            //return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Tag)));
+            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
+            return Err(nom::Err::Failure(err));
         }
 
         Ok((input, Self))
@@ -35,8 +35,8 @@ fn version_field(input: &[u8]) -> ParserResult<u8> {
     // library to enable a stricter parsing mode.
     let reserved = (version_byte & 0x80) >> 7;
     if cfg!(feature = "strict") && reserved != 0 {
-        todo!()
-        //return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Verify)));
+        let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
+        return Err(nom::Err::Failure(err));
     }
 
     let version = version_byte & 0x7f;

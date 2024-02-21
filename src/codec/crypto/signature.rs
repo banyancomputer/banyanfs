@@ -22,11 +22,8 @@ impl Signature {
         let signature = match Signature::from_slice(signature_bytes) {
             Ok(signature) => signature,
             Err(_) => {
-                todo!()
-                //return Err(nom::Err::Failure(nom::error::Error::new(
-                //    input,
-                //    nom::error::ErrorKind::Verify,
-                //)))
+                let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
+                return Err(nom::Err::Failure(err));
             }
         };
 

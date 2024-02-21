@@ -1,6 +1,5 @@
 use elliptic_curve::rand_core::CryptoRngCore;
 use std::collections::HashMap;
-use time::OffsetDateTime;
 
 use crate::codec::meta::ActorId;
 use crate::filesystem::nodes::{Node, NodeId, NodeKind, NodeName, NodeNameError, PermanentId};
@@ -26,6 +25,8 @@ impl NodeBuilder {
             return Err(NodeBuilderError::MissingParent);
         }
 
+        let current_ts = crate::utils::current_time_ms();
+
         let new_node = Node {
             id,
             parent_id: self.parent_id,
@@ -34,8 +35,8 @@ impl NodeBuilder {
             owner_id,
             permanent_id: PermanentId::generate(rng),
 
-            created_at: OffsetDateTime::now_utc(),
-            modified_at: OffsetDateTime::now_utc(),
+            created_at: current_ts,
+            modified_at: current_ts,
 
             kind: self.kind,
             metadata: self.metadata,

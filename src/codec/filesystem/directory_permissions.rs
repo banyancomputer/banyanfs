@@ -29,8 +29,8 @@ impl DirectoryPermissions {
         let (input, byte) = le_u8(input)?;
 
         if cfg!(feature = "strict") && byte & DIRECTORY_PERMISSIONS_RESERVED_MASK != 0 {
-            todo!()
-            //return Err(nom::Err::Failure(NomError::new(input, ErrorKind::Tag)));
+            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
+            return Err(nom::Err::Failure(err));
         }
 
         let owner_write_only = byte & DIRECTORY_PERMISSIONS_OWNER_WRITE_ONLY != 0;
