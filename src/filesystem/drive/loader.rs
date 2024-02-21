@@ -1,6 +1,7 @@
 use futures::{AsyncRead, AsyncReadExt};
 use nom::bytes::streaming::take;
 use nom::number::streaming::le_u64;
+use tracing::{debug, trace};
 
 use crate::codec::crypto::{AuthenticationTag, Nonce, SigningKey};
 use crate::codec::header::{IdentityHeader, KeyCount, PublicSettings};
@@ -52,7 +53,7 @@ impl<'a> DriveLoader<'a> {
 
             if let Some(segment_res) = streamer.next().await {
                 let (hash, drive) = segment_res?;
-                tracing::info!("loaded drive with blake3 hash of {{{hash:02x?}}}");
+                debug!("loaded drive with blake3 hash of {{{hash:02x?}}}");
                 return Ok(drive);
             };
         }
@@ -68,7 +69,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 let (input, id_header) = IdentityHeader::parse_with_magic(buffer)?;
                 let bytes_read = buffer.len() - input.len();
 
-                tracing::debug!(bytes_read, ?id_header, "drive_loader::identity_header");
+                trace!(bytes_read, ?id_header, "drive_loader::identity_header");
 
                 self.state = DriveLoaderState::FilesystemId;
 
@@ -78,7 +79,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 let (input, filesystem_id) = FilesystemId::parse(buffer)?;
                 let bytes_read = buffer.len() - input.len();
 
-                tracing::debug!(bytes_read, ?filesystem_id, "drive_loader::filesystem_id");
+                trace!(bytes_read, ?filesystem_id, "drive_loader::filesystem_id");
 
                 self.filesystem_id = Some(filesystem_id);
                 self.state = DriveLoaderState::PublicSettings;
@@ -89,7 +90,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 let (input, public_settings) = PublicSettings::parse(buffer)?;
                 let bytes_read = buffer.len() - input.len();
 
-                tracing::debug!(
+                trace!(
                     bytes_read,
                     ?public_settings,
                     "drive_loader::public_settings"
@@ -104,7 +105,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 let (input, key_count) = KeyCount::parse(buffer)?;
                 let bytes_read = buffer.len() - input.len();
 
-                tracing::debug!(bytes_read, ?key_count, "drive_loader::key_count");
+                trace!(bytes_read, ?key_count, "drive_loader::key_count");
 
                 if self
                     .public_settings
@@ -124,14 +125,14 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                     MetaKey::parse_escrow(buffer, **key_count, self.signing_key)?;
 
                 let bytes_read = buffer.len() - input.len();
-                tracing::debug!(bytes_read, ?key_count, "drive_loader::escrowed_access_keys");
+                trace!(bytes_read, ?key_count, "drive_loader::escrowed_access_keys");
 
                 let meta_key = match meta_key {
                     Some(mk) => mk,
                     None => return Err(DriveLoaderError::AccessUnavailable),
                 };
 
-                tracing::debug!("drive_loader::escrowed_access_keys::unlocked");
+                trace!("drive_loader::escrowed_access_keys::unlocked");
                 self.state = DriveLoaderState::EncryptedPermissions(*key_count, meta_key);
 
                 Ok(ProgressType::Advance(bytes_read))
@@ -145,10 +146,9 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 )?;
                 let bytes_read = buffer.len() - input.len();
 
-                tracing::debug!(
+                trace!(
                     bytes_read,
                     ?key_count,
-                    access = ?drive_access.permission_keys(),
                     "drive_loader::encrypted_permissions"
                 );
 
@@ -173,7 +173,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 let (input, tag) = AuthenticationTag::parse(input)?;
                 let bytes_read = buffer.len() - input.len();
 
-                tracing::debug!(
+                trace!(
                     bytes_read,
                     payload_size = content_length,
                     "drive_loader::private_content::payload_size"
@@ -290,10 +290,9 @@ enum DriveLoaderState {
     EscrowedAccessKeys(KeyCount),
     EncryptedPermissions(KeyCount, MetaKey),
     PrivateContent,
+    //PublicPermissions(KeyCount),
+    //PublicContent,
 
-    PublicPermissions(KeyCount),
-    PublicContent,
-
-    Signature,
-    ErrorCorrection,
+    //Signature,
+    //ErrorCorrection,
 }

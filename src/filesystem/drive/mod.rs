@@ -21,7 +21,7 @@ use async_std::sync::RwLock;
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
 use slab::Slab;
-use tracing::debug;
+use tracing::{debug, trace};
 
 use crate::codec::crypto::*;
 use crate::codec::header::*;
@@ -84,6 +84,7 @@ impl Drive {
             },
             None => return Err(StdError::new(StdErrorKind::Other, "no filesystem key")),
         };
+        tracing::error!(key = ?fs_key.as_bytes(), "raw post-encrypted nodes");
 
         let mut payload_side_buffer = Vec::new();
 
@@ -95,6 +96,9 @@ impl Drive {
         payload_side_buffer.write_all(&encoded_length_bytes).await?;
 
         // todo: use filesystem ID and encoded length bytes as AD
+
+        // todo(sstelfox): the filesystem key appears wrong at this particular poitn and I need to
+        // figure out why...
 
         let (nonce, tag) = fs_key
             .encrypt_buffer(rng, &[], &mut plaintext_buffer)
@@ -134,7 +138,7 @@ impl Drive {
         let actor_id = verifying_key.actor_id();
 
         let filesystem_id = FilesystemId::generate(rng);
-        debug!(?actor_id, ?filesystem_id, "drive::initializing_private");
+        trace!(?actor_id, ?filesystem_id, "drive::initializing_private");
 
         let kas = KeyAccessSettingsBuilder::private()
             .set_owner()

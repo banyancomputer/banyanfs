@@ -63,6 +63,8 @@ impl AccessKey {
     ) -> Result<AsymLockedAccessKey, AccessKeyError<&[u8]>> {
         let (dh_exchange_key, shared_secret) = verifying_key.ephemeral_dh_exchange(rng);
 
+        tracing::info!(locked_key = ?self.0.as_bytes(), key_id = ?verifying_key.key_id(), "locking access key with pubkey");
+
         let mut payload = self.0;
         let (nonce, tag) = shared_secret
             .encrypt_buffer(rng, &[], &mut payload)
@@ -130,6 +132,8 @@ impl<I> From<chacha20poly1305::Error> for AccessKeyError<I> {
 mod tests {
     use super::*;
 
+    use crate::codec::crypto::SigningKey;
+
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -153,5 +157,30 @@ mod tests {
             .expect("decryption success");
 
         assert_eq!(&reference_pt, &buffer);
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_locking_leaves_original_unchanged() {
+        const REFERENCE_KEY: [u8; ACCESS_KEY_LENGTH] = [0x55; ACCESS_KEY_LENGTH];
+
+        let access_key = AccessKey::from(REFERENCE_KEY);
+
+        let mut rng = crate::utils::crypto_rng();
+        let locking_sym_key = AccessKey::generate(&mut rng);
+        access_key
+            .lock_with(&mut rng, &locking_sym_key)
+            .expect("sym encryption");
+
+        assert_eq!(access_key.0, REFERENCE_KEY);
+
+        let signing_key = SigningKey::generate(&mut rng);
+        let verifying_key = signing_key.verifying_key();
+
+        access_key
+            .lock_for(&mut rng, &verifying_key)
+            .expect("asym encryption");
+
+        assert_eq!(access_key.0, REFERENCE_KEY);
     }
 }

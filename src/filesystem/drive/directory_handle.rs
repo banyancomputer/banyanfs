@@ -25,7 +25,7 @@ pub struct DirectoryHandle {
 impl DirectoryHandle {
     #[instrument(level = Level::DEBUG, skip(self))]
     pub async fn cd(&self, path: &[&str]) -> Result<DirectoryHandle, OperationError> {
-        debug!(cwd_id = self.cwd_id, "directory::cd");
+        trace!(cwd_id = self.cwd_id, "directory::cd");
 
         let target_directory_id = if path.is_empty() {
             self.cwd_id
@@ -47,7 +47,7 @@ impl DirectoryHandle {
 
     #[instrument(level = Level::DEBUG, skip(self))]
     pub async fn ls(&self, path: &[&str]) -> Result<Vec<(NodeName, PermanentId)>, OperationError> {
-        debug!(cwd_id = self.cwd_id, "directory::ls");
+        trace!(cwd_id = self.cwd_id, "directory::ls");
 
         // These behaviors are slightly different mostly in the error cases, in the first case we
         // should be in a directory, any other state is an error. In the latter case, we can match
@@ -169,7 +169,7 @@ impl DirectoryHandle {
             ));
         }
 
-        debug!(?node_id, ?permanent_id, "directory::insert_node::inserted");
+        trace!(?node_id, ?permanent_id, "directory::insert_node::inserted");
 
         Ok((node_id, permanent_id))
     }
@@ -201,12 +201,12 @@ impl DirectoryHandle {
                     missing_name,
                     remaining_path,
                 } => {
-                    debug!(cwd_id = working_directory_id, name = ?missing_name, "drive::mkdir::node_missing");
+                    trace!(cwd_id = working_directory_id, name = ?missing_name, "drive::mkdir::node_missing");
 
                     // When we're not recursing and there are more path components left, we have to
                     // abort early
                     if !recursive && !remaining_path.is_empty() {
-                        debug!(?remaining_path, "drive::mkdir::not_recursive");
+                        trace!(?remaining_path, "drive::mkdir::not_recursive");
                         return Err(OperationError::PathNotFound);
                     }
 
@@ -225,7 +225,7 @@ impl DirectoryHandle {
                     .await?;
 
                     if remaining_path.is_empty() {
-                        debug!("drive::mkdir::complete");
+                        trace!("drive::mkdir::complete");
                         return Ok(());
                     }
                 }
@@ -233,7 +233,7 @@ impl DirectoryHandle {
                     working_directory_id,
                     blocking_name,
                 } => {
-                    debug!(cwd_id = working_directory_id, name = ?blocking_name, "drive::mkdir::not_traversable");
+                    trace!(cwd_id = working_directory_id, name = ?blocking_name, "drive::mkdir::not_traversable");
                     return Err(OperationError::NotADirectory);
                 }
             }
