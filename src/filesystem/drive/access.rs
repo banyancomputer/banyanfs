@@ -51,7 +51,7 @@ impl DriveAccess {
         let (input, tag) = AuthenticationTag::parse(input)?;
 
         let mut crypt_buffer = crypt_slice.to_vec();
-        if let Err(err) = meta_key.decrypt_buffer(nonce, &mut crypt_buffer, &[], tag) {
+        if let Err(err) = meta_key.decrypt_buffer(nonce, &[], &mut crypt_buffer, tag) {
             tracing::error!("failed to decrypt permission buffer: {err}");
             let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
             return Err(nom::Err::Failure(err));

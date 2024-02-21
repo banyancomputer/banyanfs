@@ -85,14 +85,14 @@ impl Drive {
             None => return Err(StdError::new(StdErrorKind::Other, "no filesystem key")),
         };
 
+        let mut payload_side_buffer = Vec::new();
+
         let mut plaintext_buffer = Vec::new();
-        written_bytes += inner_read.encode_nodes(&mut plaintext_buffer).await?;
+        inner_read.encode_nodes(&mut plaintext_buffer).await?;
 
         let filesystem_length = Nonce::size() + plaintext_buffer.len() + AuthenticationTag::size();
-
         let encoded_length_bytes = (filesystem_length as u64).to_le_bytes();
-        writer.write_all(&encoded_length_bytes).await?;
-        written_bytes += encoded_length_bytes.len();
+        payload_side_buffer.write_all(&encoded_length_bytes).await?;
 
         // todo: use filesystem ID and encoded length bytes as AD
 
@@ -100,10 +100,14 @@ impl Drive {
             .encrypt_buffer(rng, &[], &mut plaintext_buffer)
             .map_err(|_| StdError::new(StdErrorKind::Other, "unable to encrypt filesystem"))?;
 
-        written_bytes += nonce.encode(writer).await?;
-        writer.write_all(&plaintext_buffer).await?;
-        written_bytes += plaintext_buffer.len();
-        written_bytes += tag.encode(writer).await?;
+        tracing::error!(key = ?fs_key.as_bytes(), nonce = ?nonce.as_bytes(), content = ?plaintext_buffer, auth_tag = ?tag.as_bytes(), "raw post-encrypted nodes");
+
+        nonce.encode(&mut payload_side_buffer).await?;
+        payload_side_buffer.write_all(&plaintext_buffer).await?;
+        tag.encode(&mut payload_side_buffer).await?;
+
+        writer.write_all(&payload_side_buffer).await?;
+        written_bytes += payload_side_buffer.len();
 
         Ok(written_bytes)
     }

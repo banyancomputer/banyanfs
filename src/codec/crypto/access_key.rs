@@ -10,10 +10,14 @@ use crate::codec::crypto::{
 
 const ACCESS_KEY_LENGTH: usize = 32;
 
-#[derive(Clone, Zeroize, ZeroizeOnDrop)]
+#[derive(Clone, PartialEq, Eq, Zeroize, ZeroizeOnDrop)]
 pub struct AccessKey([u8; ACCESS_KEY_LENGTH]);
 
 impl AccessKey {
+    pub(crate) fn as_bytes(&self) -> &[u8; ACCESS_KEY_LENGTH] {
+        &self.0
+    }
+
     pub(crate) fn chacha_key(&self) -> &ChaChaKey {
         ChaChaKey::from_slice(&self.0)
     }
@@ -21,8 +25,8 @@ impl AccessKey {
     pub fn decrypt_buffer(
         &self,
         nonce: Nonce,
-        buffer: &mut [u8],
         authenticated_data: &[u8],
+        buffer: &mut [u8],
         tag: AuthenticationTag,
     ) -> Result<(), AccessKeyError<&[u8]>> {
         let cipher = XChaCha20Poly1305::new(self.chacha_key());
@@ -145,7 +149,7 @@ mod tests {
         assert_ne!(&reference_pt, &buffer);
 
         access_key
-            .decrypt_buffer(nonce, &mut buffer, &[], tag)
+            .decrypt_buffer(nonce, &[], &mut buffer, tag)
             .expect("decryption success");
 
         assert_eq!(&reference_pt, &buffer);

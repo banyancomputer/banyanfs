@@ -9,6 +9,7 @@ use crate::codec::{AsyncEncodable, ParserResult};
 
 const KEY_PRESENT_BIT: u8 = 0b0000_0001;
 
+#[derive(PartialEq, Eq)]
 pub struct PermissionKeys {
     pub(crate) filesystem: Option<AccessKey>,
     pub(crate) data: Option<AccessKey>,
@@ -107,7 +108,13 @@ impl PermissionKeys {
 
 impl std::fmt::Debug for PermissionKeys {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "PermissionKeys(fs:{}, d:{}, mt:{})", self.filesystem.is_some(), self.data.is_some(), self.maintenance.is_some())
+        write!(
+            f,
+            "PermissionKeys(fs:{}, d:{}, mt:{})",
+            self.filesystem.is_some(),
+            self.data.is_some(),
+            self.maintenance.is_some()
+        )
     }
 }
 
@@ -135,7 +142,7 @@ pub async fn maybe_encode_key<W: AsyncWrite + Unpin + Send>(
             written_bytes += 1;
 
             // Write out empty bytes matching the normal size of a key
-            let empty_key = [0u8; AccessKey::size()];
+            let empty_key = [0u8; AsymLockedAccessKey::size()];
             writer.write_all(&empty_key).await?;
             written_bytes += empty_key.len();
         }
@@ -154,5 +161,41 @@ fn maybe_parse_key(input: &[u8]) -> ParserResult<Option<AsymLockedAccessKey>> {
         // still need to advance the input
         let (input, _blank) = take(AsymLockedAccessKey::size())(input)?;
         Ok((input, None))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::codec::header::KeyAccessSettingsBuilder;
+
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_permission_keys_roundtrip() {
+        let mut rng = crate::utils::crypto_rng();
+
+        let signing_key = SigningKey::generate(&mut rng);
+        let verifying_key = signing_key.verifying_key();
+        let original = PermissionKeys::generate(&mut rng);
+
+        let mut buffer = Vec::new();
+
+        let kas = KeyAccessSettingsBuilder::private()
+            .set_owner()
+            .with_all_access()
+            .build();
+
+        original
+            .encode_for(&mut rng, &mut buffer, &kas, &verifying_key)
+            .await
+            .unwrap();
+
+        let (remaining, parsed) = PermissionKeys::parse(&buffer, &signing_key).unwrap();
+        assert!(remaining.is_empty());
+        assert_eq!(original, parsed);
     }
 }
