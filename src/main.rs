@@ -130,7 +130,10 @@ async fn main() -> BanyanFsResult<()> {
         }
     };
 
-    if let Err(err) = drive.encode(&mut rng, &mut fh).await {
+    if let Err(err) = drive
+        .encode(&mut rng, ContentOptions::everything(), &mut fh)
+        .await
+    {
         tracing::error!("failed to encode drive to file: {err}");
         return Ok(());
     }

@@ -44,10 +44,11 @@ impl Drive {
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         rng: &mut impl CryptoRngCore,
+        content_options: ContentOptions,
         writer: &mut W,
     ) -> std::io::Result<usize> {
         if self.private {
-            self.encode_private(rng, writer).await
+            self.encode_private(rng, content_options, writer).await
         } else {
             unimplemented!("public encoding not implemented")
         }
@@ -56,6 +57,7 @@ impl Drive {
     async fn encode_private<W: AsyncWrite + Unpin + Send>(
         &self,
         rng: &mut impl CryptoRngCore,
+        content_options: ContentOptions,
         writer: &mut W,
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
@@ -157,6 +159,8 @@ impl Drive {
 
         let current_key = Arc::new(current_key);
 
+        let journal_start = JournalCheckpoint::initialize();
+
         let drive = Self {
             current_key,
             filesystem_id,
@@ -164,6 +168,9 @@ impl Drive {
 
             inner: Arc::new(RwLock::new(InnerDrive {
                 access,
+
+                journal_start,
+
                 nodes,
                 root_node_id,
                 permanent_id_map,
@@ -185,13 +192,15 @@ impl Drive {
 pub(crate) struct InnerDrive {
     access: DriveAccess,
 
+    journal_start: JournalCheckpoint,
+
     pub(crate) nodes: Slab<Node>,
     pub(crate) root_node_id: NodeId,
     pub(crate) permanent_id_map: HashMap<PermanentId, NodeId>,
 }
 
 impl InnerDrive {
-    pub(crate) async fn encode_nodes<W: AsyncWrite + Unpin + Send>(
+    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
     ) -> std::io::Result<usize> {
@@ -254,7 +263,7 @@ impl InnerDrive {
         Ok(written_bytes)
     }
 
-    pub fn parse_nodes(_input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(_input: &[u8]) -> ParserResult<Self> {
         todo!()
     }
 }
