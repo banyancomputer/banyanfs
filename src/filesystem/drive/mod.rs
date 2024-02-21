@@ -88,7 +88,7 @@ impl Drive {
         let mut payload_side_buffer = Vec::new();
 
         let mut plaintext_buffer = Vec::new();
-        inner_read.encode_nodes(&mut plaintext_buffer).await?;
+        inner_read.encode(&mut plaintext_buffer).await?;
 
         let filesystem_length = Nonce::size() + plaintext_buffer.len() + AuthenticationTag::size();
         let encoded_length_bytes = (filesystem_length as u64).to_le_bytes();
