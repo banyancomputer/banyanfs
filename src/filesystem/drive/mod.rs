@@ -243,8 +243,7 @@ impl InnerDrive {
             let modified_at_bytes = node.modified_at().to_le_bytes();
             node_encoding_buffer.write_all(&modified_at_bytes).await?;
 
-            //todo!("these need the encode method done");
-            //node.name().encode(&mut node_encoding_buffer).await?;
+            node.name().encode(&mut node_encoding_buffer).await?;
 
             writer.write_all(&node_encoding_buffer).await?;
             written_bytes += node_encoding_buffer.len();
