@@ -3,9 +3,9 @@ use nom::bytes::streaming::take;
 use nom::number::streaming::le_u64;
 use tracing::{debug, trace};
 
-use crate::codec::crypto::{AuthenticationTag, Nonce, SigningKey};
-use crate::codec::header::{IdentityHeader, KeyCount, PublicSettings};
-use crate::codec::meta::{FilesystemId, MetaKey};
+use crate::codec::crypto::{AuthenticationTag, EncryptedBuffer, Nonce, SigningKey};
+use crate::codec::header::{ContentOptions, IdentityHeader, KeyCount, PublicSettings};
+use crate::codec::meta::{FilesystemId, JournalCheckpoint, MetaKey};
 use crate::codec::parser::{
     ParserResult, ParserStateMachine, ProgressType, SegmentStreamer, StateError, StateResult,
 };
@@ -140,14 +140,21 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
             DriveLoaderState::EncryptedPermissions(key_count, meta_key) => {
                 // todo(sstelfox): this needs to be split up as it now contains three things
                 //let (content_ref, content_options) = ContentOptions::parse(&content)?;
-                let (input, drive_access) = DriveAccess::recover_permissions(
-                    buffer,
-                    **key_count,
-                    meta_key,
-                    self.signing_key,
-                )?;
-                let bytes_read = buffer.len() - input.len();
 
+                let payload_size = (**key_count as usize * DriveAccess::size())
+                    + ContentOptions::size()
+                    + JournalCheckpoint::size();
+
+                let (input, hdr) =
+                    EncryptedBuffer::parse_and_decrypt(buffer, payload_size, &[], meta_key)?;
+
+                let (hdr_ref, drive_access) =
+                    DriveAccess::parse(&hdr, **key_count, self.signing_key)?;
+                let (hdr_ref, content_options) = ContentOptions::parse(hdr_ref)?;
+                let (hdr_ref, journal_checkpoint) = JournalCheckpoint::parse(hdr_ref)?;
+                debug_assert!(hdr_ref.is_empty());
+
+                let bytes_read = buffer.len() - input.len();
                 trace!(
                     bytes_read,
                     ?key_count,
@@ -155,50 +162,43 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 );
 
                 self.drive_access = Some(drive_access);
-                self.state = DriveLoaderState::PrivateContent;
+                self.state = DriveLoaderState::PrivateContent(content_options);
 
                 Ok(ProgressType::Advance(bytes_read))
             }
-            DriveLoaderState::PrivateContent => {
-                let (input, mut content_length) = content_length(buffer)?;
-                let (input, nonce) = Nonce::parse(input)?;
+            DriveLoaderState::PrivateContent(content_options) => {
+                if content_options.include_filesystem() {
+                    let (input, mut payload_size) = content_length(buffer)?;
 
-                content_length -= Nonce::size() as u64;
-                content_length -= AuthenticationTag::size() as u64;
+                    payload_size -= Nonce::size() as u64;
+                    payload_size -= AuthenticationTag::size() as u64;
 
-                // todo(sstelfox): we ideally want to stream this data and selectively parse
-                // things, but that has impacts on the encryption which would need to be managed
-                // carefully. Since this only covers the realized view of the filesystem (the
-                // metadata) and no file content this shouldn't grow very large.
-                let (input, content) = content_chunk(input, content_length as usize)?;
+                    trace!(payload_size, "drive_loader::private_content");
 
-                let (input, tag) = AuthenticationTag::parse(input)?;
-                let bytes_read = buffer.len() - input.len();
+                    let filesystem_key = self
+                        .drive_access
+                        .as_ref()
+                        .and_then(|a| a.permission_keys())
+                        .and_then(|pk| pk.filesystem.as_ref())
+                        .ok_or(DriveLoaderError::KeyNotAvailable("filesystem key missing"))?;
 
-                trace!(
-                    bytes_read,
-                    payload_size = content_length,
-                    "drive_loader::private_content::payload_size"
-                );
+                    // todo(sstelfox): we ideally want to stream this data and selectively parse
+                    // things, but that has impacts on the encryption which would need to be managed
+                    // carefully. Since this only covers the realized view of the filesystem (the
+                    // metadata) and no file content this shouldn't grow very large.
+                    //
+                    // todo(sstelfox): authenticated data should include filesystem ID, and length
+                    // bytes
 
-                // todo: calculate hash over buffer[..bytes_read] and validate signature over
-                // length, nonce, content, tag (need to also generate this)
+                    let (input, filesystem_bytes) = EncryptedBuffer::parse_and_decrypt(
+                        input,
+                        payload_size as usize,
+                        &[],
+                        filesystem_key,
+                    )?;
+                }
 
-                let filesystem_key = self
-                    .drive_access
-                    .as_ref()
-                    .and_then(|a| a.permission_keys())
-                    .and_then(|pk| pk.filesystem.as_ref())
-                    .ok_or(DriveLoaderError::KeyNotAvailable("permission keys missing"))?;
-
-                let mut content = content.to_vec();
-                filesystem_key
-                    .decrypt_buffer(nonce, &[], &mut content, tag)
-                    .map_err(|_| {
-                        DriveLoaderError::InternalKeyError("fs key couldn't access content")
-                    })?;
-
-                todo!("private content")
+                unimplemented!("further content");
             }
         }
     }
@@ -274,7 +274,7 @@ enum DriveLoaderState {
 
     EscrowedAccessKeys(KeyCount),
     EncryptedPermissions(KeyCount, MetaKey),
-    PrivateContent,
+    PrivateContent(ContentOptions),
     //PublicPermissions(KeyCount),
     //PublicContent,
 

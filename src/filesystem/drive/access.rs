@@ -3,11 +3,8 @@ use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
 
-use crate::codec::crypto::{
-    AuthenticationTag, KeyId, Nonce, PermissionKeys, SigningKey, VerifyingKey,
-};
+use crate::codec::crypto::{KeyId, PermissionKeys, SigningKey, VerifyingKey};
 use crate::codec::header::KeyAccessSettings;
 use crate::codec::meta::VectorClock;
 use crate::codec::{ActorId, ActorSettings, ParserResult};
@@ -39,57 +36,41 @@ impl DriveAccess {
         self.permission_keys.as_ref()
     }
 
-    // todo: should use the filesystem ID as authenticated data with all the components
-    pub fn recover_permissions<'a>(
+    pub fn parse<'a>(
         input: &'a [u8],
         key_count: u8,
-        meta_key: &MetaKey,
         signing_key: &SigningKey,
     ) -> ParserResult<'a, Self> {
-        let payload_size = key_count as usize * Self::size();
-
-        let (input, nonce) = Nonce::parse(input)?;
-        let (input, crypt_slice) = take(payload_size)(input)?;
-        let (input, tag) = AuthenticationTag::parse(input)?;
-
-        let mut crypt_buffer = crypt_slice.to_vec();
-        if let Err(err) = meta_key.decrypt_buffer(nonce, &[], &mut crypt_buffer, tag) {
-            tracing::error!("failed to decrypt permission buffer: {err}");
-            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-            return Err(nom::Err::Failure(err));
-        }
-
         let mut actor_settings = HashMap::new();
         let mut permission_keys = None;
-        let mut buffer_input = crypt_buffer.as_slice();
+
+        let mut buf_slice = input;
 
         for _ in 0..key_count {
-            let (buf_inp, key_id) = KeyId::parse(buffer_input).map_err(|_| {
+            let (i, key_id) = KeyId::parse(buf_slice).map_err(|_| {
                 nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
             })?;
-            buffer_input = buf_inp;
+            buf_slice = i;
 
-            let (buf_inp, settings) = ActorSettings::parse_private(buffer_input).map_err(|_| {
+            let (i, settings) = ActorSettings::parse_private(buf_slice).map_err(|_| {
                 nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
             })?;
-            buffer_input = buf_inp;
+            buf_slice = i;
 
             let verifying_key = settings.verifying_key();
             let actor_id = verifying_key.actor_id();
             actor_settings.insert(actor_id, settings);
 
             if key_id == verifying_key.key_id() {
-                match PermissionKeys::parse(buffer_input, signing_key) {
-                    Ok((buf_inp, keys)) => {
+                match PermissionKeys::parse(buf_slice, signing_key) {
+                    Ok((i, keys)) => {
                         permission_keys = Some(keys);
-                        buffer_input = buf_inp;
+                        buf_slice = i;
                         continue;
                     }
                     Err(err) => tracing::error!("failed to access permission keys: {err}"),
                 };
             }
-
-            buffer_input = buffer_input.split_at(PermissionKeys::size()).1;
         }
 
         if permission_keys.is_none() {
@@ -107,54 +88,34 @@ impl DriveAccess {
         Ok((input, drive_access))
     }
 
-    pub async fn encode_permissions<W: AsyncWrite + Unpin + Send>(
+    pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         rng: &mut impl CryptoRngCore,
         writer: &mut W,
-        meta_key: &MetaKey,
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
 
-        let permission_keys = match &self.permission_keys {
-            Some(keys) => keys,
-            None => {
-                return Err(StdError::new(
-                    StdErrorKind::InvalidData,
-                    "no permission keys available for encoding",
-                ))
-            }
-        };
-        let mut plaintext_buffer = Vec::new();
+        let permission_keys = self.permission_keys.as_ref().ok_or(StdError::new(
+            StdErrorKind::InvalidData,
+            "no permission keys available for encoding",
+        ))?;
 
         for settings in self.sorted_actor_settings().iter() {
             let verifying_key = settings.verifying_key();
-
             let key_id = verifying_key.key_id();
-            key_id.encode(&mut plaintext_buffer).await?;
+
+            written_bytes += key_id.encode(writer).await?;
 
             let reset_agent_version = self.current_actor_id == verifying_key.actor_id();
-            settings
-                .encode(&mut plaintext_buffer, reset_agent_version)
-                .await?;
+            written_bytes += settings.encode(writer, reset_agent_version).await?;
 
-            let key_settings = settings.actor_settings();
+            let settings = settings.actor_settings();
 
             // and the protection keys based on their access
-            permission_keys
-                .encode_for(rng, &mut plaintext_buffer, &key_settings, &verifying_key)
+            written_bytes += permission_keys
+                .encode_for(rng, writer, &settings, &verifying_key)
                 .await?;
         }
-
-        let (nonce, tag) = meta_key
-            .encrypt_buffer(rng, &[], &mut plaintext_buffer)
-            .map_err(|_| {
-                StdError::new(StdErrorKind::Other, "unable to encrypt escrowed key buffer")
-            })?;
-
-        written_bytes += nonce.encode(writer).await?;
-        writer.write_all(plaintext_buffer.as_slice()).await?;
-        written_bytes += plaintext_buffer.len();
-        written_bytes += tag.encode(writer).await?;
 
         Ok(written_bytes)
     }

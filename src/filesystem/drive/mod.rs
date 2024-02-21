@@ -15,6 +15,7 @@ pub(crate) use walk_state::WalkState;
 
 use std::collections::{HashMap, HashSet};
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
+use std::ops::Deref;
 use std::sync::Arc;
 
 use async_std::sync::RwLock;
@@ -75,33 +76,38 @@ impl Drive {
 
         written_bytes += meta_key.encode_escrow(rng, writer, key_list).await?;
 
-        // todo: the following need to be split up so content options and journal start can be
-        // included
-        written_bytes += inner_read
-            .access
-            .encode_permissions(rng, writer, &meta_key)
+        let mut header_buffer = EncryptedBuffer::default();
+
+        inner_read.access.encode(rng, &mut *header_buffer).await?;
+        content_options.encode(&mut *header_buffer).await?;
+        inner_read.journal_start.encode(&mut *header_buffer).await?;
+
+        // todo: include filesystem ID and encoded length bytes as AD
+        written_bytes += header_buffer
+            .encrypt_and_encode(writer, rng, &[], meta_key.deref())
             .await?;
-        //content_options.encode(&mut plaintext_buffer).await?;
-        //inner_read.journal_start.encode(&mut plaintext_buffer).await?;
 
-        let filesystem_key = inner_read
-            .access
-            .permission_keys()
-            .and_then(|pk| pk.filesystem.as_ref())
-            .ok_or(StdError::new(StdErrorKind::Other, "no filesystem key"))?;
+        if content_options.include_filesystem() {
+            let mut fs_buffer = EncryptedBuffer::default();
 
-        let mut buffer = EncryptedBuffer::default();
-        inner_read.encode(&mut *buffer).await?;
+            let filesystem_key = inner_read
+                .access
+                .permission_keys()
+                .and_then(|pk| pk.filesystem.as_ref())
+                .ok_or(StdError::new(StdErrorKind::Other, "no filesystem key"))?;
 
-        let buffer_length = buffer.encrypted_len() as u64;
-        let length_bytes = buffer_length.to_le_bytes();
-        writer.write_all(&length_bytes).await?;
-        written_bytes += length_bytes.len();
+            written_bytes += inner_read.encode(&mut *fs_buffer).await?;
 
-        // todo: use filesystem ID and encoded length bytes as AD
-        written_bytes += buffer
-            .encrypt_and_encode(writer, rng, &[], filesystem_key)
-            .await?;
+            // todo: use filesystem ID and encoded length bytes as AD
+            let buffer_length = fs_buffer.encrypted_len() as u64;
+            let length_bytes = buffer_length.to_le_bytes();
+            writer.write_all(&length_bytes).await?;
+            written_bytes += length_bytes.len();
+
+            written_bytes += fs_buffer
+                .encrypt_and_encode(writer, rng, &[], filesystem_key)
+                .await?;
+        }
 
         Ok(written_bytes)
     }

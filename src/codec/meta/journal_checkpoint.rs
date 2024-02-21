@@ -40,4 +40,8 @@ impl JournalCheckpoint {
 
         Ok((input, journal_checkpoint))
     }
+
+    pub const fn size() -> usize {
+        Cid::size() + VectorClock::size()
+    }
 }
