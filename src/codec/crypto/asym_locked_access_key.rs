@@ -1,11 +1,10 @@
-use async_trait::async_trait;
 use chacha20poly1305::{AeadInPlace, KeyInit, XChaCha20Poly1305};
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 use nom::sequence::tuple;
 
 use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce, SigningKey, VerifyingKey};
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 pub struct AsymLockedAccessKey {
     pub(crate) dh_exchange_key: VerifyingKey,
@@ -15,6 +14,22 @@ pub struct AsymLockedAccessKey {
 }
 
 impl AsymLockedAccessKey {
+    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let mut written_bytes = 0;
+
+        written_bytes += self.dh_exchange_key.encode(writer).await?;
+        written_bytes += self.nonce.encode(writer).await?;
+
+        writer.write_all(&self.cipher_text).await?;
+        written_bytes += self.cipher_text.len();
+
+        written_bytes += self.tag.encode(writer).await?;
+
+        Ok(written_bytes)
+    }
     pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, (dh_exchange_key, nonce, raw_cipher_text, tag)) = tuple((
             VerifyingKey::parse,
@@ -60,23 +75,6 @@ impl AsymLockedAccessKey {
 impl std::fmt::Debug for AsymLockedAccessKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("AsymLockedAccessKey(*encrytped*)")
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for AsymLockedAccessKey {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        let mut written_bytes = 0;
-
-        written_bytes += self.dh_exchange_key.encode(writer).await?;
-        written_bytes += self.nonce.encode(writer).await?;
-
-        writer.write_all(&self.cipher_text).await?;
-        written_bytes += self.cipher_text.len();
-
-        written_bytes += self.tag.encode(writer).await?;
-
-        Ok(written_bytes)
     }
 }
 

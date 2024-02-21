@@ -10,7 +10,7 @@ use crate::codec::crypto::{
 };
 use crate::codec::header::KeyAccessSettings;
 use crate::codec::meta::VectorClock;
-use crate::codec::{ActorId, ActorSettings, AsyncEncodable, ParserResult};
+use crate::codec::{ActorId, ActorSettings, ParserResult};
 use crate::filesystem::drive::MetaKey;
 
 #[derive(Debug)]

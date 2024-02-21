@@ -1,10 +1,9 @@
-use async_trait::async_trait;
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 use uuid::{NoContext, Timestamp, Uuid};
 
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 const ID_LENGTH: usize = 16;
 
@@ -12,6 +11,14 @@ const ID_LENGTH: usize = 16;
 pub struct FilesystemId([u8; ID_LENGTH]);
 
 impl FilesystemId {
+    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        writer.write_all(&self.0).await?;
+        Ok(self.0.len())
+    }
+
     pub fn generate(_rng: &mut impl CryptoRngCore) -> Self {
         // todo: this needs to use the provided rng to generate
         let ts = Timestamp::now(NoContext);
@@ -48,14 +55,6 @@ impl FilesystemId {
 impl From<[u8; ID_LENGTH]> for FilesystemId {
     fn from(bytes: [u8; ID_LENGTH]) -> Self {
         Self(bytes)
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for FilesystemId {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        writer.write_all(&self.0).await?;
-        Ok(self.0.len())
     }
 }
 

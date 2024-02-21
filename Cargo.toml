@@ -9,14 +9,20 @@ edition = "2021"
 
 [features]
 default = ["banyan-api", "pem", "strict", "tomb-compat"]
-banyan-api = ["jwt-simple", "reqwest", "serde", "serde_json", "url"]
+banyan-api = [
+  "async-trait",
+  "jwt-simple",
+  "reqwest",
+  "serde",
+  "serde_json",
+  "url",
+]
 pem = ["p384/pem", "p384/pkcs8"]
 strict = []
 tomb-compat = ["banyan-api"]
 
 [dependencies]
 async-std = "^1"
-async-trait = "^0.1"
 futures = "^0.3"
 thiserror = "^1"
 tracing = "^0.1"
@@ -28,20 +34,32 @@ ecdsa = { version = "^0.16", features = ["signing", "verifying"] }
 elliptic-curve = { version = "^0.13", features = ["ecdh", "sec1"] }
 p384 = { version = "^0.13", features = ["ecdh", "ecdsa"] }
 rand = "^0.8"
+# TODO: We don't necessarily need to use rand_chacha, this could be an optional dep
 rand_chacha = "^0.3"
+# TODO: sha2 is used for signatures but we do already have blake3 I think we can
+# swap that in and remove this
 sha2 = "^0.10"
 zeroize = { version = "^1", features = ["derive", "std"] }
 
 bytes = "^1"
+# TODO: we only minimally use UUID and only for the v7 version, we can hand generate those and save the dependency
 uuid = { version = "^1", features = ["v7", "serde"] }
+# TODO: transitioning from nom to winnow, finish it up and remove nom
 nom = "^7"
+winnow = "^0.6"
 crdts = { version = "^7", default-features = false, features = [
   "merkle",
   "num",
 ] }
 slab = "^0.4"
+# TODO: This is convenient to use with both wasm and native, but we only need
+# unix milliseconds, displaying is for other libraries so should drop this
 time = "^0.3"
 
+async-trait = { version = "^0.1", optional = true }
+# TODO: we have most of what jwt-simple handles in our own crypto code which we
+# really don't need and it doesn't quite match our needs. We can pull this out
+# and reduce the scope of our library.
 jwt-simple = { version = "^0.12", optional = true }
 reqwest = { version = "^0.11", default-features = false, optional = true, features = [
   "multipart",

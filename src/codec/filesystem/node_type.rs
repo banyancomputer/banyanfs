@@ -1,8 +1,7 @@
-use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 #[derive(Debug, PartialEq)]
 pub enum NodeType {
@@ -15,6 +14,24 @@ pub enum NodeType {
 }
 
 impl NodeType {
+    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let type_byte = match self {
+            Self::File => 0x00,
+            Self::AssociatedData => 0x01,
+            Self::Directory => 0x02,
+            Self::InternalLink => 0x03,
+            Self::NativeMount => 0x04,
+            Self::Unknown(num) => *num,
+        };
+
+        writer.write_all(&[type_byte]).await?;
+
+        Ok(1)
+    }
+
     pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, node_type) = take(1u8)(input)?;
         let node_type = node_type[0];
@@ -30,24 +47,6 @@ impl NodeType {
         };
 
         Ok((input, parsed_type))
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for NodeType {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        let type_byte = match self {
-            Self::File => 0x00,
-            Self::AssociatedData => 0x01,
-            Self::Directory => 0x02,
-            Self::InternalLink => 0x03,
-            Self::NativeMount => 0x04,
-            Self::Unknown(num) => *num,
-        };
-
-        writer.write_all(&[type_byte]).await?;
-
-        Ok(1)
     }
 }
 

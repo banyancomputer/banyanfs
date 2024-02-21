@@ -1,8 +1,7 @@
-use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 const ECC_PRESENT_BIT: u8 = 0x02;
 
@@ -19,6 +18,25 @@ pub struct PublicSettings {
 impl PublicSettings {
     pub fn ecc_present(&self) -> bool {
         self.ecc_present
+    }
+
+    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let mut settings_byte = 0;
+
+        if self.ecc_present {
+            settings_byte |= ECC_PRESENT_BIT;
+        }
+
+        if self.private {
+            settings_byte |= PRIVATE_BIT;
+        }
+
+        writer.write_all(&[settings_byte]).await?;
+
+        Ok(1)
     }
 
     pub fn new(ecc_present: bool, private: bool) -> Self {
@@ -50,25 +68,6 @@ impl PublicSettings {
 
     pub fn private(&self) -> bool {
         self.private
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for PublicSettings {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        let mut settings_byte = 0;
-
-        if self.ecc_present {
-            settings_byte |= ECC_PRESENT_BIT;
-        }
-
-        if self.private {
-            settings_byte |= PRIVATE_BIT;
-        }
-
-        writer.write_all(&[settings_byte]).await?;
-
-        Ok(1)
     }
 }
 

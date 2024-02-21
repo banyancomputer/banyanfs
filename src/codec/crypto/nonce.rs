@@ -1,12 +1,11 @@
 use std::ops::Deref;
 
-use async_trait::async_trait;
 use chacha20poly1305::XNonce as ChaChaNonce;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 use rand::Rng;
 
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 const NONCE_LENGTH: usize = 24;
 
@@ -18,7 +17,14 @@ impl Nonce {
         &self.0
     }
 
-    #[allow(dead_code)]
+    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        writer.write_all(&self.0).await?;
+        Ok(self.0.len())
+    }
+
     pub(crate) fn generate(rng: &mut impl Rng) -> Self {
         Self(rng.gen())
     }
@@ -34,14 +40,6 @@ impl Nonce {
 
     pub const fn size() -> usize {
         NONCE_LENGTH
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for Nonce {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        writer.write_all(&self.0).await?;
-        Ok(self.0.len())
     }
 }
 

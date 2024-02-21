@@ -1,8 +1,7 @@
-use async_trait::async_trait;
 use futures::AsyncWrite;
 use nom::sequence::tuple;
 
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 use crate::codec::header::{IdentityHeader, PublicSettings};
 use crate::codec::FilesystemId;
@@ -15,6 +14,21 @@ pub struct FormatHeader {
 }
 
 impl FormatHeader {
+    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let mut written_bytes = 0;
+
+        written_bytes += IdentityHeader::encode(&IdentityHeader, writer).await?;
+        written_bytes += self.filesystem_id.encode(writer).await?;
+
+        let settings = PublicSettings::new(self.ecc_present, self.private);
+        written_bytes += settings.encode(writer).await?;
+
+        Ok(written_bytes)
+    }
+
     pub fn parse_with_magic(input: &[u8]) -> ParserResult<Self> {
         let mut header_parser = tuple((
             IdentityHeader::parse_with_magic,
@@ -31,21 +45,6 @@ impl FormatHeader {
         };
 
         Ok((input, header))
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for FormatHeader {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        let mut written_bytes = 0;
-
-        written_bytes += IdentityHeader::encode(&IdentityHeader, writer).await?;
-        written_bytes += self.filesystem_id.encode(writer).await?;
-
-        let settings = PublicSettings::new(self.ecc_present, self.private);
-        written_bytes += settings.encode(writer).await?;
-
-        Ok(written_bytes)
     }
 }
 

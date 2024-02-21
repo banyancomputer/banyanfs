@@ -1,6 +1,5 @@
 use std::ops::Deref;
 
-use async_trait::async_trait;
 use ecdsa::signature::rand_core::CryptoRngCore;
 use elliptic_curve::pkcs8::EncodePublicKey;
 use futures::{AsyncWrite, AsyncWriteExt};
@@ -10,7 +9,7 @@ use p384::{NistP384, PublicKey};
 
 use crate::codec::crypto::{AccessKey, Fingerprint, KeyId};
 use crate::codec::ActorId;
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 const KEY_SIZE: usize = 49;
 
@@ -22,6 +21,15 @@ pub struct VerifyingKey {
 impl VerifyingKey {
     pub fn actor_id(&self) -> ActorId {
         ActorId::from(self.fingerprint())
+    }
+
+    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let key_bytes = self.to_bytes();
+        writer.write_all(&key_bytes).await?;
+        Ok(key_bytes.len())
     }
 
     pub(crate) fn ephemeral_dh_exchange(&self, rng: &mut impl CryptoRngCore) -> (Self, AccessKey) {
@@ -116,15 +124,6 @@ impl VerifyingKey {
             .map_err(VerifyingKeyError::SpkiEncodingFailed)?;
 
         Ok(spki)
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for VerifyingKey {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        let key_bytes = self.to_bytes();
-        writer.write_all(&key_bytes).await?;
-        Ok(key_bytes.len())
     }
 }
 

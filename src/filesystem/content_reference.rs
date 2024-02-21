@@ -1,9 +1,8 @@
-use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::multi::count;
 use nom::number::streaming::le_u32;
 
-use crate::codec::{AsyncEncodable, Cid, ParserResult};
+use crate::codec::{Cid, ParserResult};
 
 #[derive(Clone, Debug)]
 pub struct ContentReference {
@@ -13,6 +12,21 @@ pub struct ContentReference {
 }
 
 impl ContentReference {
+    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let mut written_bytes = self.data_block_cid.encode(writer).await?;
+
+        writer.write_all(&self.offset.to_le_bytes()).await?;
+        written_bytes += 4;
+
+        writer.write_all(&self.length.to_le_bytes()).await?;
+        written_bytes += 4;
+
+        Ok(written_bytes)
+    }
+
     pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (remaining, data_block_cid) = Cid::parse(input)?;
 
@@ -34,20 +48,5 @@ impl ContentReference {
 
     pub fn size(&self) -> u64 {
         self.length as u64
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for ContentReference {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        let mut written_bytes = self.data_block_cid.encode(writer).await?;
-
-        writer.write_all(&self.offset.to_le_bytes()).await?;
-        written_bytes += 4;
-
-        writer.write_all(&self.length.to_le_bytes()).await?;
-        written_bytes += 4;
-
-        Ok(written_bytes)
     }
 }

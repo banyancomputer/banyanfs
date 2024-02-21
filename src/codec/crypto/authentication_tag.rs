@@ -1,11 +1,10 @@
 use std::ops::Deref;
 
-use async_trait::async_trait;
 use chacha20poly1305::Tag as ChaChaTag;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 const TAG_LENGTH: usize = 16;
 
@@ -15,6 +14,14 @@ pub struct AuthenticationTag([u8; TAG_LENGTH]);
 impl AuthenticationTag {
     pub fn as_bytes(&self) -> &[u8; TAG_LENGTH] {
         &self.0
+    }
+
+    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        writer.write_all(&self.0).await?;
+        Ok(self.0.len())
     }
 
     pub fn parse(input: &[u8]) -> ParserResult<Self> {
@@ -28,14 +35,6 @@ impl AuthenticationTag {
 
     pub const fn size() -> usize {
         TAG_LENGTH
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for AuthenticationTag {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        writer.write_all(&self.0).await?;
-        Ok(self.0.len())
     }
 }
 

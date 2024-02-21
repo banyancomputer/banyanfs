@@ -1,8 +1,7 @@
-use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 const CID_LENGTH: usize = 32;
 
@@ -12,6 +11,14 @@ pub struct Cid([u8; CID_LENGTH]);
 impl Cid {
     pub fn as_bytes(&self) -> &[u8; CID_LENGTH] {
         &self.0
+    }
+
+    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        writer.write_all(&self.0).await?;
+        Ok(self.0.len())
     }
 
     pub fn parse(input: &[u8]) -> ParserResult<Self> {
@@ -31,13 +38,5 @@ impl Cid {
 impl From<[u8; CID_LENGTH]> for Cid {
     fn from(bytes: [u8; CID_LENGTH]) -> Self {
         Self(bytes)
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for Cid {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        writer.write_all(&self.0).await?;
-        Ok(self.0.len())
     }
 }

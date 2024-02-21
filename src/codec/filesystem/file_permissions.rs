@@ -1,8 +1,7 @@
-use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::number::streaming::le_u8;
 
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 const FILE_PERMISSIONS_RESERVED_MASK: u8 = 0b1111_1000;
 
@@ -22,6 +21,29 @@ pub struct FilePermissions {
 impl FilePermissions {
     pub fn owner_write_only(&self) -> bool {
         self.owner_write_only
+    }
+
+    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let mut options: u8 = 0x00;
+
+        if self.owner_write_only {
+            options |= FILE_PERMISSIONS_OWNER_WRITE_ONLY;
+        }
+
+        if self.executable {
+            options |= FILE_PERMISSIONS_EXECUTABLE;
+        }
+
+        if self.immutable {
+            options |= FILE_PERMISSIONS_IMMUTABLE;
+        }
+
+        writer.write_all(&[options]).await?;
+
+        Ok(1)
     }
 
     pub fn executable(&self) -> bool {
@@ -51,28 +73,5 @@ impl FilePermissions {
         };
 
         Ok((input, permissions))
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for FilePermissions {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        let mut options: u8 = 0x00;
-
-        if self.owner_write_only {
-            options |= FILE_PERMISSIONS_OWNER_WRITE_ONLY;
-        }
-
-        if self.executable {
-            options |= FILE_PERMISSIONS_EXECUTABLE;
-        }
-
-        if self.immutable {
-            options |= FILE_PERMISSIONS_IMMUTABLE;
-        }
-
-        writer.write_all(&[options]).await?;
-
-        Ok(1)
     }
 }

@@ -1,9 +1,8 @@
-use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 use p384::NistP384;
 
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 const SIGNATURE_SIZE: usize = 96;
 
@@ -12,6 +11,15 @@ pub struct Signature {
 }
 
 impl Signature {
+    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let byte_ref = self.inner.to_bytes();
+        writer.write_all(byte_ref.as_slice()).await?;
+        Ok(byte_ref.len())
+    }
+
     pub fn from_slice(slice: &[u8]) -> Result<Self, SignatureError> {
         let inner = ecdsa::Signature::from_slice(slice)?;
         Ok(Self { inner })
@@ -28,15 +36,6 @@ impl Signature {
         };
 
         Ok((remaining, signature))
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for Signature {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        let byte_ref = self.inner.to_bytes();
-        writer.write_all(byte_ref.as_slice()).await?;
-        Ok(byte_ref.len())
     }
 }
 

@@ -1,8 +1,7 @@
-use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::number::streaming::le_u8;
 
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 const DIRECTORY_PERMISSIONS_RESERVED_MASK: u8 = 0b1111_1100;
 
@@ -17,6 +16,24 @@ pub struct DirectoryPermissions {
 }
 
 impl DirectoryPermissions {
+    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let mut options: u8 = 0x00;
+
+        if self.owner_write_only {
+            options |= DIRECTORY_PERMISSIONS_OWNER_WRITE_ONLY;
+        }
+
+        if self.immutable {
+            options |= DIRECTORY_PERMISSIONS_IMMUTABLE;
+        }
+
+        writer.write_all(&[options]).await?;
+
+        Ok(1)
+    }
     pub fn owner_write_only(&self) -> bool {
         self.owner_write_only
     }
@@ -42,24 +59,5 @@ impl DirectoryPermissions {
         };
 
         Ok((input, permissions))
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for DirectoryPermissions {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        let mut options: u8 = 0x00;
-
-        if self.owner_write_only {
-            options |= DIRECTORY_PERMISSIONS_OWNER_WRITE_ONLY;
-        }
-
-        if self.immutable {
-            options |= DIRECTORY_PERMISSIONS_IMMUTABLE;
-        }
-
-        writer.write_all(&[options]).await?;
-
-        Ok(1)
     }
 }

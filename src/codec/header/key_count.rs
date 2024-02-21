@@ -1,15 +1,21 @@
 use std::ops::Deref;
 
-use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct KeyCount(u8);
 
 impl KeyCount {
+    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        writer.write_all(&[self.0]).await?;
+        Ok(1)
+    }
     pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, count) = take(1u8)(input)?;
         Ok((input, Self(count[0])))
@@ -46,13 +52,5 @@ impl TryFrom<usize> for KeyCount {
         }
 
         Ok(Self(value as u8))
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for KeyCount {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        writer.write_all(&[self.0]).await?;
-        Ok(1)
     }
 }

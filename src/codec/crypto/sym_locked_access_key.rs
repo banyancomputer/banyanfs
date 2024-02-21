@@ -1,10 +1,9 @@
-use async_trait::async_trait;
 use chacha20poly1305::{AeadInPlace, KeyInit, XChaCha20Poly1305};
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 
 use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce};
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 #[derive(Clone)]
 pub struct SymLockedAccessKey {
@@ -14,6 +13,19 @@ pub struct SymLockedAccessKey {
 }
 
 impl SymLockedAccessKey {
+    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let mut written_bytes = self.nonce.encode(writer).await?;
+
+        writer.write_all(&self.cipher_text).await?;
+        written_bytes += self.cipher_text.len();
+
+        written_bytes += self.tag.encode(writer).await?;
+
+        Ok(written_bytes)
+    }
     pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (remaining, nonce) = Nonce::parse(input)?;
 
@@ -42,20 +54,6 @@ impl SymLockedAccessKey {
         cipher.decrypt_in_place_detached(&self.nonce, &[], &mut key_payload, &self.tag)?;
 
         Ok(AccessKey::from(key_payload))
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for SymLockedAccessKey {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        let mut written_bytes = self.nonce.encode(writer).await?;
-
-        writer.write_all(&self.cipher_text).await?;
-        written_bytes += self.cipher_text.len();
-
-        written_bytes += self.tag.encode(writer).await?;
-
-        Ok(written_bytes)
     }
 }
 

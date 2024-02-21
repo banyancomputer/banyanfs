@@ -1,14 +1,23 @@
-use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::{tag, take};
 
 use crate::codec::header::BANYAN_FS_MAGIC;
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 #[derive(Debug, PartialEq)]
 pub struct IdentityHeader;
 
 impl IdentityHeader {
+    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        writer.write_all(BANYAN_FS_MAGIC).await?;
+        writer.write_all(&[0x01]).await?;
+
+        Ok(BANYAN_FS_MAGIC.len() + 1)
+    }
+
     pub fn parse_with_magic(input: &[u8]) -> ParserResult<Self> {
         let (input, _magic) = banyanfs_magic_tag(input)?;
         let (input, version) = version_field(input)?;
@@ -41,16 +50,6 @@ fn version_field(input: &[u8]) -> ParserResult<u8> {
 
     let version = version_byte & 0x7f;
     Ok((input, version))
-}
-
-#[async_trait]
-impl AsyncEncodable for IdentityHeader {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        writer.write_all(BANYAN_FS_MAGIC).await?;
-        writer.write_all(&[0x01]).await?;
-
-        Ok(BANYAN_FS_MAGIC.len() + 1)
-    }
 }
 
 #[cfg(test)]

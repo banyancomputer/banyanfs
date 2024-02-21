@@ -1,13 +1,12 @@
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 
-use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 use nom::multi::count;
 use nom::number::streaming::{le_u64, le_u8};
 
 use crate::codec::filesystem::FilePermissions;
-use crate::codec::{ActorId, AsyncEncodable, ParserResult};
+use crate::codec::{ActorId, ParserResult};
 
 const ATTRIBUTE_OWNER_TYPE_ID: u8 = 0x01;
 
@@ -35,71 +34,10 @@ pub enum Attribute {
 }
 
 impl Attribute {
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
-        let (remaining, type_byte) = le_u8(input)?;
-
-        let parsed = match type_byte {
-            ATTRIBUTE_CUSTOM_TYPE_ID => {
-                let (remaining, key_len) = le_u8(remaining)?;
-                let (remaining, key_bytes) = take(key_len)(remaining)?;
-                let key = String::from_utf8(key_bytes.to_vec()).map_err(|_| {
-                    nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
-                })?;
-
-                let (remaining, value_len) = le_u8(remaining)?;
-                let (remaining, value_bytes) = take(value_len)(remaining)?;
-                let value = String::from_utf8(value_bytes.to_vec()).map_err(|_| {
-                    nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
-                })?;
-
-                (remaining, Self::Custom { key, value })
-            }
-            ATTRIBUTE_OWNER_TYPE_ID => {
-                let (remaining, actor_id) = ActorId::parse(remaining)?;
-                (remaining, Self::Owner(actor_id))
-            }
-            ATTRIBUTE_PERMISSIONS_TYPE_ID => {
-                // we should probably have a common filesystem permission type that can be
-                // specialized to the node type by the caller, but for now directories have fewer
-                // permissions so file can be the super set, we just loose a little validation
-                let (remaining, fs_perms) = FilePermissions::parse(remaining)?;
-                (remaining, Self::Permissions(fs_perms))
-            }
-            ATTRIBUTE_CREATED_AT_TYPE_ID => {
-                let (remaining, unix_milliseconds) = le_u64(remaining)?;
-                (remaining, Self::CreatedAt(unix_milliseconds))
-            }
-            ATTRIBUTE_MODIFIED_AT_TYPE_ID => {
-                let (remaining, unix_milliseconds) = le_u64(remaining)?;
-                (remaining, Self::ModifiedAt(unix_milliseconds))
-            }
-            ATTRIBUTE_MIME_TYPE_TYPE_ID => {
-                let (remaining, mime_len) = le_u8(remaining)?;
-                let (remaining, mime_bytes) = take(mime_len)(remaining)?;
-
-                let mime_str = String::from_utf8(mime_bytes.to_vec()).map_err(|_| {
-                    nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
-                })?;
-
-                (remaining, Self::MimeType(mime_str))
-            }
-            _ => {
-                let err = nom::error::make_error(input, nom::error::ErrorKind::Tag);
-                return Err(nom::Err::Failure(err));
-            }
-        };
-
-        Ok(parsed)
-    }
-
-    pub fn parse_many(input: &[u8], attribute_count: u8) -> ParserResult<Vec<Self>> {
-        count(Self::parse, attribute_count as usize)(input)
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for Attribute {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
+    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
 
         match self {
@@ -175,5 +113,65 @@ impl AsyncEncodable for Attribute {
         }
 
         Ok(written_bytes)
+    }
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+        let (remaining, type_byte) = le_u8(input)?;
+
+        let parsed = match type_byte {
+            ATTRIBUTE_CUSTOM_TYPE_ID => {
+                let (remaining, key_len) = le_u8(remaining)?;
+                let (remaining, key_bytes) = take(key_len)(remaining)?;
+                let key = String::from_utf8(key_bytes.to_vec()).map_err(|_| {
+                    nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
+                })?;
+
+                let (remaining, value_len) = le_u8(remaining)?;
+                let (remaining, value_bytes) = take(value_len)(remaining)?;
+                let value = String::from_utf8(value_bytes.to_vec()).map_err(|_| {
+                    nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
+                })?;
+
+                (remaining, Self::Custom { key, value })
+            }
+            ATTRIBUTE_OWNER_TYPE_ID => {
+                let (remaining, actor_id) = ActorId::parse(remaining)?;
+                (remaining, Self::Owner(actor_id))
+            }
+            ATTRIBUTE_PERMISSIONS_TYPE_ID => {
+                // we should probably have a common filesystem permission type that can be
+                // specialized to the node type by the caller, but for now directories have fewer
+                // permissions so file can be the super set, we just loose a little validation
+                let (remaining, fs_perms) = FilePermissions::parse(remaining)?;
+                (remaining, Self::Permissions(fs_perms))
+            }
+            ATTRIBUTE_CREATED_AT_TYPE_ID => {
+                let (remaining, unix_milliseconds) = le_u64(remaining)?;
+                (remaining, Self::CreatedAt(unix_milliseconds))
+            }
+            ATTRIBUTE_MODIFIED_AT_TYPE_ID => {
+                let (remaining, unix_milliseconds) = le_u64(remaining)?;
+                (remaining, Self::ModifiedAt(unix_milliseconds))
+            }
+            ATTRIBUTE_MIME_TYPE_TYPE_ID => {
+                let (remaining, mime_len) = le_u8(remaining)?;
+                let (remaining, mime_bytes) = take(mime_len)(remaining)?;
+
+                let mime_str = String::from_utf8(mime_bytes.to_vec()).map_err(|_| {
+                    nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
+                })?;
+
+                (remaining, Self::MimeType(mime_str))
+            }
+            _ => {
+                let err = nom::error::make_error(input, nom::error::ErrorKind::Tag);
+                return Err(nom::Err::Failure(err));
+            }
+        };
+
+        Ok(parsed)
+    }
+
+    pub fn parse_many(input: &[u8], attribute_count: u8) -> ParserResult<Vec<Self>> {
+        count(Self::parse, attribute_count as usize)(input)
     }
 }

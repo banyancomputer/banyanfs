@@ -9,7 +9,7 @@ pub use access::DriveAccess;
 pub use directory_handle::DirectoryHandle;
 pub use file_handle::FileHandle;
 pub use loader::{DriveLoader, DriveLoaderError};
-pub use operations::OperationError;
+pub(crate) use operations::OperationError;
 
 pub(crate) use walk_state::WalkState;
 

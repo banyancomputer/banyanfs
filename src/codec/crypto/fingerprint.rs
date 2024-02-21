@@ -1,9 +1,8 @@
-use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 
 use crate::codec::crypto::{KeyId, VerifyingKey};
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 const FINGERPRINT_SIZE: usize = 32;
 
@@ -11,6 +10,14 @@ const FINGERPRINT_SIZE: usize = 32;
 pub struct Fingerprint([u8; FINGERPRINT_SIZE]);
 
 impl Fingerprint {
+    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        writer.write_all(&self.0).await?;
+        Ok(self.0.len())
+    }
+
     pub fn key_id(&self) -> KeyId {
         let mut key_id = [0u8; 2];
         key_id.copy_from_slice(&self.0[..2]);
@@ -24,14 +31,6 @@ impl Fingerprint {
         bytes.copy_from_slice(id_bytes);
 
         Ok((remaining, Self(bytes)))
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for Fingerprint {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        writer.write_all(&self.0).await?;
-        Ok(self.0.len())
     }
 }
 

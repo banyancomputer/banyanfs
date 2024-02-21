@@ -1,10 +1,9 @@
-use async_trait::async_trait;
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 use rand::Rng;
 
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 const PERMANENT_ID_SIZE: usize = 8;
 
@@ -12,6 +11,14 @@ const PERMANENT_ID_SIZE: usize = 8;
 pub struct PermanentId([u8; PERMANENT_ID_SIZE]);
 
 impl PermanentId {
+    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        writer.write_all(&self.0).await?;
+        Ok(self.0.len())
+    }
+
     pub fn generate(rng: &mut impl CryptoRngCore) -> Self {
         Self(rng.gen())
     }
@@ -23,14 +30,6 @@ impl PermanentId {
         bytes.copy_from_slice(id_bytes);
 
         Ok((remaining, Self(bytes)))
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for PermanentId {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        writer.write_all(&self.0).await?;
-        Ok(self.0.len())
     }
 }
 

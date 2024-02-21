@@ -1,8 +1,7 @@
-use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::number::streaming::le_u8;
 
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 const PROTECTED_BIT: u8 = 0b1000_0000;
 
@@ -103,6 +102,72 @@ pub enum KeyAccessSettings {
 }
 
 impl KeyAccessSettings {
+    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let mut settings: u8 = 0x00;
+
+        match self {
+            Self::Public {
+                protected,
+                owner,
+                historical,
+                extra,
+            } => {
+                if *protected {
+                    settings |= PROTECTED_BIT;
+                }
+
+                if *owner {
+                    settings |= OWNER_BIT;
+                }
+
+                if *historical {
+                    settings |= HISTORICAL_BIT;
+                }
+
+                settings |= *extra & PRIVATE_ONLY_MASK;
+            }
+            Self::Private {
+                protected,
+                owner,
+                historical,
+                filesystem_key_present,
+                data_key_present,
+                maintenance_key_present,
+            } => {
+                if *protected {
+                    settings |= PROTECTED_BIT;
+                }
+
+                if *owner {
+                    settings |= OWNER_BIT;
+                }
+
+                if *historical {
+                    settings |= HISTORICAL_BIT;
+                }
+
+                if *filesystem_key_present {
+                    settings |= FILESYSTEM_KEY_PRESENT_BIT;
+                }
+
+                if *data_key_present {
+                    settings |= DATA_KEY_PRESENT_BIT;
+                }
+
+                if *maintenance_key_present {
+                    settings |= MAINTENANCE_KEY_PRESENT_BIT;
+                }
+            }
+        }
+
+        writer.write_all(&[settings]).await?;
+
+        Ok(1)
+    }
+
     pub fn has_data_key(&self) -> bool {
         match self {
             KeyAccessSettings::Public { .. } => false,
@@ -207,71 +272,5 @@ impl KeyAccessSettings {
 
     pub const fn size() -> usize {
         1
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for KeyAccessSettings {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        let mut settings: u8 = 0x00;
-
-        match self {
-            Self::Public {
-                protected,
-                owner,
-                historical,
-                extra,
-            } => {
-                if *protected {
-                    settings |= PROTECTED_BIT;
-                }
-
-                if *owner {
-                    settings |= OWNER_BIT;
-                }
-
-                if *historical {
-                    settings |= HISTORICAL_BIT;
-                }
-
-                settings |= *extra & PRIVATE_ONLY_MASK;
-            }
-            Self::Private {
-                protected,
-                owner,
-                historical,
-                filesystem_key_present,
-                data_key_present,
-                maintenance_key_present,
-            } => {
-                if *protected {
-                    settings |= PROTECTED_BIT;
-                }
-
-                if *owner {
-                    settings |= OWNER_BIT;
-                }
-
-                if *historical {
-                    settings |= HISTORICAL_BIT;
-                }
-
-                if *filesystem_key_present {
-                    settings |= FILESYSTEM_KEY_PRESENT_BIT;
-                }
-
-                if *data_key_present {
-                    settings |= DATA_KEY_PRESENT_BIT;
-                }
-
-                if *maintenance_key_present {
-                    settings |= MAINTENANCE_KEY_PRESENT_BIT;
-                }
-            }
-        }
-
-        writer.write_all(&[settings]).await?;
-
-        Ok(1)
     }
 }

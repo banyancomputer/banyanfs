@@ -1,9 +1,8 @@
-use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::number::streaming::{le_u64, le_u8};
 
 use crate::codec::crypto::SymLockedAccessKey;
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 use crate::filesystem::ContentReference;
 
 const FILE_CONTENT_TYPE_STUB: u8 = 0x01;
@@ -27,6 +26,42 @@ pub enum FileContent {
 }
 
 impl FileContent {
+    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let mut written_bytes = 0;
+
+        match self {
+            Self::Encrypted {
+                access_key,
+                content,
+            } => {
+                writer.write_all(&[FILE_CONTENT_TYPE_PUBLIC]).await?;
+                written_bytes += 1;
+
+                written_bytes += access_key.encode(writer).await?;
+                written_bytes += encode_content_list(writer, content).await?;
+            }
+            Self::Public { content } => {
+                writer.write_all(&[FILE_CONTENT_TYPE_PUBLIC]).await?;
+                written_bytes += 1;
+
+                written_bytes += encode_content_list(writer, content).await?;
+            }
+            Self::Stub { size } => {
+                writer.write_all(&[FILE_CONTENT_TYPE_STUB]).await?;
+                written_bytes += 1;
+
+                let size_bytes = size.to_le_bytes();
+                writer.write_all(&size_bytes).await?;
+                written_bytes += size_bytes.len();
+            }
+        }
+
+        Ok(written_bytes)
+    }
+
     pub fn is_encrypted(&self) -> bool {
         matches!(self, FileContent::Encrypted { .. })
     }
@@ -71,42 +106,6 @@ impl FileContent {
             FileContent::Public { content } => content.iter().map(|c| c.size()).sum(),
             FileContent::Stub { size } => *size,
         }
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for FileContent {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        let mut written_bytes = 0;
-
-        match self {
-            Self::Encrypted {
-                access_key,
-                content,
-            } => {
-                writer.write_all(&[FILE_CONTENT_TYPE_PUBLIC]).await?;
-                written_bytes += 1;
-
-                written_bytes += access_key.encode(writer).await?;
-                written_bytes += encode_content_list(writer, content).await?;
-            }
-            Self::Public { content } => {
-                writer.write_all(&[FILE_CONTENT_TYPE_PUBLIC]).await?;
-                written_bytes += 1;
-
-                written_bytes += encode_content_list(writer, content).await?;
-            }
-            Self::Stub { size } => {
-                writer.write_all(&[FILE_CONTENT_TYPE_STUB]).await?;
-                written_bytes += 1;
-
-                let size_bytes = size.to_le_bytes();
-                writer.write_all(&size_bytes).await?;
-                written_bytes += size_bytes.len();
-            }
-        }
-
-        Ok(written_bytes)
     }
 }
 

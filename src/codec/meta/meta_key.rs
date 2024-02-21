@@ -9,7 +9,7 @@ use nom::Needed;
 
 use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, KeyId, SigningKey};
 use crate::codec::header::KeyCount;
-use crate::codec::{ActorSettings, AsyncEncodable, ParserResult};
+use crate::codec::{ActorSettings, ParserResult};
 
 pub struct MetaKey(AccessKey);
 

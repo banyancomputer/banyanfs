@@ -8,8 +8,6 @@ pub use progress_type::ProgressType;
 pub(crate) use segment_streamer::SegmentStreamer;
 pub use state_error::StateError;
 
-use async_trait::async_trait;
-
 #[cfg(debug_assertions)]
 pub type ParserResult<'a, T> = nom::IResult<&'a [u8], T, nom::error::VerboseError<&'a [u8]>>;
 
@@ -18,16 +16,16 @@ pub type ParserResult<'a, T> = nom::IResult<&'a [u8], T>;
 
 pub type StateResult<T, E> = Result<ProgressType<T>, E>;
 
-#[async_trait]
-pub trait AsyncParser<'a>: Parser + Sized {
-    async fn next(input: &'a [u8], ctx: &'a Self::Context) -> ParserResult<'a, Option<Self>> {
-        match Self::parse(input, ctx) {
-            Ok((remaining, parsed)) => Ok((remaining, Some(parsed))),
-            Err(nom::Err::Incomplete(_)) => Ok((input, None)),
-            Err(err) => Err(err),
-        }
-    }
-}
+//#[async_trait]
+//pub trait AsyncParser<'a>: Parser + Sized {
+//    async fn next(input: &'a [u8], ctx: &'a Self::Context) -> ParserResult<'a, Option<Self>> {
+//        match Self::parse(input, ctx) {
+//            Ok((remaining, parsed)) => Ok((remaining, Some(parsed))),
+//            Err(nom::Err::Incomplete(_)) => Ok((input, None)),
+//            Err(err) => Err(err),
+//        }
+//    }
+//}
 
 pub trait Parser: Sized {
     type Context: Send + Sync;

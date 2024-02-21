@@ -5,7 +5,7 @@ use nom::number::streaming::le_u8;
 
 use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, SigningKey, VerifyingKey};
 use crate::codec::header::KeyAccessSettings;
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 const KEY_PRESENT_BIT: u8 = 0b0000_0001;
 

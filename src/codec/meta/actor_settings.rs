@@ -5,7 +5,7 @@ use nom::number::streaming::le_u8;
 use crate::codec::crypto::VerifyingKey;
 use crate::codec::header::KeyAccessSettings;
 use crate::codec::meta::VectorClock;
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 const SOFTWARE_AGENT_BYTE_STR_SIZE: usize = 63;
 

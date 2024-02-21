@@ -1,8 +1,7 @@
-use async_trait::async_trait;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::number::streaming::le_u8;
 
-use crate::codec::{AsyncEncodable, ParserResult};
+use crate::codec::ParserResult;
 
 const CONTENT_OPTIONS_RESERVED_MASK: u8 = 0b1110_0000;
 
@@ -26,6 +25,37 @@ pub struct ContentOptions {
 }
 
 impl ContentOptions {
+    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let mut options: u8 = 0x00;
+
+        if self.realized_view {
+            options |= CONTENT_OPTIONS_REALIZED_VIEW_BIT;
+        }
+
+        if self.journal {
+            options |= CONTENT_OPTIONS_JOURNAL_BIT;
+        }
+
+        if self.journal_index {
+            options |= CONTENT_OPTIONS_JOURNAL_INDEX_BIT;
+        }
+
+        if self.maintenance {
+            options |= CONTENT_OPTIONS_MAINTENANCE_BIT;
+        }
+
+        if self.data {
+            options |= CONTENT_OPTIONS_DATA_BIT;
+        }
+
+        writer.write_all(&[options]).await?;
+
+        Ok(1)
+    }
+
     pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, byte) = le_u8(input)?;
 
@@ -53,36 +83,5 @@ impl ContentOptions {
 
     pub const fn size() -> usize {
         1
-    }
-}
-
-#[async_trait]
-impl AsyncEncodable for ContentOptions {
-    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> std::io::Result<usize> {
-        let mut options: u8 = 0x00;
-
-        if self.realized_view {
-            options |= CONTENT_OPTIONS_REALIZED_VIEW_BIT;
-        }
-
-        if self.journal {
-            options |= CONTENT_OPTIONS_JOURNAL_BIT;
-        }
-
-        if self.journal_index {
-            options |= CONTENT_OPTIONS_JOURNAL_INDEX_BIT;
-        }
-
-        if self.maintenance {
-            options |= CONTENT_OPTIONS_MAINTENANCE_BIT;
-        }
-
-        if self.data {
-            options |= CONTENT_OPTIONS_DATA_BIT;
-        }
-
-        writer.write_all(&[options]).await?;
-
-        Ok(1)
     }
 }
