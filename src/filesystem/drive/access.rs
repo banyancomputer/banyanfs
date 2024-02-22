@@ -2,13 +2,11 @@ use std::collections::HashMap;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
 use elliptic_curve::rand_core::CryptoRngCore;
-use futures::io::{AsyncWrite, AsyncWriteExt};
+use futures::io::AsyncWrite;
 
 use crate::codec::crypto::{KeyId, PermissionKeys, SigningKey, VerifyingKey};
 use crate::codec::header::KeyAccessSettings;
-use crate::codec::meta::VectorClock;
 use crate::codec::{ActorId, ActorSettings, ParserResult};
-use crate::filesystem::drive::MetaKey;
 
 #[derive(Debug)]
 pub struct DriveAccess {
