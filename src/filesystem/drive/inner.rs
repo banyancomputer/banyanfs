@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
+use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::io::AsyncWrite;
 use slab::Slab;
 
@@ -21,6 +22,7 @@ pub(crate) struct InnerDrive {
 impl InnerDrive {
     pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
+        rng: &mut impl CryptoRngCore,
         writer: &mut W,
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
@@ -45,7 +47,7 @@ impl InnerDrive {
 
         let mut seen_ids = HashSet::new();
         let mut outstanding_ids = vec![self.root_node_id];
-        //let mut data_ids = Vec::new();
+        let mut all_data_cids = Vec::new();
 
         while let Some(node_id) = outstanding_ids.pop() {
             let node = self.nodes.get(node_id).ok_or_else(|| {
@@ -59,21 +61,28 @@ impl InnerDrive {
             }
             seen_ids.insert(permanent_id);
 
-            let (written, children) = node.encode(writer, data_key).await?;
+            let (written, child_pids, data_cids) = node.encode(rng, writer, Some(data_key)).await?;
 
-            for child_permanent_id in children.into_iter() {
-                if seen_ids.contains(&child_permanent_id) {
-                    continue;
+            if let Some(pid_list) = child_pids {
+                for child_perm_id in pid_list.into_iter() {
+                    if seen_ids.contains(&child_perm_id) {
+                        continue;
+                    }
+
+                    let child_node_id =
+                        self.permanent_id_map.get(&permanent_id).ok_or_else(|| {
+                            StdError::new(
+                                StdErrorKind::Other,
+                                "referenced child's permanent ID missing from internal nodes",
+                            )
+                        })?;
+
+                    outstanding_ids.push(*child_node_id);
                 }
+            }
 
-                let child_node_id = self.permanent_id_map.get(&permanent_id).ok_or_else(|| {
-                    StdError::new(
-                        StdErrorKind::Other,
-                        "referenced child's permanent ID missing from internal nodes",
-                    )
-                })?;
-
-                outstanding_ids.push(*child_node_id);
+            if let Some(data) = data_cids {
+                all_data_cids.extend(data);
             }
 
             written_bytes += written;

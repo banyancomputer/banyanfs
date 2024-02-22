@@ -86,7 +86,7 @@ impl Drive {
 
         // todo: include filesystem ID and encoded length bytes as AD
         written_bytes += header_buffer
-            .encrypt_and_encode(writer, rng, &[], meta_key.deref())
+            .encrypt_and_encode(rng, writer, &[], meta_key.deref())
             .await?;
 
         if content_options.include_filesystem() {
@@ -98,7 +98,7 @@ impl Drive {
                 .and_then(|pk| pk.filesystem.as_ref())
                 .ok_or(StdError::new(StdErrorKind::Other, "no filesystem key"))?;
 
-            written_bytes += inner_read.encode(&mut *fs_buffer).await?;
+            written_bytes += inner_read.encode(rng, &mut *fs_buffer).await?;
 
             // todo: use filesystem ID and encoded length bytes as AD
             let buffer_length = fs_buffer.encrypted_len() as u64;
@@ -107,7 +107,7 @@ impl Drive {
             written_bytes += length_bytes.len();
 
             written_bytes += fs_buffer
-                .encrypt_and_encode(writer, rng, &[], filesystem_key)
+                .encrypt_and_encode(rng, writer, &[], filesystem_key)
                 .await?;
         }
 

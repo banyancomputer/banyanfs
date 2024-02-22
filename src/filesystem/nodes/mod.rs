@@ -10,6 +10,7 @@ pub use node_name::{NodeName, NodeNameError};
 use std::collections::HashMap;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
+use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
 
 use crate::codec::crypto::AccessKey;
@@ -43,9 +44,10 @@ impl Node {
 
     pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
+        rng: &mut impl CryptoRngCore,
         writer: &mut W,
-        data_key: &AccessKey,
-    ) -> std::io::Result<(usize, Vec<PermanentId>)> {
+        data_key: Option<&AccessKey>,
+    ) -> std::io::Result<(usize, Option<Vec<PermanentId>>, Option<Vec<Cid>>)> {
         let mut node_data = Vec::new();
 
         self.permanent_id.encode(&mut node_data).await?;
@@ -70,7 +72,10 @@ impl Node {
         let entry_count = metadata_entries as u8;
         node_data.write_all(&[entry_count]).await?;
 
-        for (key, val) in self.metadata.iter() {
+        let mut sorted_metadata = self.metadata.iter().collect::<Vec<_>>();
+        sorted_metadata.sort_by(|(a, _), (b, _)| a.as_bytes().cmp(b.as_bytes()));
+
+        for (key, val) in sorted_metadata.into_iter() {
             let key_bytes = key.as_bytes();
             let key_bytes_len = key_bytes.len();
 
@@ -90,7 +95,7 @@ impl Node {
             node_data.write_all(val).await?;
         }
 
-        let (_, child_ids) = self.data().encode(&mut node_data, data_key).await?;
+        let (_, child_ids, data_cids) = self.data().encode(rng, &mut node_data, data_key).await?;
 
         let hash: [u8; 32] = blake3::hash(&node_data).into();
         let cid = Cid::from(hash);
@@ -108,7 +113,7 @@ impl Node {
         writer.write_all(&node_data).await?;
         written_bytes += node_data.len();
 
-        Ok((written_bytes, child_ids))
+        Ok((written_bytes, child_ids, data_cids))
     }
 
     pub fn id(&self) -> NodeId {

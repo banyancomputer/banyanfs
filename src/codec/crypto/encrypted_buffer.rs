@@ -37,8 +37,8 @@ impl EncryptedBuffer {
 
     pub(crate) async fn encrypt_and_encode<'a, W: 'a + AsyncWrite + Unpin + Send>(
         mut self,
-        writer: &mut W,
         rng: &mut impl CryptoRngCore,
+        writer: &mut W,
         authenticated_data: &[u8],
         access_key: &AccessKey,
     ) -> std::io::Result<usize> {

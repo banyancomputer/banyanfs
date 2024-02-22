@@ -7,10 +7,14 @@ use crate::codec::ParserResult;
 
 const PERMANENT_ID_SIZE: usize = 8;
 
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct PermanentId([u8; PERMANENT_ID_SIZE]);
 
 impl PermanentId {
+    pub fn as_bytes(&self) -> &[u8; PERMANENT_ID_SIZE] {
+        &self.0
+    }
+
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,

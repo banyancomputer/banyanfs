@@ -12,6 +12,10 @@ pub struct ContentReference {
 }
 
 impl ContentReference {
+    pub(crate) fn data_block_cid(&self) -> Cid {
+        self.data_block_cid.clone()
+    }
+
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
