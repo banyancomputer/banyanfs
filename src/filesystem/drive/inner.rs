@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
 use ecdsa::signature::rand_core::CryptoRngCore;
-use futures::io::AsyncWrite;
+use futures::io::{AsyncWrite, AsyncWriteExt};
 use slab::Slab;
 
 use crate::codec::crypto::AccessKey;
@@ -50,6 +50,7 @@ impl InnerDrive {
         let mut outstanding_ids = vec![self.root_node_id];
         let mut all_data_cids = Vec::new();
 
+        let mut node_buffer = Vec::new();
         while let Some(node_id) = outstanding_ids.pop() {
             let node = self.nodes.get(node_id).ok_or_else(|| {
                 StdError::new(StdErrorKind::Other, "node ID missing from internal nodes")
@@ -62,7 +63,8 @@ impl InnerDrive {
             }
             seen_ids.insert(permanent_id);
 
-            let (written, child_pids, data_cids) = node.encode(rng, writer, Some(data_key)).await?;
+            let (_, child_pids, data_cids) =
+                node.encode(rng, &mut node_buffer, Some(data_key)).await?;
 
             if let Some(pid_list) = child_pids {
                 for child_perm_id in pid_list.into_iter() {
@@ -85,9 +87,15 @@ impl InnerDrive {
             if let Some(data) = data_cids {
                 all_data_cids.extend(data);
             }
-
-            written_bytes += written;
         }
+
+        let node_count = seen_ids.len() as u64;
+        let node_count_bytes = node_count.to_be_bytes();
+        writer.write_all(&node_count_bytes).await?;
+        written_bytes += node_count_bytes.len();
+
+        writer.write_all(&node_buffer).await?;
+        written_bytes += node_buffer.len();
 
         Ok(written_bytes)
     }
@@ -98,6 +106,7 @@ impl InnerDrive {
         journal_start: JournalCheckpoint,
         data_key: Option<&AccessKey>,
     ) -> ParserResult<'a, Self> {
+        // todo parse count
         loop {
             //let (node, remaining) = Node::parse(input)?;
             todo!()
