@@ -198,6 +198,12 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                         .and_then(|pk| pk.filesystem.as_ref())
                         .ok_or(DriveLoaderError::KeyNotAvailable("filesystem key missing"))?;
 
+                    let data_key = self
+                        .drive_access
+                        .as_ref()
+                        .and_then(|a| a.permission_keys())
+                        .and_then(|pk| pk.data.as_ref());
+
                     // todo(sstelfox): we ideally want to stream this data and selectively parse
                     // things, but that has impacts on the encryption which would need to be managed
                     // carefully. Since this only covers the realized view of the filesystem (the
@@ -213,8 +219,14 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                         filesystem_key,
                     )?;
 
-                    let (remaining, inner_drive) =
-                        InnerDrive::parse(&fs_buffer, journal_start.clone())?;
+                    let drive_access = self.drive_access.clone().expect("to have been set");
+
+                    let (remaining, inner_drive) = InnerDrive::parse(
+                        &fs_buffer,
+                        drive_access,
+                        journal_start.clone(),
+                        data_key.clone(),
+                    )?;
                     debug_assert!(remaining.is_empty());
 
                     let drive = Drive {

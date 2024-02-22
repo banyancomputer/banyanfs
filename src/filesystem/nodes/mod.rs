@@ -154,7 +154,7 @@ impl Node {
 
     pub(crate) fn parse<'a>(
         input: &'a [u8],
-        data_key: &AccessKey,
+        data_key: Option<&AccessKey>,
     ) -> ParserResult<'a, (Self, Vec<PermanentId>)> {
         todo!()
     }

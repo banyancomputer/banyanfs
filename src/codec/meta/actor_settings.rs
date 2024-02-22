@@ -9,7 +9,7 @@ use crate::codec::ParserResult;
 
 const SOFTWARE_AGENT_BYTE_STR_SIZE: usize = 63;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ActorSettings {
     verifying_key: VerifyingKey,
     vector_clock: VectorClock,

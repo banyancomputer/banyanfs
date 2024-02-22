@@ -8,7 +8,7 @@ use crate::codec::crypto::{KeyId, PermissionKeys, SigningKey, VerifyingKey};
 use crate::codec::header::KeyAccessSettings;
 use crate::codec::{ActorId, ActorSettings, ParserResult};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct DriveAccess {
     current_actor_id: ActorId,
     actor_settings: HashMap<ActorId, ActorSettings>,

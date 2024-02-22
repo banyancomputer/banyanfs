@@ -5,6 +5,7 @@ use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::io::AsyncWrite;
 use slab::Slab;
 
+use crate::codec::crypto::AccessKey;
 use crate::codec::*;
 use crate::filesystem::drive::DriveAccess;
 use crate::filesystem::nodes::{Node, NodeId};
@@ -91,7 +92,15 @@ impl InnerDrive {
         Ok(written_bytes)
     }
 
-    pub fn parse(_input: &[u8], _journal_start: JournalCheckpoint) -> ParserResult<Self> {
-        todo!()
+    pub fn parse<'a>(
+        input: &'a [u8],
+        drive_access: DriveAccess,
+        journal_start: JournalCheckpoint,
+        data_key: Option<&AccessKey>,
+    ) -> ParserResult<'a, Self> {
+        loop {
+            //let (node, remaining) = Node::parse(input)?;
+            todo!()
+        }
     }
 }

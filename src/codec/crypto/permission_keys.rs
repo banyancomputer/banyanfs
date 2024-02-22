@@ -9,7 +9,7 @@ use crate::codec::ParserResult;
 
 const KEY_PRESENT_BIT: u8 = 0b0000_0001;
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct PermissionKeys {
     pub(crate) filesystem: Option<AccessKey>,
     pub(crate) data: Option<AccessKey>,
