@@ -6,10 +6,10 @@ use crate::codec::crypto::AccessKey;
 use crate::codec::filesystem::{DirectoryPermissions, FilePermissions};
 use crate::codec::meta::PermanentId;
 use crate::codec::ParserResult;
-use crate::filesystem::nodes::NodeName;
+use crate::filesystem::nodes::{NodeKind, NodeName};
 use crate::filesystem::FileContent;
 
-pub enum NodeKind {
+pub enum NodeData {
     File {
         permissions: FilePermissions,
         content: FileContent,
@@ -21,17 +21,24 @@ pub enum NodeKind {
     },
 }
 
-impl NodeKind {
+impl NodeData {
     pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
-        _writer: &mut W,
+        writer: &mut W,
         _data_key: &AccessKey,
     ) -> std::io::Result<(usize, Vec<PermanentId>)> {
         todo!()
     }
 
+    pub(crate) fn kind(&self) -> NodeKind {
+        match self {
+            NodeData::File { .. } => NodeKind::File,
+            NodeData::Directory { .. } => NodeKind::Directory,
+        }
+    }
+
     pub fn new_directory() -> Self {
-        NodeKind::Directory {
+        Self::Directory {
             permissions: DirectoryPermissions::default(),
             children: HashMap::new(),
             children_size: 0,
@@ -46,7 +53,7 @@ impl NodeKind {
     }
 
     pub fn stub_file(size: u64) -> Self {
-        NodeKind::File {
+        Self::File {
             permissions: FilePermissions::default(),
             content: FileContent::Stub { size },
         }

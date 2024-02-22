@@ -6,12 +6,12 @@ use futures::future::BoxFuture;
 use futures::FutureExt;
 use tracing::{debug, instrument, trace, Instrument, Level};
 
+use crate::codec::filesystem::NodeKind;
 use crate::codec::*;
-use crate::filesystem::nodes::NodeKind;
 
 use crate::codec::crypto::SigningKey;
 use crate::filesystem::drive::{InnerDrive, OperationError, WalkState};
-use crate::filesystem::nodes::{Node, NodeId, NodeName};
+use crate::filesystem::nodes::{Node, NodeData, NodeId, NodeName};
 use crate::filesystem::NodeBuilder;
 
 const MAX_PATH_DEPTH: usize = 32;
@@ -55,8 +55,8 @@ impl DirectoryHandle {
         // node.
         let inner_read = self.inner.read().await;
         let children = if path.is_empty() {
-            match inner_read.nodes[self.cwd_id].kind() {
-                NodeKind::Directory { children, .. } => children,
+            match inner_read.nodes[self.cwd_id].data() {
+                NodeData::Directory { children, .. } => children,
                 _ => {
                     return Err(OperationError::InternalCorruption(
                         self.cwd_id,
@@ -72,8 +72,8 @@ impl DirectoryHandle {
 
             let listed_node = &inner_read.nodes[node_id];
 
-            match listed_node.kind() {
-                NodeKind::Directory { children, .. } => children,
+            match listed_node.data() {
+                NodeData::Directory { children, .. } => children,
                 _ => return Ok(vec![(listed_node.name(), listed_node.permanent_id())]),
             }
         };
@@ -152,8 +152,8 @@ impl DirectoryHandle {
                     "expected referenced parent to exist",
                 ))?;
 
-        let parent_children = match parent_node.kind_mut() {
-            NodeKind::Directory { children, .. } => children,
+        let parent_children = match parent_node.data_mut() {
+            NodeData::Directory { children, .. } => children,
             _ => {
                 return Err(OperationError::InternalCorruption(
                     parent_id,
@@ -192,8 +192,9 @@ impl DirectoryHandle {
                     let inner_read = self.inner.read().await;
 
                     match inner_read.nodes[node_id].kind() {
-                        NodeKind::Directory { .. } => return Ok(()),
-                        NodeKind::File { .. } => return Err(OperationError::Exists(node_id)),
+                        NodeKind::Directory => return Ok(()),
+                        NodeKind::File => return Err(OperationError::Exists(node_id)),
+                        _ => unimplemented!(),
                     }
                 }
                 WalkState::MissingComponent {
@@ -270,8 +271,8 @@ fn walk_path<'a>(
             OperationError::InternalCorruption(working_directory_id, "missing working directory"),
         )?;
 
-        let children = match current_node.kind() {
-            NodeKind::Directory { children, .. } => children,
+        let children = match current_node.data() {
+            NodeData::Directory { children, .. } => children,
             _ => {
                 return Err(OperationError::InternalCorruption(
                     working_directory_id,
@@ -303,7 +304,7 @@ fn walk_path<'a>(
             .ok_or(OperationError::MissingPermanentId(*perm_id))?;
 
         let next_node = &inner_read.nodes[next_node_id];
-        if !matches!(next_node.kind(), NodeKind::Directory { .. }) {
+        if !matches!(next_node.kind(), NodeKind::Directory) {
             return Ok(WalkState::NotTraversable {
                 working_directory_id,
                 blocking_name: current_entry,

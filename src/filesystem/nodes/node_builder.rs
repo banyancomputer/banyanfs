@@ -1,8 +1,9 @@
 use elliptic_curve::rand_core::CryptoRngCore;
 use std::collections::HashMap;
 
+use crate::codec::filesystem::NodeKind;
 use crate::codec::meta::ActorId;
-use crate::filesystem::nodes::{Node, NodeId, NodeKind, NodeName, NodeNameError, PermanentId};
+use crate::filesystem::nodes::{Node, NodeData, NodeId, NodeName, NodeNameError, PermanentId};
 
 pub(crate) struct NodeBuilder {
     id: Option<NodeId>,
@@ -27,6 +28,12 @@ impl NodeBuilder {
 
         let current_ts = crate::utils::current_time_ms();
 
+        let inner = match self.kind {
+            NodeKind::File => NodeData::stub_file(0),
+            NodeKind::Directory => NodeData::new_directory(),
+            _ => unimplemented!("haven't made it there yet"),
+        };
+
         let new_node = Node {
             id,
             parent_id: self.parent_id,
@@ -40,7 +47,7 @@ impl NodeBuilder {
             created_at: current_ts,
             modified_at: current_ts,
 
-            kind: self.kind,
+            inner,
             metadata: self.metadata,
         };
 
@@ -55,7 +62,7 @@ impl NodeBuilder {
             name,
             owner_id: None,
 
-            kind: NodeKind::new_directory(),
+            kind: NodeKind::Directory,
             metadata: HashMap::new(),
         }
     }
@@ -83,7 +90,7 @@ impl NodeBuilder {
             name: NodeName::root(),
             owner_id: None,
 
-            kind: NodeKind::new_directory(),
+            kind: NodeKind::Directory,
             metadata: HashMap::new(),
         }
     }

@@ -4,7 +4,7 @@ use nom::bytes::streaming::take;
 use crate::codec::ParserResult;
 
 #[derive(Debug, PartialEq)]
-pub enum NodeType {
+pub(crate) enum NodeKind {
     File,
     AssociatedData,
     Directory,
@@ -13,7 +13,7 @@ pub enum NodeType {
     Unknown(u8),
 }
 
-impl NodeType {
+impl NodeKind {
     pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
@@ -60,10 +60,10 @@ mod tests {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_round_trip_file() {
-        let node_type = NodeType::File;
+        let node_type = NodeKind::File;
         let source_bytes = [0x00];
 
-        let (remaining, parsed) = NodeType::parse(&source_bytes).unwrap();
+        let (remaining, parsed) = NodeKind::parse(&source_bytes).unwrap();
 
         assert!(remaining.is_empty());
         assert_eq!(node_type, parsed);

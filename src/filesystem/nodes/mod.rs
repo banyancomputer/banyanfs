@@ -1,10 +1,10 @@
 mod node_builder;
-mod node_kind;
+mod node_data;
 mod node_name;
 
 pub(crate) use node_builder::{NodeBuilder, NodeBuilderError};
 
-pub use node_kind::NodeKind;
+pub use node_data::NodeData;
 pub use node_name::{NodeName, NodeNameError};
 
 use std::collections::HashMap;
@@ -13,6 +13,7 @@ use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 use futures::{AsyncWrite, AsyncWriteExt};
 
 use crate::codec::crypto::AccessKey;
+use crate::codec::filesystem::NodeKind;
 use crate::codec::meta::{ActorId, Cid, PermanentId};
 use crate::codec::ParserResult;
 
@@ -31,7 +32,8 @@ pub struct Node {
 
     name: NodeName,
     metadata: HashMap<String, Vec<u8>>,
-    kind: NodeKind,
+
+    inner: NodeData,
 }
 
 impl Node {
@@ -88,7 +90,7 @@ impl Node {
             node_data.write_all(val).await?;
         }
 
-        let (_, child_ids) = self.kind.encode(&mut node_data, data_key).await?;
+        let (_, child_ids) = self.data().encode(&mut node_data, data_key).await?;
 
         let hash: [u8; 32] = blake3::hash(&node_data).into();
         let cid = Cid::from(hash);
@@ -114,15 +116,19 @@ impl Node {
     }
 
     pub fn is_directory(&self) -> bool {
-        matches!(self.kind, NodeKind::Directory { .. })
+        self.inner.kind() == NodeKind::Directory
     }
 
-    pub fn kind(&self) -> &NodeKind {
-        &self.kind
+    pub(crate) fn kind(&self) -> NodeKind {
+        self.inner.kind()
     }
 
-    pub fn kind_mut(&mut self) -> &mut NodeKind {
-        &mut self.kind
+    pub fn data(&self) -> &NodeData {
+        &self.inner
+    }
+
+    pub fn data_mut(&mut self) -> &mut NodeData {
+        &mut self.inner
     }
 
     pub fn modified_at(&self) -> u64 {
@@ -159,17 +165,17 @@ impl Node {
 
 impl std::fmt::Debug for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.kind {
-            NodeKind::Directory { .. } => f
-                .debug_tuple("NodeDirectory")
+        match self.inner {
+            NodeData::File { .. } => f
+                .debug_tuple("NodeFile")
                 .field(&self.id)
                 .field(&self.cid)
                 .field(&self.permanent_id)
                 .field(&self.owner_id)
                 .field(&self.name)
                 .finish(),
-            NodeKind::File { .. } => f
-                .debug_tuple("NodeFile")
+            NodeData::Directory { .. } => f
+                .debug_tuple("NodeDirectory")
                 .field(&self.id)
                 .field(&self.cid)
                 .field(&self.permanent_id)
