@@ -13,8 +13,9 @@ pub enum NodeData {
     File {
         permissions: FilePermissions,
         content: FileContent,
-        associated_data: HashMap<u16, FileContent>,
+        associated_data: HashMap<u16, PermanentId>,
     },
+    AssoicatedData,
     Directory {
         permissions: DirectoryPermissions,
         children: HashMap<NodeName, PermanentId>,
@@ -40,7 +41,7 @@ impl NodeData {
                 associated_data,
             } => {
                 written_bytes += permissions.encode(writer).await?;
-                let (n, mut data_cids) = content.encode(rng, writer, data_key).await?;
+                let (n, data_cids) = content.encode(rng, writer, data_key).await?;
                 written_bytes += n;
 
                 let ad_length = associated_data.len();
@@ -53,11 +54,17 @@ impl NodeData {
                 writer.write_all(&[ad_length as u8]).await?;
                 written_bytes += 1;
 
+                if associated_data.is_empty() {
+                    return Ok((written_bytes, None, data_cids));
+                }
+
+                let mut child_ids = Vec::new();
+
                 let mut ad_list = associated_data.iter().collect::<Vec<_>>();
-                ad_list.sort_by(|(a, _), (b, _)| a.cmp(b));
+                ad_list.sort();
                 let mut highest_seen_ad_kind = 0;
 
-                for (ad_kind, content) in ad_list {
+                for (ad_kind, ad_perm_id) in ad_list.into_iter() {
                     if *ad_kind <= highest_seen_ad_kind {
                         return Err(std::io::Error::new(
                             std::io::ErrorKind::InvalidData,
@@ -68,28 +75,12 @@ impl NodeData {
                     highest_seen_ad_kind = *ad_kind;
                     writer.write_all(&ad_kind.to_le_bytes()).await?;
                     written_bytes += 2;
+                    written_bytes += ad_perm_id.encode(writer).await?;
 
-                    let (n, ad_cids) = content.encode(rng, writer, data_key).await?;
-                    written_bytes += n;
-
-                    data_cids = match (data_cids, ad_cids) {
-                        (Some(mut dc), Some(ac)) => {
-                            dc.extend(ac);
-                            dc.sort();
-
-                            Some(dc)
-                        }
-                        (Some(dc), None) => Some(dc),
-                        (None, Some(mut ac)) => {
-                            ac.sort();
-
-                            Some(ac)
-                        }
-                        (None, None) => None,
-                    };
+                    child_ids.push(*ad_perm_id);
                 }
 
-                Ok((written_bytes, None, data_cids))
+                Ok((written_bytes, Some(child_ids), data_cids))
             }
             NodeData::Directory {
                 permissions,
@@ -113,12 +104,14 @@ impl NodeData {
 
                 Ok((written_bytes, Some(children_ids), None))
             }
+            _ => unimplemented!(),
         }
     }
 
     pub(crate) fn kind(&self) -> NodeKind {
         match self {
             NodeData::File { .. } => NodeKind::File,
+            NodeData::AssoicatedData => NodeKind::AssociatedData,
             NodeData::Directory { .. } => NodeKind::Directory,
         }
     }

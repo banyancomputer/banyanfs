@@ -168,6 +168,7 @@ impl Node {
     }
 }
 
+// TODO: this belongs on the inner class not here
 impl std::fmt::Debug for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.inner {
@@ -179,6 +180,7 @@ impl std::fmt::Debug for Node {
                 .field(&self.owner_id)
                 .field(&self.name)
                 .finish(),
+            NodeData::AssoicatedData => unimplemented!(),
             NodeData::Directory { .. } => f
                 .debug_tuple("NodeDirectory")
                 .field(&self.id)
