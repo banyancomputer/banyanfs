@@ -152,7 +152,8 @@ mod tests {
         assert_eq!(buffer, &[0x00]);
 
         let (remaining, parsed) = NodeName::parse(&buffer).unwrap();
-        assert!(!remaining.is_empty());
+        let remaining: Vec<u8> = remaining.to_vec();
+        assert_eq!(Vec::<u8>::new(), remaining);
         assert_eq!(original, parsed);
     }
 
@@ -166,7 +167,8 @@ mod tests {
         assert_eq!(buffer, &[0x01, 0x05, b'h', b'e', b'l', b'l', b'o']);
 
         let (remaining, parsed) = NodeName::parse(&buffer).unwrap();
-        assert!(!remaining.is_empty());
+        let remaining: Vec<u8> = remaining.to_vec();
+        assert_eq!(Vec::<u8>::new(), remaining);
         assert_eq!(original, parsed);
     }
 }
