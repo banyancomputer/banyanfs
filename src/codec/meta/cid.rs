@@ -5,7 +5,7 @@ use crate::codec::ParserResult;
 
 const CID_LENGTH: usize = 32;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Cid([u8; CID_LENGTH]);
 
 impl Cid {

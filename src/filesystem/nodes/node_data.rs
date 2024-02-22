@@ -13,6 +13,7 @@ pub enum NodeData {
     File {
         permissions: FilePermissions,
         content: FileContent,
+        associated_data: HashMap<u16, FileContent>,
     },
     Directory {
         permissions: DirectoryPermissions,
@@ -36,10 +37,57 @@ impl NodeData {
             NodeData::File {
                 permissions,
                 content,
+                associated_data,
             } => {
                 written_bytes += permissions.encode(writer).await?;
-                let (n, data_cids) = content.encode(rng, writer, data_key).await?;
+                let (n, mut data_cids) = content.encode(rng, writer, data_key).await?;
                 written_bytes += n;
+
+                let ad_length = associated_data.len();
+                if ad_length > u8::MAX as usize {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "too many associated data items with a single file entry",
+                    ));
+                }
+                writer.write_all(&[ad_length as u8]).await?;
+                written_bytes += 1;
+
+                let mut ad_list = associated_data.iter().collect::<Vec<_>>();
+                ad_list.sort_by(|(a, _), (b, _)| a.cmp(b));
+                let mut highest_seen_ad_kind = 0;
+
+                for (ad_kind, content) in ad_list {
+                    if *ad_kind <= highest_seen_ad_kind {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            "associated data kinds may only appear once a piece",
+                        ));
+                    }
+
+                    highest_seen_ad_kind = *ad_kind;
+                    writer.write_all(&ad_kind.to_le_bytes()).await?;
+                    written_bytes += 2;
+
+                    let (n, ad_cids) = content.encode(rng, writer, data_key).await?;
+                    written_bytes += n;
+
+                    data_cids = match (data_cids, ad_cids) {
+                        (Some(mut dc), Some(ac)) => {
+                            dc.extend(ac);
+                            dc.sort();
+
+                            Some(dc)
+                        }
+                        (Some(dc), None) => Some(dc),
+                        (None, Some(mut ac)) => {
+                            ac.sort();
+
+                            Some(ac)
+                        }
+                        (None, None) => None,
+                    };
+                }
 
                 Ok((written_bytes, None, data_cids))
             }
@@ -94,6 +142,7 @@ impl NodeData {
         Self::File {
             permissions: FilePermissions::default(),
             content: FileContent::Stub { size },
+            associated_data: HashMap::new(),
         }
     }
 }
