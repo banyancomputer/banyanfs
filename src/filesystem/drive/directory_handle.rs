@@ -111,21 +111,27 @@ impl DirectoryHandle {
     async fn insert_node<'a, 'b, R, F, Fut>(
         &'b mut self,
         rng: &'a mut R,
-        parent_id: NodeId,
+        parent_permanent_id: PermanentId,
         build_node: F,
     ) -> Result<(NodeId, PermanentId), OperationError>
     where
         R: CryptoRngCore,
-        F: FnOnce(&'a mut R, NodeId, NodeId, ActorId) -> Fut,
+        F: FnOnce(&'a mut R, NodeId, PermanentId, ActorId) -> Fut,
         Fut: std::future::Future<Output = Result<Node, OperationError>>,
     {
         trace!("directory::insert_node");
 
         let inner_read = self.inner.read().await;
-        let parent_node = &inner_read.nodes[parent_id];
+        let parent_node_id = *inner_read
+            .permanent_id_map
+            .get(&parent_permanent_id)
+            .ok_or(OperationError::MissingPermanentId(parent_permanent_id))?;
+
+        let parent_node = &inner_read.nodes[parent_node_id];
         if !parent_node.is_directory() {
             return Err(OperationError::ParentMustBeDirectory);
         }
+
         drop(inner_read);
 
         let mut inner_write = self.inner.write().in_current_span().await;
@@ -133,7 +139,7 @@ impl DirectoryHandle {
         let node_id = node_entry.key();
 
         let owner_id = self.current_key.actor_id();
-        let node = build_node(rng, parent_id, node_id, owner_id)
+        let node = build_node(rng, node_id, parent_permanent_id, owner_id)
             .in_current_span()
             .await?;
 
@@ -146,9 +152,9 @@ impl DirectoryHandle {
         let parent_node =
             inner_write
                 .nodes
-                .get_mut(parent_id)
+                .get_mut(parent_node_id)
                 .ok_or(OperationError::InternalCorruption(
-                    parent_id,
+                    parent_node_id,
                     "expected referenced parent to exist",
                 ))?;
 
@@ -156,7 +162,7 @@ impl DirectoryHandle {
             NodeData::Directory { children, .. } => children,
             _ => {
                 return Err(OperationError::InternalCorruption(
-                    parent_id,
+                    parent_node_id,
                     "parent node must be a directory",
                 ));
             }
@@ -164,7 +170,7 @@ impl DirectoryHandle {
 
         if parent_children.insert(name, permanent_id).is_some() {
             return Err(OperationError::InternalCorruption(
-                parent_id,
+                parent_node_id,
                 "wrote new directory over existing entry",
             ));
         }
@@ -211,10 +217,14 @@ impl DirectoryHandle {
                         return Err(OperationError::PathNotFound);
                     }
 
+                    let inner_read = self.inner.read().await;
+                    let parent_permanent_id = inner_read.nodes[working_directory_id].permanent_id();
+                    drop(inner_read);
+
                     self.insert_node(
                         &mut *rng,
-                        working_directory_id,
-                        |rng, parent_id, new_node_id, actor_id| async move {
+                        parent_permanent_id,
+                        |rng, new_node_id, parent_id, actor_id| async move {
                             NodeBuilder::directory(missing_name)
                                 .with_parent(parent_id)
                                 .with_id(new_node_id)

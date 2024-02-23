@@ -162,7 +162,6 @@ impl Drive {
         node_entry.insert(directory);
 
         let current_key = Arc::new(current_key);
-
         let journal_start = JournalCheckpoint::initialize();
 
         let drive = Self {

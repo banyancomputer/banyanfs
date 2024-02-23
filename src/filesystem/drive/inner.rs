@@ -3,6 +3,7 @@ use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
+use nom::number::streaming::le_u64;
 use slab::Slab;
 
 use crate::codec::crypto::AccessKey;
@@ -89,6 +90,8 @@ impl InnerDrive {
             }
         }
 
+        // Should
+
         let node_count = seen_ids.len() as u64;
         let node_count_bytes = node_count.to_be_bytes();
         writer.write_all(&node_count_bytes).await?;
@@ -106,10 +109,44 @@ impl InnerDrive {
         journal_start: JournalCheckpoint,
         data_key: Option<&AccessKey>,
     ) -> ParserResult<'a, Self> {
-        // todo parse count
-        loop {
-            //let (node, remaining) = Node::parse(input)?;
-            todo!()
+        let (mut input, node_count) = le_u64(input)?;
+
+        let mut nodes = Slab::new();
+        let mut permanent_id_map = HashMap::new();
+
+        let mut root_node_id = None;
+
+        for _ in 0..node_count {
+            let entry = nodes.vacant_entry();
+            let node_id = entry.key();
+
+            // The first node is the root
+            if root_node_id.is_none() {
+                root_node_id.replace(node_id);
+            }
+
+            let (remaining, node) = Node::parse(input, node_id, data_key)?;
+            input = remaining;
+
+            let permanent_id = node.permanent_id();
+            entry.insert(node);
+
+            permanent_id_map.insert(permanent_id, node_id);
         }
+
+        let root_node_id = root_node_id.ok_or_else(|| {
+            let error = nom::error::make_error(input, nom::error::ErrorKind::Verify);
+            nom::Err::Failure(error)
+        })?;
+
+        let inner_drive = InnerDrive {
+            access: drive_access,
+            journal_start,
+            root_node_id,
+            nodes,
+            permanent_id_map,
+        };
+
+        Ok((input, inner_drive))
     }
 }

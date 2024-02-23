@@ -225,7 +225,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                         &fs_buffer,
                         drive_access,
                         journal_start.clone(),
-                        data_key.clone(),
+                        data_key,
                     )?;
                     debug_assert!(remaining.is_empty());
 

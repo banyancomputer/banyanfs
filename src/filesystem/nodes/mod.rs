@@ -12,6 +12,8 @@ use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
+use nom::bytes::streaming::take;
+use nom::number::streaming::{le_u32, le_u64, le_u8};
 
 use crate::codec::crypto::AccessKey;
 use crate::codec::filesystem::NodeKind;
@@ -22,8 +24,9 @@ pub(crate) type NodeId = usize;
 
 pub struct Node {
     id: NodeId,
-    parent_id: Option<NodeId>,
+
     cid: Option<Cid>,
+    parent_id: Option<PermanentId>,
 
     permanent_id: PermanentId,
     owner_id: ActorId,
@@ -49,6 +52,16 @@ impl Node {
         data_key: Option<&AccessKey>,
     ) -> std::io::Result<(usize, Option<Vec<PermanentId>>, Option<Vec<Cid>>)> {
         let mut node_data = Vec::new();
+
+        match self.parent_id {
+            Some(pid) => {
+                node_data.write_all(&[0x01]).await?;
+                pid.encode(&mut node_data).await?;
+            }
+            None => {
+                node_data.write_all(&[0x00]).await?;
+            }
+        }
 
         self.permanent_id.encode(&mut node_data).await?;
         self.owner_id.encode(&mut node_data).await?;
@@ -148,15 +161,81 @@ impl Node {
         self.owner_id
     }
 
-    pub fn parent_id(&self) -> Option<NodeId> {
+    pub fn parent_id(&self) -> Option<PermanentId> {
         self.parent_id
     }
 
     pub(crate) fn parse<'a>(
         input: &'a [u8],
+        allocated_id: NodeId,
         data_key: Option<&AccessKey>,
-    ) -> ParserResult<'a, (Self, Vec<PermanentId>)> {
-        todo!()
+    ) -> ParserResult<'a, Self> {
+        let (input, mut node_data_len) = le_u32(input)?;
+        let (input, cid) = Cid::parse(input)?;
+
+        node_data_len -= Cid::size() as u32;
+        let (input, node_data_buf) = take(node_data_len)(input)?;
+
+        let (node_data_buf, parent_present) = take(1u8)(node_data_buf)?;
+        let (node_data_buf, parent_id) = match parent_present[0] {
+            0x00 => (node_data_buf, None),
+            0x01 => {
+                let (node_data_buf, pid) = PermanentId::parse(node_data_buf)?;
+                (node_data_buf, Some(pid))
+            }
+            _ => {
+                let err = nom::error::make_error(input, nom::error::ErrorKind::Switch);
+                return Err(nom::Err::Failure(err));
+            }
+        };
+
+        let (node_data_buf, permanent_id) = PermanentId::parse(node_data_buf)?;
+        let (node_data_buf, owner_id) = ActorId::parse(node_data_buf)?;
+
+        let (node_data_buf, created_at) = le_u64(node_data_buf)?;
+        let (node_data_buf, modified_at) = le_u64(node_data_buf)?;
+
+        let (node_data_buf, name) = NodeName::parse(node_data_buf)?;
+        let (mut node_data_buf, metadata_entries) = le_u8(node_data_buf)?;
+
+        let mut metadata = HashMap::new();
+
+        for _ in 0..metadata_entries {
+            let (meta_buf, key_len) = le_u8(node_data_buf)?;
+            let (meta_buf, key) = take(key_len)(meta_buf)?;
+            let key_str = String::from_utf8(key.to_vec()).map_err(|_| {
+                nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Char))
+            })?;
+
+            let (meta_buf, val_len) = le_u8(meta_buf)?;
+            let (meta_buf, val) = take(val_len)(meta_buf)?;
+            let val = val.to_vec();
+
+            metadata.insert(key_str, val);
+            node_data_buf = meta_buf;
+        }
+
+        let (input, inner) = NodeData::parse(node_data_buf, data_key)?;
+
+        let node = Self {
+            id: allocated_id,
+
+            cid: Some(cid),
+            parent_id,
+
+            permanent_id,
+            owner_id,
+
+            created_at,
+            modified_at,
+
+            name,
+            metadata,
+
+            inner,
+        };
+
+        Ok((input, node))
     }
 
     pub fn permanent_id(&self) -> PermanentId {

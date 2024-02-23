@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
+use nom::number::streaming::{le_u16, le_u8};
 
 use crate::codec::crypto::AccessKey;
 use crate::codec::filesystem::{DirectoryPermissions, FilePermissions};
@@ -126,9 +127,43 @@ impl NodeData {
 
     pub(crate) fn parse<'a>(
         input: &'a [u8],
-        data_key: &AccessKey,
-    ) -> ParserResult<'a, (Self, Vec<PermanentId>)> {
-        todo!()
+        data_key: Option<&AccessKey>,
+    ) -> ParserResult<'a, Self> {
+        let (input, kind) = NodeKind::parse(input)?;
+
+        let (input, node_data) = match kind {
+            NodeKind::File => {
+                let (data_buf, permissions) = FilePermissions::parse(input)?;
+                let (data_buf, content) = FileContent::parse(data_buf, data_key)?;
+
+                let (data_buf, associated_data) = {
+                    let (mut data_buf, ad_length) = le_u8(data_buf)?;
+                    let mut associated_data = HashMap::new();
+
+                    for _ in 0..ad_length {
+                        let (ad_buf, ad_kind) = le_u16(data_buf)?;
+                        let (ad_buf, ad_perm_id) = PermanentId::parse(ad_buf)?;
+                        associated_data.insert(ad_kind, ad_perm_id);
+                        data_buf = ad_buf;
+                    }
+
+                    (data_buf, associated_data)
+                };
+
+                let data = NodeData::File {
+                    permissions,
+                    content,
+                    associated_data,
+                };
+
+                (data_buf, data)
+            }
+            //NodeKind::AssociatedData => {}
+            //NodeKind::Directory => {}
+            _ => unimplemented!(),
+        };
+
+        Ok((input, node_data))
     }
 
     pub fn stub_file(size: u64) -> Self {

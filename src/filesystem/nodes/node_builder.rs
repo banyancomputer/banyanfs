@@ -7,7 +7,7 @@ use crate::filesystem::nodes::{Node, NodeData, NodeId, NodeName, NodeNameError, 
 
 pub(crate) struct NodeBuilder {
     id: Option<NodeId>,
-    parent_id: Option<NodeId>,
+    parent_id: Option<PermanentId>,
 
     name: NodeName,
     owner_id: Option<ActorId>,
@@ -77,7 +77,7 @@ impl NodeBuilder {
         self
     }
 
-    pub fn with_parent(mut self, parent_id: NodeId) -> Self {
+    pub fn with_parent(mut self, parent_id: PermanentId) -> Self {
         self.parent_id = Some(parent_id);
         self
     }
