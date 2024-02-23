@@ -115,13 +115,13 @@ impl Node {
 
         let mut written_bytes = 0;
 
-        let node_data_len = (Cid::size() + node_data.len()) as u32;
+        written_bytes += cid.encode(writer).await?;
+
+        let node_data_len = node_data.len() as u32;
         let node_data_len_bytes = node_data_len.to_le_bytes();
 
         writer.write_all(&node_data_len_bytes).await?;
         written_bytes += node_data_len_bytes.len();
-
-        written_bytes += cid.encode(writer).await?;
 
         writer.write_all(&node_data).await?;
         written_bytes += node_data.len();
@@ -170,10 +170,13 @@ impl Node {
         allocated_id: NodeId,
         data_key: Option<&AccessKey>,
     ) -> ParserResult<'a, Self> {
-        let (input, mut node_data_len) = le_u32(input)?;
-        let (input, cid) = Cid::parse(input)?;
+        tracing::trace!(allocated_id, "node::parse::begin");
 
-        node_data_len -= Cid::size() as u32;
+        let (input, cid) = Cid::parse(input)?;
+        let (input, node_data_len) = le_u32(input)?;
+
+        tracing::trace!(node_data_len, ?cid, "node::parse::block_id");
+
         let (input, node_data_buf) = take(node_data_len)(input)?;
 
         let (node_data_buf, parent_present) = take(1u8)(node_data_buf)?;
@@ -188,9 +191,11 @@ impl Node {
                 return Err(nom::Err::Failure(err));
             }
         };
+        tracing::trace!(?parent_id, "node::parse::parent");
 
         let (node_data_buf, permanent_id) = PermanentId::parse(node_data_buf)?;
         let (node_data_buf, owner_id) = ActorId::parse(node_data_buf)?;
+        tracing::trace!(?permanent_id, ?owner_id, "node::parse::identity");
 
         let (node_data_buf, created_at) = le_u64(node_data_buf)?;
         let (node_data_buf, modified_at) = le_u64(node_data_buf)?;

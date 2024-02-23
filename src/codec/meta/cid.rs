@@ -5,7 +5,7 @@ use crate::codec::ParserResult;
 
 const CID_LENGTH: usize = 32;
 
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Cid([u8; CID_LENGTH]);
 
 impl Cid {
@@ -34,6 +34,17 @@ impl Cid {
 
     pub const fn size() -> usize {
         CID_LENGTH
+    }
+}
+
+impl std::fmt::Debug for Cid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let cid_str: String = self
+            .0
+            .iter()
+            .fold(String::new(), |acc, &b| format!("{acc}{:02x}", b));
+
+        write!(f, "{{0x{cid_str}}}")
     }
 }
 
