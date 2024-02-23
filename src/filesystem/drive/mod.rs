@@ -75,22 +75,23 @@ impl Drive {
         let mut inner_write = self.inner.write().await;
 
         let key_list = inner_write.access.sorted_actor_settings();
-
         written_bytes += meta_key.encode_escrow(rng, writer, key_list).await?;
 
         let mut header_buffer = EncryptedBuffer::default();
 
-        inner_write.access.encode(rng, &mut *header_buffer).await?;
-        content_options.encode(&mut *header_buffer).await?;
-        inner_write
+        let mut inner_header_size = inner_write.access.encode(rng, &mut *header_buffer).await?;
+        inner_header_size += content_options.encode(&mut *header_buffer).await?;
+        inner_header_size += inner_write
             .journal_start
             .encode(&mut *header_buffer)
             .await?;
 
         // todo: include filesystem ID and encoded length bytes as AD
-        written_bytes += header_buffer
+        let hdr_len = header_buffer
             .encrypt_and_encode(rng, writer, &[], meta_key.deref())
             .await?;
+        written_bytes += hdr_len;
+        tracing::trace!(payload_size = ?inner_header_size, encrypted_size = ?hdr_len, "drive::encode_private::header");
 
         if content_options.include_filesystem() {
             let mut fs_buffer = EncryptedBuffer::default();
@@ -109,6 +110,11 @@ impl Drive {
             let length_bytes = buffer_length.to_le_bytes();
             writer.write_all(&length_bytes).await?;
             written_bytes += length_bytes.len();
+
+            tracing::info!(
+                ?buffer_length,
+                "drive::encode_private: encoded filesystem buffer length"
+            );
 
             written_bytes += fs_buffer
                 .encrypt_and_encode(rng, writer, &[], &filesystem_key)

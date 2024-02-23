@@ -103,18 +103,19 @@ impl InnerDrive {
 
         let root_node = &self.nodes[self.root_node_id];
         let root_perm_id = root_node.permanent_id();
-        written_bytes += root_perm_id.encode(&mut node_buffer).await?;
-
-        tracing::trace!(
-            total_node_count = seen_ids.len(),
-            ?root_perm_id,
-            "node_encoding::complete"
-        );
+        let encoded_len = root_perm_id.encode(writer).await?;
+        written_bytes += encoded_len;
+        tracing::trace!(?root_perm_id, encoded_len, "node_encoding::root_perm_id");
 
         let node_count = seen_ids.len() as u64;
         let node_count_bytes = node_count.to_le_bytes();
         writer.write_all(&node_count_bytes).await?;
         written_bytes += node_count_bytes.len();
+        tracing::trace!(
+            ?node_count,
+            encode_len = node_count_bytes.len(),
+            "node_encoding::node_count"
+        );
 
         writer.write_all(&node_buffer).await?;
         written_bytes += node_buffer.len();
@@ -128,16 +129,23 @@ impl InnerDrive {
         journal_start: JournalCheckpoint,
         data_key: Option<&AccessKey>,
     ) -> ParserResult<'a, Self> {
-        let (input, root_perm_id) = PermanentId::parse(input)?;
-        let (input, node_count) = le_u64(input)?;
+        let (remaining, root_perm_id) = PermanentId::parse(input)?;
+        let bytes_read = input.len() - remaining.len();
+        tracing::trace!(
+            ?root_perm_id,
+            bytes_read,
+            "inner_drive::parse::root_perm_id"
+        );
 
-        tracing::trace!(node_count, ?root_perm_id, "inner_drive::parse");
+        let (remaining, node_count) = le_u64(remaining)?;
+        let bytes_read = input.len() - remaining.len() - bytes_read;
+        tracing::trace!(node_count, bytes_read, "inner_drive::parse::node_count");
 
         let mut nodes = Slab::new();
         let mut permanent_id_map = HashMap::new();
         let mut expected_permanent_ids = HashSet::from([root_perm_id]);
 
-        let mut node_input = input;
+        let mut node_input = remaining;
         for _ in 0..node_count {
             let entry = nodes.vacant_entry();
             let node_id = entry.key();

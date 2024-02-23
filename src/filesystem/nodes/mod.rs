@@ -65,7 +65,7 @@ impl Node {
             None => {
                 node_data.write_all(&[0x00]).await?;
             }
-        }
+        };
 
         self.permanent_id.encode(&mut node_data).await?;
         self.owner_id.encode(&mut node_data).await?;

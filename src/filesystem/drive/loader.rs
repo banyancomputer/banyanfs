@@ -145,9 +145,14 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                     + ContentOptions::size()
                     + JournalCheckpoint::size();
 
-                trace!(payload_size, "drive_loader::encrypted_header");
                 let (input, header_buffer) =
                     EncryptedBuffer::parse_and_decrypt(buffer, payload_size, &[], meta_key)?;
+                let encrypted_size = buffer.len() - input.len();
+                trace!(
+                    encrypted_size,
+                    payload_size,
+                    "drive_loader::encrypted_header"
+                );
 
                 let mut header = header_buffer.as_ref();
 
@@ -184,12 +189,10 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
             }
             DriveLoaderState::PrivateContent(content_options, journal_start) => {
                 if content_options.include_filesystem() {
-                    let (input, mut payload_size) = content_length(buffer)?;
+                    let (input, encrypted_size) = content_length(buffer)?;
 
-                    payload_size -= Nonce::size() as u64;
-                    payload_size -= AuthenticationTag::size() as u64;
-
-                    trace!(payload_size, "drive_loader::private_content");
+                    let encrypted_size = encrypted_size as usize;
+                    let payload_size = encrypted_size - (Nonce::size() + AuthenticationTag::size());
 
                     let filesystem_key = self
                         .drive_access
@@ -214,13 +217,14 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
 
                     let (input, fs_buffer) = EncryptedBuffer::parse_and_decrypt(
                         input,
-                        payload_size as usize,
+                        payload_size,
                         &[],
                         filesystem_key,
                     )?;
 
                     trace!(
-                        fs_buffer_len = fs_buffer.len(),
+                        encrypted_size,
+                        payload_size,
                         "drive_loader::private_content::decrypt_successful"
                     );
                     let drive_access = self.drive_access.clone().expect("to have been set");
