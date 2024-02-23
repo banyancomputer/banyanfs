@@ -1,3 +1,4 @@
+use crate::codec::crypto::Hash;
 use crate::codec::parser::{ParserStateMachine, ProgressType, StateError};
 
 use bytes::{Bytes, BytesMut};
@@ -31,7 +32,7 @@ impl<T: Unpin, S: ParserStateMachine<T>> SegmentStreamer<T, S> {
         self.hasher.reset();
     }
 
-    pub async fn next(&mut self) -> Option<Result<([u8; 32], T), S::Error>> {
+    pub async fn next(&mut self) -> Option<Result<(Hash, T), S::Error>> {
         loop {
             match self.state_machine.parse(&self.buffer) {
                 Ok(ProgressType::Ready(byte_count, val)) => {
@@ -40,9 +41,10 @@ impl<T: Unpin, S: ParserStateMachine<T>> SegmentStreamer<T, S> {
                     self.hasher.update(&read_data);
                     let hash = self.hasher.finalize();
                     let byte_hash: [u8; 32] = hash.into();
+                    let int_hash = Hash::from(byte_hash);
                     self.reset_digest();
 
-                    return Some(Ok((byte_hash, val)));
+                    return Some(Ok((int_hash, val)));
                 }
                 Ok(ProgressType::Advance(byte_count)) => {
                     let read_data = self.buffer.split_to(byte_count);
@@ -56,7 +58,7 @@ impl<T: Unpin, S: ParserStateMachine<T>> SegmentStreamer<T, S> {
 }
 
 impl<T: Unpin, S: ParserStateMachine<T> + Unpin> Stream for SegmentStreamer<T, S> {
-    type Item = Result<([u8; 32], T), S::Error>;
+    type Item = Result<(Hash, T), S::Error>;
 
     fn poll_next(
         self: std::pin::Pin<&mut Self>,

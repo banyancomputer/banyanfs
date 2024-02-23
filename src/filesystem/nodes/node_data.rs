@@ -24,16 +24,20 @@ pub enum NodeData {
     },
 }
 
+type EncodedAssociation = (usize, Option<Vec<PermanentId>>, Option<Vec<Cid>>);
+
 impl NodeData {
+    #[tracing::instrument(skip(self, rng, writer))]
     pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         rng: &mut impl CryptoRngCore,
         writer: &mut W,
         data_key: Option<&AccessKey>,
-    ) -> std::io::Result<(usize, Option<Vec<PermanentId>>, Option<Vec<Cid>>)> {
+    ) -> std::io::Result<EncodedAssociation> {
         let mut written_bytes = 0;
 
         written_bytes += self.kind().encode(writer).await?;
+        tracing::trace!(kind = ?self.kind(), encode_len = written_bytes, "kind");
 
         match &self {
             NodeData::File {
@@ -41,9 +45,17 @@ impl NodeData {
                 content,
                 associated_data,
             } => {
-                written_bytes += permissions.encode(writer).await?;
-                let (n, data_cids) = content.encode(rng, writer, data_key).await?;
-                written_bytes += n;
+                let perm_len = permissions.encode(writer).await?;
+                tracing::trace!(encoded_len = perm_len, "permissions");
+
+                let (content_len, data_cids) = content.encode(rng, writer, data_key).await?;
+                tracing::trace!(
+                    encoded_len = content_len,
+                    data_cid_count = ?data_cids.as_ref().map(|c| c.len()).ok_or(0),
+                    "data_cids"
+                );
+
+                written_bytes += content_len + perm_len;
 
                 let ad_length = associated_data.len();
                 if ad_length > u8::MAX as usize {
@@ -88,7 +100,8 @@ impl NodeData {
                 children_size,
                 children,
             } => {
-                written_bytes += permissions.encode(writer).await?;
+                let perm_len = permissions.encode(writer).await?;
+                written_bytes += perm_len;
 
                 let children_size_bytes = children_size.to_le_bytes();
                 writer.write_all(&children_size_bytes).await?;
@@ -112,6 +125,8 @@ impl NodeData {
                 let mut children_ids = Vec::new();
                 for (name, id) in children {
                     written_bytes += name.encode(writer).await?;
+                    written_bytes += id.encode(writer).await?;
+
                     children_ids.push(*id);
                 }
 
@@ -173,16 +188,36 @@ impl NodeData {
             //NodeKind::AssociatedData => {}
             NodeKind::Directory => {
                 let (data_buf, permissions) = DirectoryPermissions::parse(input)?;
-                let (mut data_buf, children_size) = le_u64(data_buf)?;
+                let perm_len = input.len() - data_buf.len();
+                tracing::trace!(bytes_read = ?perm_len, "directory_permissions");
+
+                let (data_buf, children_size) = le_u64(data_buf)?;
+                let children_size_len = input.len() - data_buf.len() - perm_len;
+                tracing::trace!(bytes_read = ?children_size_len, "children_size");
+
+                let (data_buf, children_count) = le_u16(data_buf)?;
+                let children_count_len =
+                    input.len() - data_buf.len() - perm_len - children_size_len;
+                tracing::trace!(bytes_read = ?children_count_len, children_count, "children_count");
 
                 let mut children = HashMap::new();
-                for _ in 0..children_size {
-                    let (child_input, child_name) = NodeName::parse(data_buf)?;
-                    let (child_input, child_id) = PermanentId::parse(child_input)?;
+                let mut child_buf = data_buf;
+                for idx in 0..children_count {
+                    let _guard = tracing::trace_span!("child", child_idx = idx, remaining_buf = ?child_buf.len()).entered();
+
+                    let (remaining, child_name) = NodeName::parse(child_buf)?;
+                    let name_len = child_buf.len() - remaining.len();
+                    tracing::trace!(?child_name, bytes_read = name_len, "child_name");
+
+                    let (remaining, child_id) = PermanentId::parse(remaining)?;
+                    let id_len = child_buf.len() - remaining.len() - name_len;
+                    tracing::trace!(child_perm_id = ?child_id, bytes_read = id_len, "child_perm_id");
 
                     children.insert(child_name, child_id);
 
-                    data_buf = child_input;
+                    let bytes_read = child_buf.len() - remaining.len();
+                    tracing::trace!(bytes_read, "complete");
+                    child_buf = remaining;
                 }
 
                 let data = NodeData::Directory {
@@ -191,7 +226,7 @@ impl NodeData {
                     children,
                 };
 
-                (data_buf, data)
+                (child_buf, data)
             }
             _ => unimplemented!(),
         };

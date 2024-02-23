@@ -129,17 +129,22 @@ impl InnerDrive {
         journal_start: JournalCheckpoint,
         data_key: Option<&AccessKey>,
     ) -> ParserResult<'a, Self> {
+        tracing::trace!(available_data = ?input.len(), "inner_drive::parse");
+
         let (remaining, root_perm_id) = PermanentId::parse(input)?;
         let bytes_read = input.len() - remaining.len();
         tracing::trace!(
             ?root_perm_id,
             bytes_read,
+            remaining_len = ?remaining.len(),
             "inner_drive::parse::root_perm_id"
         );
 
         let (remaining, node_count) = le_u64(remaining)?;
         let bytes_read = input.len() - remaining.len() - bytes_read;
-        tracing::trace!(node_count, bytes_read, "inner_drive::parse::node_count");
+        tracing::trace!(node_count, bytes_read,
+            remaining_len = ?remaining.len(),
+            "inner_drive::parse::node_count");
 
         let mut nodes = Slab::new();
         let mut permanent_id_map = HashMap::new();
@@ -147,10 +152,16 @@ impl InnerDrive {
 
         let mut node_input = remaining;
         for _ in 0..node_count {
+            tracing::trace!(available_node_data = ?node_input.len(), "inner_drive::parse::node_loop");
+
             let entry = nodes.vacant_entry();
             let node_id = entry.key();
 
             let (remaining, node) = Node::parse(node_input, node_id, data_key)?;
+            tracing::trace!(
+                remaining_node_data = remaining.len(),
+                "inner_drive::parse::node_loop::node"
+            );
             node_input = remaining;
 
             let permanent_id = node.permanent_id();

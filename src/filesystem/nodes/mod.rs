@@ -112,7 +112,9 @@ impl Node {
             node_data.write_all(val).await?;
         }
 
-        let (_, child_ids, data_cids) = self.data().encode(rng, &mut node_data, data_key).await?;
+        let (data_len, child_ids, data_cids) =
+            self.data().encode(rng, &mut node_data, data_key).await?;
+        tracing::trace!(node_data_len = data_len, "node_data::encoded");
 
         let hash: [u8; 32] = blake3::hash(&node_data).into();
         let cid = Cid::from(hash);
@@ -170,17 +172,17 @@ impl Node {
         self.parent_id
     }
 
+    #[tracing::instrument(skip(input))]
     pub(crate) fn parse<'a>(
         input: &'a [u8],
         allocated_id: NodeId,
         data_key: Option<&AccessKey>,
     ) -> ParserResult<'a, Self> {
-        tracing::trace!(allocated_id, "node::parse::begin");
+        tracing::trace!(allocated_id, "begin");
 
         let (input, cid) = Cid::parse(input)?;
         let (input, node_data_len) = le_u32(input)?;
-
-        tracing::trace!(node_data_len, ?cid, "node::parse::block_id");
+        tracing::trace!(node_data_len, ?cid, "cid/node_data_len");
 
         let (input, node_data_buf) = take(node_data_len)(input)?;
 
@@ -196,20 +198,23 @@ impl Node {
                 return Err(nom::Err::Failure(err));
             }
         };
-        tracing::trace!(?parent_id, "node::parse::parent");
+        tracing::trace!(?parent_id, "parent");
 
         let (node_data_buf, permanent_id) = PermanentId::parse(node_data_buf)?;
         let (node_data_buf, owner_id) = ActorId::parse(node_data_buf)?;
-        tracing::trace!(?permanent_id, ?owner_id, "node::parse::identity");
+        tracing::trace!(?permanent_id, ?owner_id, "identity");
 
         let (node_data_buf, created_at) = le_u64(node_data_buf)?;
         let (node_data_buf, modified_at) = le_u64(node_data_buf)?;
+        tracing::trace!(?created_at, ?modified_at, "timestamps");
 
         let (node_data_buf, name) = NodeName::parse(node_data_buf)?;
+        tracing::trace!(?name, "name");
+
         let (mut node_data_buf, metadata_entries) = le_u8(node_data_buf)?;
+        tracing::trace!(?metadata_entries, "metadata::begin");
 
         let mut metadata = HashMap::new();
-
         for _ in 0..metadata_entries {
             let (meta_buf, key_len) = le_u8(node_data_buf)?;
             let (meta_buf, key) = take(key_len)(meta_buf)?;
@@ -225,7 +230,10 @@ impl Node {
             node_data_buf = meta_buf;
         }
 
-        let (input, inner) = NodeData::parse(node_data_buf, data_key)?;
+        tracing::trace!("metadata::end");
+
+        let (remaining, inner) = NodeData::parse(node_data_buf, data_key)?;
+        debug_assert!(remaining.is_empty());
 
         let node = Self {
             id: allocated_id,

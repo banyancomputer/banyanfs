@@ -55,7 +55,7 @@ impl<'a> DriveLoader<'a> {
 
             if let Some(segment_res) = streamer.next().await {
                 let (hash, drive) = segment_res?;
-                debug!("loaded drive with blake3 hash of {{{hash:02x?}}}");
+                debug!("loaded drive with blake3 hash of {hash:?}");
                 return Ok(drive);
             };
         }
@@ -211,7 +211,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                     // things, but that has impacts on the encryption which would need to be managed
                     // carefully. Since this only covers the realized view of the filesystem (the
                     // metadata) and no file content this shouldn't grow very large.
-                    //
+
                     // todo(sstelfox): authenticated data should include filesystem ID, and length
                     // bytes
 
