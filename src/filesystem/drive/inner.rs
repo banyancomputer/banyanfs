@@ -111,9 +111,12 @@ impl InnerDrive {
     ) -> ParserResult<'a, Self> {
         let (mut input, node_count) = le_u64(input)?;
 
+        tracing::trace!(node_count, "inner_drive::parse");
+
         let mut nodes = Slab::new();
         let mut permanent_id_map = HashMap::new();
 
+        // todo(sstelfox): change the protocol a slight bit to explicitly encode the root permanent node id even if the first node will always be the root.
         let mut root_node_id = None;
 
         for _ in 0..node_count {
@@ -129,6 +132,8 @@ impl InnerDrive {
             input = remaining;
 
             let permanent_id = node.permanent_id();
+            tracing::trace!(?permanent_id, ?node_id, node_kind = ?node.kind(), "inner_drive::parse::node");
+
             entry.insert(node);
 
             permanent_id_map.insert(permanent_id, node_id);
@@ -138,6 +143,8 @@ impl InnerDrive {
             let error = nom::error::make_error(input, nom::error::ErrorKind::Verify);
             nom::Err::Failure(error)
         })?;
+
+        tracing::trace!(?root_node_id, "inner_drive::parse::complete");
 
         let inner_drive = InnerDrive {
             access: drive_access,

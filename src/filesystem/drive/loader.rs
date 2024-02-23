@@ -219,6 +219,10 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                         filesystem_key,
                     )?;
 
+                    trace!(
+                        fs_buffer_len = fs_buffer.len(),
+                        "drive_loader::private_content::decrypt_successful"
+                    );
                     let drive_access = self.drive_access.clone().expect("to have been set");
 
                     let (remaining, inner_drive) = InnerDrive::parse(

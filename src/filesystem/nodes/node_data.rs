@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::number::streaming::{le_u16, le_u8};
+use nom::number::streaming::{le_u16, le_u64, le_u8};
 
 use crate::codec::crypto::AccessKey;
 use crate::codec::filesystem::{DirectoryPermissions, FilePermissions};
@@ -85,14 +85,26 @@ impl NodeData {
             }
             NodeData::Directory {
                 permissions,
-                children,
                 children_size,
+                children,
             } => {
                 written_bytes += permissions.encode(writer).await?;
 
                 let children_size_bytes = children_size.to_le_bytes();
                 writer.write_all(&children_size_bytes).await?;
                 written_bytes += children_size_bytes.len();
+
+                let child_count = children.len();
+                if child_count > u16::MAX as usize {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "too many children in a single directory entry",
+                    ));
+                }
+
+                let child_count_bytes = (child_count as u16).to_le_bytes();
+                writer.write_all(&child_count_bytes).await?;
+                written_bytes += child_count_bytes.len();
 
                 let mut children = children.iter().collect::<Vec<_>>();
                 children.sort_by(|(_, a), (_, b)| a.cmp(b));
@@ -159,7 +171,28 @@ impl NodeData {
                 (data_buf, data)
             }
             //NodeKind::AssociatedData => {}
-            //NodeKind::Directory => {}
+            NodeKind::Directory => {
+                let (data_buf, permissions) = DirectoryPermissions::parse(input)?;
+                let (mut data_buf, children_size) = le_u64(data_buf)?;
+
+                let mut children = HashMap::new();
+                for _ in 0..children_size {
+                    let (child_input, child_name) = NodeName::parse(data_buf)?;
+                    let (child_input, child_id) = PermanentId::parse(child_input)?;
+
+                    children.insert(child_name, child_id);
+
+                    data_buf = child_input;
+                }
+
+                let data = NodeData::Directory {
+                    permissions,
+                    children_size,
+                    children,
+                };
+
+                (data_buf, data)
+            }
             _ => unimplemented!(),
         };
 
