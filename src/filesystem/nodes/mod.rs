@@ -41,12 +41,16 @@ pub struct Node {
 }
 
 impl Node {
+    pub fn cid(&self) -> Option<&Cid> {
+        self.cid.as_ref()
+    }
+
     pub fn created_at(&self) -> u64 {
         self.created_at
     }
 
     pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
+        &mut self,
         rng: &mut impl CryptoRngCore,
         writer: &mut W,
         data_key: Option<&AccessKey>,
@@ -116,6 +120,7 @@ impl Node {
         let mut written_bytes = 0;
 
         written_bytes += cid.encode(writer).await?;
+        self.cid = Some(cid);
 
         let node_data_len = node_data.len() as u32;
         let node_data_len_bytes = node_data_len.to_le_bytes();

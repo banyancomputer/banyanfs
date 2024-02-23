@@ -23,7 +23,7 @@ pub(crate) struct InnerDrive {
 
 impl InnerDrive {
     pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
+        &mut self,
         rng: &mut impl CryptoRngCore,
         writer: &mut W,
     ) -> std::io::Result<usize> {
@@ -53,7 +53,7 @@ impl InnerDrive {
 
         let mut node_buffer = Vec::new();
         while let Some(node_id) = outstanding_ids.pop() {
-            let node = self.nodes.get(node_id).ok_or_else(|| {
+            let node = self.nodes.get_mut(node_id).ok_or_else(|| {
                 StdError::new(StdErrorKind::Other, "node ID missing from internal nodes")
             })?;
 
@@ -64,7 +64,7 @@ impl InnerDrive {
             }
             seen_ids.insert(permanent_id);
 
-            let (_, child_pids, data_cids) =
+            let (node_size, child_pids, data_cids) =
                 node.encode(rng, &mut node_buffer, Some(data_key)).await?;
 
             let child_count = child_pids.as_ref().map_or(0, |p| p.len());
@@ -90,7 +90,7 @@ impl InnerDrive {
                 }
             }
 
-            tracing::trace!(?permanent_id, node_kind = ?node.kind(), added_children, child_count, data_count, "node_encoding::complete");
+            tracing::trace!(?permanent_id, cid = ?node.cid(), node_kind = ?node.kind(), node_size, added_children, child_count, data_count, "node_encoding::complete");
 
             if let Some(data) = data_cids {
                 all_data_cids.extend(data);
@@ -106,7 +106,7 @@ impl InnerDrive {
         written_bytes += root_perm_id.encode(&mut node_buffer).await?;
 
         tracing::trace!(
-            node_count = seen_ids.len(),
+            total_node_count = seen_ids.len(),
             ?root_perm_id,
             "node_encoding::complete"
         );
@@ -128,8 +128,8 @@ impl InnerDrive {
         journal_start: JournalCheckpoint,
         data_key: Option<&AccessKey>,
     ) -> ParserResult<'a, Self> {
-        let (input, node_count) = le_u64(input)?;
         let (input, root_perm_id) = PermanentId::parse(input)?;
+        let (input, node_count) = le_u64(input)?;
 
         tracing::trace!(node_count, ?root_perm_id, "inner_drive::parse");
 

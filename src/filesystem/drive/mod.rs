@@ -72,17 +72,20 @@ impl Drive {
         written_bytes += PublicSettings::new(false, true).encode(writer).await?;
 
         let meta_key = MetaKey::generate(rng);
-        let inner_read = self.inner.read().await;
+        let mut inner_write = self.inner.write().await;
 
-        let key_list = inner_read.access.sorted_actor_settings();
+        let key_list = inner_write.access.sorted_actor_settings();
 
         written_bytes += meta_key.encode_escrow(rng, writer, key_list).await?;
 
         let mut header_buffer = EncryptedBuffer::default();
 
-        inner_read.access.encode(rng, &mut *header_buffer).await?;
+        inner_write.access.encode(rng, &mut *header_buffer).await?;
         content_options.encode(&mut *header_buffer).await?;
-        inner_read.journal_start.encode(&mut *header_buffer).await?;
+        inner_write
+            .journal_start
+            .encode(&mut *header_buffer)
+            .await?;
 
         // todo: include filesystem ID and encoded length bytes as AD
         written_bytes += header_buffer
@@ -92,13 +95,14 @@ impl Drive {
         if content_options.include_filesystem() {
             let mut fs_buffer = EncryptedBuffer::default();
 
-            let filesystem_key = inner_read
+            let filesystem_key = inner_write
                 .access
                 .permission_keys()
                 .and_then(|pk| pk.filesystem.as_ref())
-                .ok_or(StdError::new(StdErrorKind::Other, "no filesystem key"))?;
+                .ok_or(StdError::new(StdErrorKind::Other, "no filesystem key"))?
+                .clone();
 
-            written_bytes += inner_read.encode(rng, &mut *fs_buffer).await?;
+            written_bytes += inner_write.encode(rng, &mut *fs_buffer).await?;
 
             // todo: use filesystem ID and encoded length bytes as AD
             let buffer_length = fs_buffer.encrypted_len() as u64;
@@ -107,7 +111,7 @@ impl Drive {
             written_bytes += length_bytes.len();
 
             written_bytes += fs_buffer
-                .encrypt_and_encode(rng, writer, &[], filesystem_key)
+                .encrypt_and_encode(rng, writer, &[], &filesystem_key)
                 .await?;
         }
 
