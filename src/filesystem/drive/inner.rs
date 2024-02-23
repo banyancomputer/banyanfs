@@ -67,6 +67,10 @@ impl InnerDrive {
             let (_, child_pids, data_cids) =
                 node.encode(rng, &mut node_buffer, Some(data_key)).await?;
 
+            let child_count = child_pids.as_ref().map_or(0, |p| p.len());
+            let data_count = data_cids.as_ref().map_or(0, |d| d.len());
+
+            let mut added_children = 0;
             if let Some(pid_list) = child_pids {
                 for child_perm_id in pid_list.into_iter() {
                     if seen_ids.contains(&child_perm_id) {
@@ -74,7 +78,7 @@ impl InnerDrive {
                     }
 
                     let child_node_id =
-                        self.permanent_id_map.get(&permanent_id).ok_or_else(|| {
+                        self.permanent_id_map.get(&child_perm_id).ok_or_else(|| {
                             StdError::new(
                                 StdErrorKind::Other,
                                 "referenced child's permanent ID missing from internal nodes",
@@ -82,18 +86,33 @@ impl InnerDrive {
                         })?;
 
                     outstanding_ids.push(*child_node_id);
+                    added_children += 1;
                 }
             }
+
+            tracing::trace!(?permanent_id, node_kind = ?node.kind(), added_children, child_count, data_count, "node_encoding::complete");
 
             if let Some(data) = data_cids {
                 all_data_cids.extend(data);
             }
         }
 
-        // Should
+        // TODO: should scan the slab for any nodes that are not reachable from the root and track
+        // them for removal in the journal and maintenance logs. It really shoudn't happen but be
+        // defensive against errors...
+
+        let root_node = &self.nodes[self.root_node_id];
+        let root_perm_id = root_node.permanent_id();
+        written_bytes += root_perm_id.encode(&mut node_buffer).await?;
+
+        tracing::trace!(
+            node_count = seen_ids.len(),
+            ?root_perm_id,
+            "node_encoding::complete"
+        );
 
         let node_count = seen_ids.len() as u64;
-        let node_count_bytes = node_count.to_be_bytes();
+        let node_count_bytes = node_count.to_le_bytes();
         writer.write_all(&node_count_bytes).await?;
         written_bytes += node_count_bytes.len();
 
@@ -109,29 +128,31 @@ impl InnerDrive {
         journal_start: JournalCheckpoint,
         data_key: Option<&AccessKey>,
     ) -> ParserResult<'a, Self> {
-        let (mut input, node_count) = le_u64(input)?;
+        let (input, node_count) = le_u64(input)?;
+        let (input, root_perm_id) = PermanentId::parse(input)?;
 
-        tracing::trace!(node_count, "inner_drive::parse");
+        tracing::trace!(node_count, ?root_perm_id, "inner_drive::parse");
 
         let mut nodes = Slab::new();
         let mut permanent_id_map = HashMap::new();
+        let mut expected_permanent_ids = HashSet::from([root_perm_id]);
 
-        // todo(sstelfox): change the protocol a slight bit to explicitly encode the root permanent node id even if the first node will always be the root.
-        let mut root_node_id = None;
-
+        let mut node_input = input;
         for _ in 0..node_count {
             let entry = nodes.vacant_entry();
             let node_id = entry.key();
 
-            // The first node is the root
-            if root_node_id.is_none() {
-                root_node_id.replace(node_id);
-            }
-
-            let (remaining, node) = Node::parse(input, node_id, data_key)?;
-            input = remaining;
+            let (remaining, node) = Node::parse(node_input, node_id, data_key)?;
+            node_input = remaining;
 
             let permanent_id = node.permanent_id();
+
+            if !expected_permanent_ids.contains(&permanent_id) {
+                tracing::warn!(?permanent_id, ?node_id, node_kind = ?node.kind(), "found unexpected permanent ID in node data, skipping...");
+                continue;
+            }
+
+            expected_permanent_ids.remove(&permanent_id);
             tracing::trace!(?permanent_id, ?node_id, node_kind = ?node.kind(), "inner_drive::parse::node");
 
             entry.insert(node);
@@ -139,9 +160,18 @@ impl InnerDrive {
             permanent_id_map.insert(permanent_id, node_id);
         }
 
-        let root_node_id = root_node_id.ok_or_else(|| {
-            let error = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-            nom::Err::Failure(error)
+        if !expected_permanent_ids.is_empty() {
+            tracing::warn!(
+                ?expected_permanent_ids,
+                "missing expected permanent IDs in node data, fs missing data..."
+            );
+        }
+
+        let root_node_id = *permanent_id_map.get(&root_perm_id).ok_or_else(|| {
+            nom::Err::Failure(nom::error::make_error(
+                node_input,
+                nom::error::ErrorKind::Verify,
+            ))
         })?;
 
         tracing::trace!(?root_node_id, "inner_drive::parse::complete");
@@ -154,6 +184,6 @@ impl InnerDrive {
             permanent_id_map,
         };
 
-        Ok((input, inner_drive))
+        Ok((node_input, inner_drive))
     }
 }
