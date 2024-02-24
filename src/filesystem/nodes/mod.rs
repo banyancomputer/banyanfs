@@ -177,7 +177,7 @@ impl Node {
         input: &'a [u8],
         allocated_id: NodeId,
         data_key: Option<&AccessKey>,
-    ) -> ParserResult<'a, Self> {
+    ) -> ParserResult<'a, (Self, Vec<PermanentId>)> {
         tracing::trace!(allocated_id, "begin");
 
         let (input, cid) = Cid::parse(input)?;
@@ -232,7 +232,7 @@ impl Node {
 
         tracing::trace!("metadata::end");
 
-        let (remaining, inner) = NodeData::parse(node_data_buf, data_key)?;
+        let (remaining, (inner, desired_node_ids)) = NodeData::parse(node_data_buf, data_key)?;
         debug_assert!(remaining.is_empty());
 
         let node = Self {
@@ -253,7 +253,7 @@ impl Node {
             inner,
         };
 
-        Ok((input, node))
+        Ok((input, (node, desired_node_ids)))
     }
 
     pub fn permanent_id(&self) -> PermanentId {

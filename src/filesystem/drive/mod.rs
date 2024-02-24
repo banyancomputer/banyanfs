@@ -111,11 +111,6 @@ impl Drive {
             writer.write_all(&length_bytes).await?;
             written_bytes += length_bytes.len();
 
-            tracing::info!(
-                ?buffer_length,
-                "drive::encode_private: encoded filesystem buffer length"
-            );
-
             written_bytes += fs_buffer
                 .encrypt_and_encode(rng, writer, &[], &filesystem_key)
                 .await?;

@@ -157,15 +157,19 @@ impl InnerDrive {
             let entry = nodes.vacant_entry();
             let node_id = entry.key();
 
-            let (remaining, node) = Node::parse(node_input, node_id, data_key)?;
+            let (remaining, (node, desired_node_ids)) = Node::parse(node_input, node_id, data_key)?;
             tracing::trace!(
                 remaining_node_data = remaining.len(),
+                desired_node_len = desired_node_ids.len(),
                 "inner_drive::parse::node_loop::node"
             );
             node_input = remaining;
 
-            let permanent_id = node.permanent_id();
+            for perm_id in desired_node_ids.into_iter() {
+                expected_permanent_ids.insert(perm_id);
+            }
 
+            let permanent_id = node.permanent_id();
             if !expected_permanent_ids.contains(&permanent_id) {
                 tracing::warn!(?permanent_id, ?node_id, node_kind = ?node.kind(), "found unexpected permanent ID in node data, skipping...");
                 continue;

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
@@ -155,7 +155,7 @@ impl NodeData {
     pub(crate) fn parse<'a>(
         input: &'a [u8],
         data_key: Option<&AccessKey>,
-    ) -> ParserResult<'a, Self> {
+    ) -> ParserResult<'a, (Self, Vec<PermanentId>)> {
         let (input, kind) = NodeKind::parse(input)?;
 
         let (input, node_data) = match kind {
@@ -183,7 +183,7 @@ impl NodeData {
                     associated_data,
                 };
 
-                (data_buf, data)
+                (data_buf, (data, Vec::new()))
             }
             //NodeKind::AssociatedData => {}
             NodeKind::Directory => {
@@ -200,6 +200,8 @@ impl NodeData {
                     input.len() - data_buf.len() - perm_len - children_size_len;
                 tracing::trace!(bytes_read = ?children_count_len, children_count, "children_count");
 
+                let mut desired_nodes = HashSet::new();
+
                 let mut children = HashMap::new();
                 let mut child_buf = data_buf;
                 for idx in 0..children_count {
@@ -214,19 +216,21 @@ impl NodeData {
                     tracing::trace!(child_perm_id = ?child_id, bytes_read = id_len, "child_perm_id");
 
                     children.insert(child_name, child_id);
+                    desired_nodes.insert(child_id);
 
                     let bytes_read = child_buf.len() - remaining.len();
                     tracing::trace!(bytes_read, "complete");
                     child_buf = remaining;
                 }
 
+                let desired_node_ids = desired_nodes.into_iter().collect::<Vec<_>>();
                 let data = NodeData::Directory {
                     permissions,
                     children_size,
                     children,
                 };
 
-                (child_buf, data)
+                (child_buf, (data, desired_node_ids))
             }
             _ => unimplemented!(),
         };

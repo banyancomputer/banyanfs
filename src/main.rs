@@ -138,8 +138,6 @@ async fn main() -> BanyanFsResult<()> {
         return Ok(());
     }
 
-    tracing::debug!("persisted drive");
-
     let mut fh = match tokio::fs::File::open("fixtures/minimal.bfs").await {
         Ok(fh) => fh.compat(),
         Err(err) => {
@@ -156,8 +154,6 @@ async fn main() -> BanyanFsResult<()> {
             return Ok(());
         }
     };
-
-    tracing::info!("loaded drive");
 
     let mut root_dir = loaded_drive.root().await;
 
