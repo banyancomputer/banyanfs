@@ -253,13 +253,18 @@ impl DirectoryHandle {
         Err(OperationError::PathTooDeep)
     }
 
-    #[instrument(skip(self, _rng))]
+    #[instrument(level = Level::DEBUG, skip(self, rng))]
     pub async fn mv(
         &mut self,
-        _rng: &mut impl CryptoRngCore,
-        _src_path: &[&str],
-        _dst_path: &[&str],
+        rng: &mut impl CryptoRngCore,
+        src_path: &[&str],
+        dst_path: &[&str],
     ) -> Result<(), OperationError> {
+        let source_node_id = match walk_path(&self.inner, self.cwd_id, src_path, 0).await? {
+            WalkState::FoundNode { node_id } => node_id,
+            _ => return Err(OperationError::PathNotFound),
+        };
+
         todo!()
     }
 }
