@@ -177,5 +177,15 @@ async fn main() -> BanyanFsResult<()> {
         return Ok(());
     }
 
+    let root_contents = match root_dir.ls(&[]).await {
+        Ok(dir_contents) => dir_contents,
+        Err(err) => {
+            tracing::error!("failed to list directory from loaded drive: {err}");
+            return Ok(());
+        }
+    };
+
+    tracing::info!(?root_contents, "root contents after move");
+
     Ok(())
 }

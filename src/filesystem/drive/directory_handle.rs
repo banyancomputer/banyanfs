@@ -253,19 +253,115 @@ impl DirectoryHandle {
         Err(OperationError::PathTooDeep)
     }
 
-    #[instrument(level = Level::DEBUG, skip(self, rng))]
+    #[instrument(level = Level::DEBUG, skip(self, _rng))]
     pub async fn mv(
         &mut self,
-        rng: &mut impl CryptoRngCore,
+        _rng: &mut impl CryptoRngCore,
         src_path: &[&str],
         dst_path: &[&str],
     ) -> Result<(), OperationError> {
-        let source_node_id = match walk_path(&self.inner, self.cwd_id, src_path, 0).await? {
+        let src_node_id = match walk_path(&self.inner, self.cwd_id, src_path, 0).await? {
             WalkState::FoundNode { node_id } => node_id,
-            _ => return Err(OperationError::PathNotFound),
+            WalkState::NotTraversable { .. } => return Err(OperationError::NotADirectory),
+            WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
         };
 
-        todo!()
+        let dst_parent_id = match walk_path(&self.inner, self.cwd_id, dst_path, 0).await? {
+            WalkState::FoundNode { node_id } => return Err(OperationError::Exists(node_id)),
+            WalkState::NotTraversable { .. } => return Err(OperationError::NotADirectory),
+            WalkState::MissingComponent {
+                working_directory_id,
+                remaining_path,
+                ..
+            } => {
+                if !remaining_path.is_empty() {
+                    return Err(OperationError::PathNotFound);
+                }
+
+                working_directory_id
+            }
+        };
+
+        let mut inner_write = self.inner.write().await;
+        let src_node =
+            inner_write
+                .nodes
+                .get_mut(src_node_id)
+                .ok_or(OperationError::InternalCorruption(
+                    src_node_id,
+                    "src node referencible but missing from node map",
+                ))?;
+        let src_parent_perm_id = src_node
+            .parent_id()
+            .ok_or(OperationError::InternalCorruption(
+                src_node_id,
+                "src node has no parent and should not be referencible",
+            ))?;
+        let src_name = src_node.name();
+        let src_perm_id = src_node.permanent_id();
+
+        let src_parent_node_id = *inner_write
+            .permanent_id_map
+            .get(&src_parent_perm_id)
+            .ok_or(OperationError::MissingPermanentId(src_parent_perm_id))?;
+
+        let src_parent_node = &mut inner_write.nodes.get_mut(src_parent_node_id).ok_or(
+            OperationError::InternalCorruption(
+                src_parent_node_id,
+                "parent node was missing during a move",
+            ),
+        )?;
+        match src_parent_node.data_mut() {
+            NodeData::Directory { children, .. } => children.remove(&src_name),
+            _ => {
+                return Err(OperationError::InternalCorruption(
+                    src_parent_node_id,
+                    "source node parent is not a directory",
+                ));
+            }
+        };
+
+        let dst_parent_node = &mut inner_write.nodes.get_mut(dst_parent_id).ok_or(
+            OperationError::InternalCorruption(
+                dst_parent_id,
+                "destination parent node was missing during a move",
+            ),
+        )?;
+
+        let last_dst_element = dst_path.last().ok_or(OperationError::UnexpectedEmptyPath)?;
+        let new_dst_name = NodeName::named(last_dst_element.to_string())?;
+
+        match dst_parent_node.data_mut() {
+            NodeData::Directory { children, .. } => {
+                if children.insert(new_dst_name.clone(), src_perm_id).is_some() {
+                    return Err(OperationError::InternalCorruption(
+                        dst_parent_id,
+                        "destination parent already had a node with the same name",
+                    ));
+                }
+            }
+            _ => {
+                return Err(OperationError::InternalCorruption(
+                    dst_parent_id,
+                    "destination parent is not a directory",
+                ))
+            }
+        }
+
+        let dst_parent_perm_id = dst_parent_node.permanent_id();
+
+        let tgt_node =
+            inner_write
+                .nodes
+                .get_mut(src_node_id)
+                .ok_or(OperationError::InternalCorruption(
+                    src_node_id,
+                    "src node referencible but missing from node map",
+                ))?;
+        tgt_node.set_parent_id(dst_parent_perm_id);
+        tgt_node.set_name(new_dst_name);
+
+        Ok(())
     }
 }
 

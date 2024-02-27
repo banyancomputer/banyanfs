@@ -256,6 +256,14 @@ impl Node {
         Ok((input, (node, desired_node_ids)))
     }
 
+    pub(crate) fn set_name(&mut self, new_name: NodeName) {
+        self.name = new_name;
+    }
+
+    pub(crate) fn set_parent_id(&mut self, parent_id: PermanentId) {
+        self.parent_id = Some(parent_id);
+    }
+
     pub fn permanent_id(&self) -> PermanentId {
         self.permanent_id
     }
