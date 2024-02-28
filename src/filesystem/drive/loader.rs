@@ -55,7 +55,7 @@ impl<'a> DriveLoader<'a> {
 
             if let Some(segment_res) = streamer.next().await {
                 let (hash, drive) = segment_res?;
-                debug!("loaded drive with blake3 hash of {hash:?}");
+                debug!(full_drive_hash = ?hash, "loaded drive");
                 return Ok(drive);
             };
         }

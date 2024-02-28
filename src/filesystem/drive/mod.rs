@@ -1,4 +1,5 @@
 mod access;
+mod directory_entry;
 mod directory_handle;
 mod file_handle;
 mod inner;
@@ -7,6 +8,7 @@ mod operations;
 mod walk_state;
 
 pub use access::DriveAccess;
+pub use directory_entry::DirectoryEntry;
 pub use directory_handle::DirectoryHandle;
 pub use file_handle::FileHandle;
 pub use loader::{DriveLoader, DriveLoaderError};

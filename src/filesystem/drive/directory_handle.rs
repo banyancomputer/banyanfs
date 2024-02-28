@@ -266,6 +266,8 @@ impl DirectoryHandle {
             WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
         };
 
+        // todo(sstelfox): If the found node is a directory its also a valid case that needs to be
+        // handled. We should simply move the node entry to the contents of the found directory.
         let dst_parent_id = match walk_path(&self.inner, self.cwd_id, dst_path, 0).await? {
             WalkState::FoundNode { node_id } => return Err(OperationError::Exists(node_id)),
             WalkState::NotTraversable { .. } => return Err(OperationError::NotADirectory),
