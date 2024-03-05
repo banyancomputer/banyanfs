@@ -3,7 +3,7 @@ use nom::bytes::streaming::take;
 
 use crate::codec::ParserResult;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum NodeKind {
     File,
     AssociatedData,

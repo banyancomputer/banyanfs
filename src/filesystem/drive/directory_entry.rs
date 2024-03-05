@@ -1,20 +1,34 @@
+use std::sync::Arc;
+
+use async_std::sync::RwLock;
+
+use crate::codec::crypto::SigningKey;
 use crate::codec::filesystem::NodeKind;
 use crate::codec::PermanentId;
-use crate::filesystem::nodes::{Node, NodeName};
+use crate::filesystem::drive::InnerDrive;
+use crate::filesystem::nodes::{Node, NodeId, NodeName};
 
-#[derive(Debug)]
 pub struct DirectoryEntry {
     permanent_id: PermanentId,
     name: NodeName,
     kind: NodeKind,
+
+    // these are needed for hydration
+    current_key: Arc<SigningKey>,
+    cwd_id: NodeId,
+    inner: Arc<RwLock<InnerDrive>>,
 }
 
-impl From<Node> for DirectoryEntry {
-    fn from(node: Node) -> Self {
-        Self {
-            permanent_id: node.permanent_id(),
-            name: node.name(),
-            kind: node.kind(),
-        }
+impl DirectoryEntry {
+    pub fn name(&self) -> NodeName {
+        self.name.clone()
+    }
+
+    pub fn kind(&self) -> NodeKind {
+        self.kind.clone()
+    }
+
+    pub fn permanent_id(&self) -> PermanentId {
+        self.permanent_id
     }
 }
