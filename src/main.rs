@@ -187,5 +187,13 @@ async fn main() -> BanyanFsResult<()> {
 
     tracing::info!(?root_contents, "root contents after move");
 
+    if let Err(err) = root_dir
+        .rm(&mut rng, &["new base documents", "deeply"])
+        .await
+    {
+        tracing::error!("failed to remove directory from loaded drive: {err}");
+        return Ok(());
+    }
+
     Ok(())
 }

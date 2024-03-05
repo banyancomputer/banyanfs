@@ -256,6 +256,10 @@ impl Node {
         Ok((input, (node, desired_node_ids)))
     }
 
+    pub(crate) fn children(&self) -> Vec<PermanentId> {
+        self.inner.children()
+    }
+
     pub(crate) fn set_name(&mut self, new_name: NodeName) {
         self.name = new_name;
     }

@@ -27,6 +27,16 @@ pub enum NodeData {
 type EncodedAssociation = (usize, Option<Vec<PermanentId>>, Option<Vec<Cid>>);
 
 impl NodeData {
+    pub(crate) fn children(&self) -> Vec<PermanentId> {
+        match self {
+            NodeData::File {
+                associated_data, ..
+            } => associated_data.values().cloned().collect(),
+            NodeData::Directory { children, .. } => children.values().cloned().collect(),
+            _ => Vec::new(),
+        }
+    }
+
     #[tracing::instrument(skip(self, rng, writer))]
     pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
