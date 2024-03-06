@@ -8,7 +8,7 @@ mod traits;
 pub(crate) mod utils;
 
 pub use error::ApiClientError;
-pub(crate) use traits::{ApiRequest, PlatformApiRequest};
+pub(crate) use traits::{ApiRequest, FromReqwestResponse, PlatformApiRequest};
 
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
@@ -95,29 +95,32 @@ impl ApiClient {
         debug!(response_status = ?status, "platform_request_response");
 
         if status.is_success() {
-            if response.status() == StatusCode::NO_CONTENT {
-                return Ok(None);
-            }
+            FromReqwestResponse::from_response(response).await
+        } else {
+            let resp_bytes = response.bytes().await?;
 
-            match response.json::<R::Response>().await {
-                Ok(resp) => Ok(Some(resp)),
-                Err(err) => {
-                    tracing::error!("failed to parse response API: {}", err);
+            match serde_json::from_slice::<RawApiError>(&resp_bytes) {
+                Ok(raw_error) => Err(ApiError::Message {
+                    status_code: status.as_u16(),
+                    message: raw_error.message,
+                }),
+                Err(_) => {
+                    tracing::warn!(response_status = ?status, "api endpoint did not return standard error message");
 
                     Err(ApiError::Message {
                         status_code: status.as_u16(),
-                        message: format!("failed to parse response: {err}"),
+                        message: String::from_utf8_lossy(&resp_bytes).to_string(),
                     })
                 }
             }
-        } else {
-            let raw_error = response.json::<RawApiError>().await?;
-
-            Err(ApiError::Message {
-                status_code: status.as_u16(),
-                message: raw_error.message,
-            })
         }
+    }
+
+    pub(crate) async fn platform_request_stream<R: PlatformApiRequest>(
+        &self,
+        request: R,
+    ) -> Result<R::Response, ApiError> {
+        todo!()
     }
 
     pub(crate) async fn platform_request_empty_response<R>(
@@ -136,7 +139,7 @@ impl ApiClient {
         Ok(())
     }
 
-    pub(crate) async fn full_platform_request<R: PlatformApiRequest>(
+    pub(crate) async fn platform_request_full<R: PlatformApiRequest>(
         &self,
         request: R,
     ) -> Result<R::Response, ApiError> {
