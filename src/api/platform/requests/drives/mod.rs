@@ -1,14 +1,17 @@
 mod create_request;
 mod get_all_request;
 mod get_request;
+mod update_request;
 
 use create_request::CreateRequest;
 use get_all_request::GetAllRequest;
 use get_request::GetRequest;
+use update_request::UpdateRequest;
 
 use crate::api::client::{ApiClient, ApiError};
 use crate::api::platform::{ApiDrive, DriveId, DriveKind, StorageClass};
 use crate::codec::crypto::VerifyingKey;
+use crate::prelude::platform::ApiDriveUpdateAttributes;
 
 pub async fn create(
     client: &ApiClient,
@@ -40,4 +43,13 @@ pub async fn get(client: &ApiClient, drive_id: String) -> Result<ApiDrive, ApiEr
 pub async fn get_all(client: &ApiClient) -> Result<Vec<ApiDrive>, ApiError> {
     let drives = client.platform_request_with_response(GetAllRequest).await?;
     Ok(drives)
+}
+
+pub async fn update(
+    client: &ApiClient,
+    drive_id: String,
+    attrs: ApiDriveUpdateAttributes,
+) -> Result<(), ApiError> {
+    let request = UpdateRequest::new(drive_id, attrs);
+    client.platform_request_with_empty_response(request).await
 }

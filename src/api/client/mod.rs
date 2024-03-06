@@ -119,6 +119,22 @@ impl ApiClient {
         }
     }
 
+    pub(crate) async fn platform_request_with_empty_response<R>(
+        &self,
+        request: R,
+    ) -> Result<(), ApiError>
+    where
+        R: ApiRequest<Response = ()>,
+    {
+        let resp = self.platform_request(request).await?;
+
+        if cfg!(feature = "strict") && resp.is_some() {
+            return Err(ApiError::UnexpectedResponse("expected empty response"));
+        }
+
+        Ok(())
+    }
+
     pub(crate) async fn platform_request_with_response<R: ApiRequest>(
         &self,
         request: R,

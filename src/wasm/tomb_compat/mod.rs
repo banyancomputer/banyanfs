@@ -112,10 +112,9 @@ impl TombCompat {
         };
 
         if private_key.key_id() != public_key.key_id() {
-            tracing::warn!(private_key_id = ?private_key.key_id(), public_key_id = ?public_key.key_id(), "provided public key doesn't match provided private key");
-            //return Err(BanyanFsError::from(
-            //    "provided public key doesn't match provided private key",
-            //));
+            return Err(BanyanFsError::from(
+                "provided public key doesn't match provided private key",
+            ));
         }
 
         // Just confirm they're valid and the kind we support
@@ -255,7 +254,9 @@ impl TombCompat {
 
     // new transfered and checked
     #[wasm_bindgen(js_name = renameBucket)]
-    pub async fn rename_bucket(&mut self, _bucket_id: String, _name: String) -> BanyanFsResult<()> {
-        todo!()
+    pub async fn rename_bucket(&mut self, bucket_id: String, name: String) -> BanyanFsResult<()> {
+        let attrs = platform::ApiDriveUpdateAttributes { name };
+        platform::requests::drives::update(&self.client, bucket_id, attrs).await?;
+        Ok(())
     }
 }

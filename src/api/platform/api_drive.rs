@@ -32,3 +32,8 @@ struct InitialBucketKey {
     approved: bool,
     fingerprint: String,
 }
+
+#[derive(Debug, Default, Serialize)]
+pub struct ApiDriveUpdateAttributes {
+    pub(crate) name: String,
+}

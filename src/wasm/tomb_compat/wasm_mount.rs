@@ -30,9 +30,12 @@ impl WasmMount {
     pub(crate) async fn pull(bucket: WasmBucket, wasm_client: TombCompat) -> BanyanFsResult<Self> {
         let drive = None;
 
-        // pull data, attempt to unlock it, fail with warning but still return an instance here
         platform::requests::metadata::pull_current(wasm_client.client(), bucket.id().as_str())
             .await?;
+
+        tracing::warn!(
+            "impl needed: pull data, attempt to unlock it, warn on inaccessible, include as drive"
+        );
 
         let mount = Self {
             wasm_client,
@@ -69,7 +72,7 @@ impl WasmMount {
     // checked
     #[wasm_bindgen(js_name = hasSnapshot)]
     pub fn has_snapshot(&self) -> bool {
-        tracing::warn!("not reporting snapshots as it hasn't been implemented yet");
+        tracing::warn!("impl needed: not reporting snapshots as it hasn't been implemented yet");
         false
     }
 
@@ -104,6 +107,8 @@ impl WasmMount {
 
         let path_references = path_segments.iter().map(|x| x.as_str()).collect::<Vec<_>>();
         let _entries = drive_root.ls(&path_references).await;
+
+        tracing::warn!("impl needed: convert entries to WasmFsMetadataEntry instances");
 
         todo!()
     }
