@@ -1,11 +1,12 @@
 use async_std::sync::{Arc, RwLock};
+use futures::StreamExt;
 
 use crate::prelude::*;
 
 use js_sys::{Array, ArrayBuffer, Uint8Array};
 use wasm_bindgen::prelude::*;
 
-use crate::filesystem::Drive;
+use crate::filesystem::{Drive, DriveLoader};
 use crate::wasm::tomb_compat::{TombCompat, WasmBucket, WasmBucketMetadata, WasmSnapshot};
 
 #[derive(Clone)]
@@ -14,7 +15,7 @@ pub struct WasmMount {
     wasm_client: TombCompat,
 
     bucket: WasmBucket,
-    drive: Option<Arc<RwLock<Drive>>>,
+    drive: Option<Drive>,
 }
 
 impl WasmMount {
@@ -28,15 +29,37 @@ impl WasmMount {
     }
 
     pub(crate) async fn pull(bucket: WasmBucket, wasm_client: TombCompat) -> BanyanFsResult<Self> {
+        use platform::requests::metadata;
+
         let drive = None;
 
-        let _current_metadata =
-            platform::requests::metadata::get_current(wasm_client.client(), bucket.id().as_str())
-                .await?;
+        let client = wasm_client.client();
+        let bucket_id = bucket.id();
 
-        tracing::warn!(
-            "impl needed: pull data, attempt to unlock it, warn on inaccessible, include as drive"
-        );
+        if let Some(key) = client.signing_key() {
+            let current_metadata = metadata::get_current(client, &bucket_id).await?;
+            let metadata_id = current_metadata.id();
+
+            let mut stream = metadata::pull_stream(client, &bucket_id, &metadata_id).await?;
+
+            let mut filesystem_bytes = Vec::new();
+            while let Some(chunk) = stream.next().await {
+                match chunk {
+                    Ok(byte_chunk) => {
+                        filesystem_bytes.extend(byte_chunk.to_vec());
+                    }
+                    Err(err) => {
+                        return Err(BanyanFsError::from(err.to_string()));
+                    }
+                }
+            }
+
+            let _drive_loader = DriveLoader::new(&key);
+
+            tracing::warn!(
+                "impl needed: pull data, attempt to unlock it, warn on inaccessible, include as drive"
+            );
+        }
 
         let mount = Self {
             wasm_client,
@@ -103,8 +126,7 @@ impl WasmMount {
             }
         };
 
-        let readable_drive = unlocked_drive.read().await;
-        let drive_root = readable_drive.root().await;
+        let drive_root = unlocked_drive.root().await;
 
         let path_references = path_segments.iter().map(|x| x.as_str()).collect::<Vec<_>>();
         let _entries = drive_root.ls(&path_references).await;

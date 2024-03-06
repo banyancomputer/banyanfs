@@ -2,18 +2,16 @@ use async_trait::async_trait;
 use serde::Serialize;
 
 use crate::api::client::{ApiRequest, PlatformApiRequest};
-use crate::api::platform::ApiMetadata;
+use crate::api::platform::{ApiDriveId, ApiMetadata};
 
 #[derive(Serialize)]
 pub(crate) struct GetCurrentRequest {
-    drive_id: String,
+    drive_id: ApiDriveId,
 }
 
 impl GetCurrentRequest {
-    pub(crate) fn new(drive_id: &str) -> Self {
-        Self {
-            drive_id: drive_id.to_string(),
-        }
+    pub(crate) fn new(drive_id: ApiDriveId) -> Self {
+        Self { drive_id }
     }
 }
 

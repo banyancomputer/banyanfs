@@ -6,6 +6,7 @@ mod error;
 mod traits;
 pub(crate) mod utils;
 
+pub(crate) use direct_response::DirectResponse;
 pub use error::ApiClientError;
 pub(crate) use traits::{ApiRequest, FromReqwestResponse, PlatformApiRequest};
 
@@ -139,6 +140,10 @@ impl ApiClient {
             Some(resp) => Ok(resp),
             None => Err(ApiError::UnexpectedResponse("response should not be empty")),
         }
+    }
+
+    pub(crate) fn signing_key(&self) -> Option<Arc<SigningKey>> {
+        self.auth.as_ref().map(|auth| auth.key.clone())
     }
 }
 

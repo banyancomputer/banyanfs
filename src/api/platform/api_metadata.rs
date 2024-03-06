@@ -3,21 +3,33 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, Serialize)]
 #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct ApiMetadata {
-    pub id: ApiMetadataId,
+    id: ApiMetadataId,
 
-    pub root_cid: String,
-    pub metadata_cid: String,
-    pub data_size: u64,
-    pub metadata_size: u64,
+    root_cid: RootCid,
+    metadata_cid: MetadataCid,
+    data_size: u64,
+    metadata_size: u64,
 
-    pub state: ApiMetadataState,
+    state: ApiMetadataState,
 
-    pub created_at: i64,
-    pub updated_at: i64,
+    created_at: i64,
+    updated_at: i64,
 
-    pub snapshot_id: Option<String>,
+    snapshot_id: Option<SnapshotId>,
+}
+
+impl ApiMetadata {
+    pub fn id(&self) -> ApiMetadataId {
+        self.id.clone()
+    }
 }
 
 pub type ApiMetadataId = String;
 
 pub type ApiMetadataState = String;
+
+pub type MetadataCid = String;
+
+pub type RootCid = String;
+
+pub type SnapshotId = String;

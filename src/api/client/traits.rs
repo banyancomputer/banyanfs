@@ -31,12 +31,12 @@ pub(crate) trait ApiRequest: Serialize {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 pub(crate) trait FromReqwestResponse: Sized {
     async fn from_response(response: reqwest::Response) -> Result<Option<Self>, ApiError>;
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl<T> FromReqwestResponse for T
 where
     T: DeserializeOwned + Sized,

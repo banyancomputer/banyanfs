@@ -33,6 +33,7 @@ use crate::codec::header::*;
 use crate::codec::*;
 use crate::filesystem::nodes::{NodeBuilder, NodeBuilderError};
 
+#[derive(Clone)]
 pub struct Drive {
     current_key: Arc<SigningKey>,
     filesystem_id: FilesystemId,
