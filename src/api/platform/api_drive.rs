@@ -1,11 +1,13 @@
 use serde::{Deserialize, Serialize};
 
-use crate::api::platform::{DriveId, DriveKind, StorageClass};
+use crate::api::platform::{DriveKind, StorageClass};
+
+pub type ApiDriveId = String;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct ApiDrive {
-    pub(crate) id: DriveId,
+    pub(crate) id: ApiDriveId,
     pub(crate) name: String,
 
     #[serde(rename = "type")]

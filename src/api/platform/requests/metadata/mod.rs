@@ -1,10 +1,12 @@
-mod pull_current_request;
+mod get_current_request;
 
-use pull_current_request::PullCurrentRequest;
+use get_current_request::GetCurrentRequest;
 
 use crate::api::client::{ApiClient, ApiError};
+use crate::api::platform::ApiMetadata;
 
-pub async fn pull_current(_client: &ApiClient, bucket_id: &str) -> Result<Vec<u8>, ApiError> {
-    let _request = PullCurrentRequest::new(bucket_id);
-    todo!("pull actual metadata, needs to support streaming and multipart")
+pub async fn get_current(client: &ApiClient, bucket_id: &str) -> Result<ApiMetadata, ApiError> {
+    client
+        .platform_request_full(GetCurrentRequest::new(bucket_id))
+        .await
 }

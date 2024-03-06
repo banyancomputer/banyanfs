@@ -30,8 +30,9 @@ impl WasmMount {
     pub(crate) async fn pull(bucket: WasmBucket, wasm_client: TombCompat) -> BanyanFsResult<Self> {
         let drive = None;
 
-        platform::requests::metadata::pull_current(wasm_client.client(), bucket.id().as_str())
-            .await?;
+        let _current_metadata =
+            platform::requests::metadata::get_current(wasm_client.client(), bucket.id().as_str())
+                .await?;
 
         tracing::warn!(
             "impl needed: pull data, attempt to unlock it, warn on inaccessible, include as drive"

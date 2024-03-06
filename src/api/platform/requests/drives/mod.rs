@@ -9,7 +9,7 @@ use get_request::GetRequest;
 use update_request::UpdateRequest;
 
 use crate::api::client::{ApiClient, ApiError};
-use crate::api::platform::{ApiDrive, DriveId, DriveKind, StorageClass};
+use crate::api::platform::{ApiDrive, ApiDriveId, DriveKind, StorageClass};
 use crate::codec::crypto::VerifyingKey;
 use crate::prelude::platform::ApiDriveUpdateAttributes;
 
@@ -17,7 +17,7 @@ pub async fn create(
     client: &ApiClient,
     name: &str,
     owner_key: &VerifyingKey,
-) -> Result<DriveId, ApiError> {
+) -> Result<ApiDriveId, ApiError> {
     let owner_key_spki = owner_key
         .to_spki()
         .map_err(|e| ApiError::InvalidData(e.to_string()))?;
@@ -41,8 +41,7 @@ pub async fn get(client: &ApiClient, drive_id: String) -> Result<ApiDrive, ApiEr
 }
 
 pub async fn get_all(client: &ApiClient) -> Result<Vec<ApiDrive>, ApiError> {
-    let drives = client.platform_request_full(GetAllRequest).await?;
-    Ok(drives)
+    client.platform_request_full(GetAllRequest).await
 }
 
 pub async fn update(
