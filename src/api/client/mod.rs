@@ -1,8 +1,7 @@
 #![allow(dead_code)]
-#![allow(unused_imports)]
-#![allow(unused_variables)]
 
 mod auth;
+mod direct_response;
 mod error;
 mod traits;
 pub(crate) mod utils;
@@ -10,16 +9,16 @@ pub(crate) mod utils;
 pub use error::ApiClientError;
 pub(crate) use traits::{ApiRequest, FromReqwestResponse, PlatformApiRequest};
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use async_std::sync::RwLock;
 use jwt_simple::prelude::*;
 use reqwest::header::{HeaderMap, HeaderValue};
-use reqwest::{Client as RClient, Method, Response, StatusCode, Url};
-use serde::{Deserialize, Serialize};
+use reqwest::Url;
+use serde::Deserialize;
 use time::OffsetDateTime;
-use tracing::{debug, Level};
+use tracing::debug;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::codec::crypto::SigningKey;
@@ -114,13 +113,6 @@ impl ApiClient {
                 }
             }
         }
-    }
-
-    pub(crate) async fn platform_request_stream<R: PlatformApiRequest>(
-        &self,
-        request: R,
-    ) -> Result<R::Response, ApiError> {
-        todo!()
     }
 
     pub(crate) async fn platform_request_empty_response<R>(
