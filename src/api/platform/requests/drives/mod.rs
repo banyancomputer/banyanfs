@@ -29,19 +29,19 @@ pub async fn create(
         owner_key: owner_key_spki,
     };
 
-    let created_drive = client.platform_request_with_response(request).await?;
+    let created_drive = client.full_platform_request(request).await?;
 
     Ok(created_drive.id)
 }
 
 pub async fn get(client: &ApiClient, drive_id: String) -> Result<ApiDrive, ApiError> {
     let request = GetRequest::new(drive_id);
-    let drive = client.platform_request_with_response(request).await?;
+    let drive = client.full_platform_request(request).await?;
     Ok(drive)
 }
 
 pub async fn get_all(client: &ApiClient) -> Result<Vec<ApiDrive>, ApiError> {
-    let drives = client.platform_request_with_response(GetAllRequest).await?;
+    let drives = client.full_platform_request(GetAllRequest).await?;
     Ok(drives)
 }
 
@@ -51,5 +51,5 @@ pub async fn update(
     attrs: ApiDriveUpdateAttributes,
 ) -> Result<(), ApiError> {
     let request = UpdateRequest::new(drive_id, attrs);
-    client.platform_request_with_empty_response(request).await
+    client.platform_request_empty_response(request).await
 }

@@ -8,7 +8,7 @@ mod traits;
 pub(crate) mod utils;
 
 pub use error::ApiClientError;
-pub(crate) use traits::ApiRequest;
+pub(crate) use traits::{ApiRequest, PlatformApiRequest};
 
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
@@ -66,7 +66,7 @@ impl ApiClient {
         self.base_url.clone()
     }
 
-    pub(crate) async fn platform_request<R: ApiRequest>(
+    pub(crate) async fn platform_request<R: PlatformApiRequest>(
         &self,
         request: R,
     ) -> Result<Option<R::Response>, ApiError> {
@@ -79,6 +79,7 @@ impl ApiClient {
         let full_url = self.base_url.join(&request.path())?;
         let mut request_builder = self.client.request(request.method(), full_url);
 
+        // Send authentication if its available even if the request is not marked as requiring it
         if let Some(auth) = &self.auth {
             let token = auth.platform_token().await?;
             request_builder = request_builder.bearer_auth(token);
@@ -119,12 +120,12 @@ impl ApiClient {
         }
     }
 
-    pub(crate) async fn platform_request_with_empty_response<R>(
+    pub(crate) async fn platform_request_empty_response<R>(
         &self,
         request: R,
     ) -> Result<(), ApiError>
     where
-        R: ApiRequest<Response = ()>,
+        R: PlatformApiRequest<Response = ()>,
     {
         let resp = self.platform_request(request).await?;
 
@@ -135,7 +136,7 @@ impl ApiClient {
         Ok(())
     }
 
-    pub(crate) async fn platform_request_with_response<R: ApiRequest>(
+    pub(crate) async fn full_platform_request<R: PlatformApiRequest>(
         &self,
         request: R,
     ) -> Result<R::Response, ApiError> {

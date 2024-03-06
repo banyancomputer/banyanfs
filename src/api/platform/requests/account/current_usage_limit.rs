@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 
-use crate::api::client::ApiRequest;
+use crate::api::client::{ApiRequest, PlatformApiRequest};
 
 #[derive(Serialize)]
 pub(crate) struct CurrentUsageLimit;
@@ -41,3 +41,5 @@ impl ApiRequest for CurrentUsageLimit {
         "/api/v1/buckets/usage_limit".to_string()
     }
 }
+
+impl PlatformApiRequest for CurrentUsageLimit {}

@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 
-use crate::api::client::ApiRequest;
+use crate::api::client::{ApiRequest, PlatformApiRequest};
 
 #[derive(Serialize)]
 pub(crate) struct CurrentUsage;
@@ -31,3 +31,5 @@ impl ApiRequest for CurrentUsage {
         "/api/v1/buckets/usage".to_string()
     }
 }
+
+impl PlatformApiRequest for CurrentUsage {}

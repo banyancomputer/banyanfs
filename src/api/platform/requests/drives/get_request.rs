@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use serde::Serialize;
 
-use crate::api::client::ApiRequest;
+use crate::api::client::{ApiRequest, PlatformApiRequest};
 use crate::api::platform::ApiDrive;
 
 #[derive(Debug, Serialize)]
@@ -23,3 +23,5 @@ impl ApiRequest for GetRequest {
         format!("/api/v1/buckets/{}", self.drive_id)
     }
 }
+
+impl PlatformApiRequest for GetRequest {}

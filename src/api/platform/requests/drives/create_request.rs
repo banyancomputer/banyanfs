@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use reqwest::Method;
 use serde::Serialize;
 
-use crate::api::client::ApiRequest;
+use crate::api::client::{ApiRequest, PlatformApiRequest};
 use crate::api::platform::{ApiDrive, DriveKind, StorageClass};
 
 #[derive(Serialize)]
@@ -34,3 +34,5 @@ impl ApiRequest for CreateRequest {
         true
     }
 }
+
+impl PlatformApiRequest for CreateRequest {}

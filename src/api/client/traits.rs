@@ -30,3 +30,7 @@ pub(crate) trait ApiRequest: Serialize {
         true
     }
 }
+
+pub(crate) trait PlatformApiRequest: ApiRequest {}
+
+pub(crate) trait StorageHostApiRequest: ApiRequest {}
