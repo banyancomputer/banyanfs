@@ -192,9 +192,16 @@ impl TombCompat {
     #[wasm_bindgen(js_name = listBucketSnapshots)]
     pub async fn list_bucket_snapshots(
         &mut self,
-        _bucket_id: String,
+        bucket_id: String,
     ) -> BanyanFsResult<js_sys::Array> {
-        todo!()
+        let snapshots = platform::requests::snapshots::get_all(&self.client, &bucket_id).await?;
+
+        let js_snaps = snapshots
+            .into_iter()
+            .map(|s| JsValue::from(WasmSnapshot::new(bucket_id.clone(), s)))
+            .collect::<js_sys::Array>();
+
+        Ok(js_snaps)
     }
 
     // checked, returns WasmMount instance
