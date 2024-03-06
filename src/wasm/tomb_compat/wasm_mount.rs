@@ -1,4 +1,5 @@
 use async_std::sync::{Arc, RwLock};
+use futures::io::Cursor;
 use futures::StreamExt;
 
 use crate::prelude::*;
@@ -31,35 +32,17 @@ impl WasmMount {
     pub(crate) async fn pull(bucket: WasmBucket, wasm_client: TombCompat) -> BanyanFsResult<Self> {
         use platform::requests::metadata;
 
-        let drive = None;
-
         let client = wasm_client.client();
         let bucket_id = bucket.id();
 
-        if let Some(key) = client.signing_key() {
-            let current_metadata = metadata::get_current(client, &bucket_id).await?;
-            let metadata_id = current_metadata.id();
+        let current_metadata = metadata::get_current(client, &bucket_id).await?;
+        let metadata_id = current_metadata.id();
 
-            let mut stream = metadata::pull_stream(client, &bucket_id, &metadata_id).await?;
-
-            let mut filesystem_bytes = Vec::new();
-            while let Some(chunk) = stream.next().await {
-                match chunk {
-                    Ok(byte_chunk) => {
-                        filesystem_bytes.extend(byte_chunk.to_vec());
-                    }
-                    Err(err) => {
-                        return Err(BanyanFsError::from(err.to_string()));
-                    }
-                }
-            }
-
-            let _drive_loader = DriveLoader::new(&key);
-
-            tracing::warn!(
-                "impl needed: pull data, attempt to unlock it, warn on inaccessible, include as drive"
-            );
-        }
+        // note(sstelfox): It doesn't make sense that we wouldn't have a signing key here, but if anything goes
+        // wrong at this point we simply consider the drive to remain locked. There could be a 404
+        // in here indicating that an initial metadata hasn't be pushed but that is a weird failure
+        // case. We should really enforce an initial metadata push during the bucket creation...
+        let drive = try_load_drive(client, &bucket_id, &metadata_id).await;
 
         let mount = Self {
             wasm_client,
@@ -211,5 +194,47 @@ impl WasmMount {
         _content_buffer: ArrayBuffer,
     ) -> BanyanFsResult<()> {
         todo!()
+    }
+}
+
+async fn try_load_drive(client: &ApiClient, bucket_id: &str, metadata_id: &str) -> Option<Drive> {
+    use platform::requests::metadata;
+
+    let key = client.signing_key()?;
+    let mut stream = match metadata::pull_stream(client, bucket_id, metadata_id).await {
+        Ok(stream) => stream,
+        Err(err) => {
+            // note(sstelfox): there is a chance to dodge the API design issue mentioned in the
+            // pull method, we may need to check if the response was a 404 and if so initialize a
+            // new drive to return (as there may not have been one pushed previously).
+            tracing::warn!("requested metadata unavailable: {}", err);
+            return None;
+        }
+    };
+
+    let mut drive_bytes = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        let byte_chunk = match chunk {
+            Ok(byte_chunk) => byte_chunk,
+            Err(err) => {
+                tracing::warn!("error pulling chunk in metadata stream: {}", err);
+                return None;
+            }
+        };
+
+        drive_bytes.extend(byte_chunk.to_vec());
+    }
+
+    // todo(sstelfox): optimally we'd pass the Stream above directly to the loader rather than
+    // loading it in memory. There are ways to do it but this is sufficient for the time being.
+
+    let mut drive_cursor = Cursor::new(drive_bytes);
+    let drive_loader = DriveLoader::new(&key);
+    match drive_loader.from_reader(&mut drive_cursor).await {
+        Ok(drive) => Some(drive),
+        Err(err) => {
+            tracing::warn!("error loading drive from metadata stream: {}", err);
+            None
+        }
     }
 }
