@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fmt::{Display as StdDisplay, Formatter as StdFormatter, Result as StdResult};
 
 use wasm_bindgen::prelude::*;
@@ -15,7 +14,7 @@ use super::BanyanFsError;
 pub struct WasmFsMetadataEntry {
     name: String,
     entry_kind: String,
-    metadata: HashMap<String, JsValue>,
+    metadata: JsValue,
 }
 
 #[wasm_bindgen]
@@ -27,7 +26,7 @@ impl WasmFsMetadataEntry {
 
     #[wasm_bindgen(getter = metadata)]
     pub fn metadata(&self) -> JsValue {
-        todo!("need to convert the disparate metadata to a js object")
+        self.metadata.clone()
     }
 
     #[wasm_bindgen(getter = name)]
@@ -39,25 +38,38 @@ impl WasmFsMetadataEntry {
 impl TryFrom<DirectoryEntry> for WasmFsMetadataEntry {
     type Error = WasmEntryError;
 
-    fn try_from(value: DirectoryEntry) -> Result<Self, Self::Error> {
-        let name = match value.name() {
+    fn try_from(dir_entry: DirectoryEntry) -> Result<Self, Self::Error> {
+        let name = match dir_entry.name() {
             NodeName::Named(name) => name,
             _ => return Err(WasmEntryError("expected an entry name".to_string())),
         };
 
-        let entry_kind = match value.kind() {
+        let entry_kind = match dir_entry.kind() {
             NodeKind::File => "file",
             NodeKind::Directory => "directory",
             _ => return Err(WasmEntryError("unsupported entry kind".to_string())),
         };
 
-        tracing::warn!("not extracting metadata yet");
-        let metadata = HashMap::new();
+        let mut metadata = js_sys::Object::new();
+
+        for (key, value) in dir_entry.metadata().into_iter() {
+            let value = match key.as_str() {
+                //"owner_id" | "permanent_id" => String::from_utf8_lossy(value.as_slice()).into(),
+                //"created_at" | "modified_at" => i64::try_from(value).into(),
+                _ => js_sys::Uint8Array::from(value.as_slice()).into(),
+            };
+
+            tracing::warn!("likely skipping proper metadata parsing");
+
+            let js_key = JsValue::from_str(key);
+            js_sys::Reflect::set(&metadata, &js_key, &value)
+                .map_err(|_| WasmEntryError("failed convert metadata entries".to_string()))?;
+        }
 
         Ok(Self {
             name,
             entry_kind: entry_kind.to_string(),
-            metadata,
+            metadata: metadata.into(),
         })
     }
 }

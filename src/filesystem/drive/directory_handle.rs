@@ -76,7 +76,7 @@ impl DirectoryHandle {
             match listed_node.data() {
                 NodeData::Directory { children, .. } => children.values(),
                 _ => {
-                    let entry = DirectoryEntry::from((self, listed_node));
+                    let entry = DirectoryEntry::try_from(listed_node).await?;
                     return Ok(vec![entry]);
                 }
             }
@@ -91,7 +91,9 @@ impl DirectoryHandle {
                 .ok_or(OperationError::MissingPermanentId(*perm_id))?;
 
             let node = &inner_read.nodes[node_id];
-            entries.push(DirectoryEntry::from((self, node)));
+            let entry = DirectoryEntry::try_from(node).await?;
+
+            entries.push(entry);
         }
 
         Ok(entries)
