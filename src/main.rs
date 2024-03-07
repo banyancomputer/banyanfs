@@ -8,8 +8,6 @@ fn main() -> BanyanFsResult<()> {
 #[cfg(not(target_arch = "wasm32"))]
 #[tokio::main]
 async fn main() -> BanyanFsResult<()> {
-    use banyanfs::filesystem::NodeName;
-
     use tokio_util::compat::TokioAsyncReadCompatExt;
     use tracing::{debug, error, info, Level};
     use tracing_subscriber::layer::SubscriberExt;

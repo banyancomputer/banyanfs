@@ -280,10 +280,18 @@ impl DirectoryHandle {
             WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
         };
 
-        // todo(sstelfox): If the found node is a directory its also a valid case that needs to be
-        // handled. We should simply move the node entry to the contents of the found directory.
         let dst_parent_id = match walk_path(&self.inner, self.cwd_id, dst_path, 0).await? {
-            WalkState::FoundNode { node_id } => return Err(OperationError::Exists(node_id)),
+            WalkState::FoundNode { node_id } => {
+                let inner_read = self.inner.read().await;
+                let found_node = &inner_read.nodes[node_id];
+
+                // Node is a directory, we'll put the node in it instead
+                if found_node.kind() != NodeKind::Directory {
+                    return Err(OperationError::Exists(node_id));
+                }
+
+                node_id
+            }
             WalkState::NotTraversable { .. } => return Err(OperationError::NotADirectory),
             WalkState::MissingComponent {
                 working_directory_id,
@@ -299,22 +307,16 @@ impl DirectoryHandle {
         };
 
         let mut inner_write = self.inner.write().await;
-        let src_node =
-            inner_write
-                .nodes
-                .get_mut(src_node_id)
-                .ok_or(OperationError::InternalCorruption(
-                    src_node_id,
-                    "src node referencible but missing from node map",
-                ))?;
+        let src_node = &mut inner_write.nodes[src_node_id];
         let src_parent_perm_id = src_node
             .parent_id()
             .ok_or(OperationError::InternalCorruption(
                 src_node_id,
-                "src node has no parent and should not be referencible",
+                "src node has no parent",
             ))?;
         let src_name = src_node.name();
         let src_perm_id = src_node.permanent_id();
+        src_node.set_parent_id(src_perm_id);
 
         let src_parent_node_id = *inner_write
             .permanent_id_map
