@@ -19,7 +19,9 @@ pub struct WasmMount {
     wasm_client: TombCompat,
 
     bucket: WasmBucket,
+
     drive: Option<Drive>,
+    dirty: bool,
 }
 
 impl WasmMount {
@@ -44,7 +46,9 @@ impl WasmMount {
             wasm_client,
 
             bucket,
+
             drive: Some(drive),
+            dirty: true,
         };
 
         Ok(mount)
@@ -64,12 +68,14 @@ impl WasmMount {
         // in here indicating that an initial metadata hasn't be pushed but that is a weird failure
         // case. We should really enforce an initial metadata push during the bucket creation...
         let drive = try_load_drive(client, &bucket_id, &metadata_id).await;
+        let dirty = drive.is_none();
 
         let mount = Self {
             wasm_client,
 
             bucket,
             drive,
+            dirty,
         };
 
         Ok(mount)
@@ -89,12 +95,12 @@ impl WasmMount {
 
     // new, checked
     pub fn bucket(&self) -> WasmBucket {
-        todo!()
+        self.bucket.clone()
     }
 
     // checked
     pub fn dirty(&self) -> bool {
-        todo!()
+        self.dirty
     }
 
     // checked
@@ -182,7 +188,10 @@ impl WasmMount {
     // checked
     #[wasm_bindgen]
     pub async fn remount(&mut self, _key_pem: String) -> BanyanFsResult<()> {
-        todo!()
+        tracing::warn!(
+            "impl needed: remount, should be less necessary now but still should be implemented"
+        );
+        Ok(())
     }
 
     // checked
