@@ -49,6 +49,14 @@ impl Node {
         self.created_at
     }
 
+    pub fn data(&self) -> &NodeData {
+        &self.inner
+    }
+
+    pub fn data_mut(&mut self) -> &mut NodeData {
+        &mut self.inner
+    }
+
     pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
         &mut self,
         rng: &mut impl CryptoRngCore,
@@ -148,12 +156,8 @@ impl Node {
         self.inner.kind()
     }
 
-    pub fn data(&self) -> &NodeData {
-        &self.inner
-    }
-
-    pub fn data_mut(&mut self) -> &mut NodeData {
-        &mut self.inner
+    pub fn metadata(&self) -> &HashMap<String, Vec<u8>> {
+        &self.metadata
     }
 
     pub fn modified_at(&self) -> u64 {

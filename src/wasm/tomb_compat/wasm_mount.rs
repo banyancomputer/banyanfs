@@ -8,7 +8,9 @@ use js_sys::{Array, ArrayBuffer, Uint8Array};
 use wasm_bindgen::prelude::*;
 
 use crate::filesystem::{Drive, DriveLoader};
-use crate::wasm::tomb_compat::{TombCompat, WasmBucket, WasmBucketMetadata, WasmSnapshot};
+use crate::wasm::tomb_compat::{
+    TombCompat, WasmBucket, WasmBucketMetadata, WasmFsMetadataEntry, WasmSnapshot,
+};
 use crate::wasm::utils::chacha_rng;
 
 #[derive(Clone)]
@@ -36,6 +38,8 @@ impl WasmMount {
         let drive = Drive::initialize_private_with_id(&mut rng, signing_key, filesystem_id)
             .map_err(|e| BanyanFsError::from(e.to_string()))?;
 
+        tracing::warn!("impl needed: push initial metadata to the platform");
+
         let mount = Self {
             wasm_client,
 
@@ -44,17 +48,6 @@ impl WasmMount {
         };
 
         Ok(mount)
-    }
-
-    pub(crate) fn new(bucket: WasmBucket, wasm_client: TombCompat) -> Self {
-        tracing::warn!("creating a new mount without a drive, this is likely an error");
-
-        Self {
-            wasm_client,
-
-            bucket,
-            drive: None,
-        }
     }
 
     pub(crate) async fn pull(bucket: WasmBucket, wasm_client: TombCompat) -> BanyanFsResult<Self> {
@@ -140,11 +133,21 @@ impl WasmMount {
         let drive_root = unlocked_drive.root().await;
 
         let path_references = path_segments.iter().map(|x| x.as_str()).collect::<Vec<_>>();
-        let _entries = drive_root.ls(&path_references).await;
+        let entries = drive_root.ls(&path_references).await.map_err(|err| {
+            BanyanFsError::from(format!(
+                "error listing directory contents of {}: {}",
+                path_segments.join("/"),
+                err
+            ))
+        })?;
 
-        tracing::warn!("impl needed: convert entries to WasmFsMetadataEntry instances");
+        let mut wasm_entries = Vec::new();
+        for we in entries.into_iter() {
+            let wasm_entry = WasmFsMetadataEntry::try_from(we)?;
+            wasm_entries.push(wasm_entry);
+        }
 
-        todo!()
+        Ok(vec_to_js_array(wasm_entries))
     }
 
     // checked
@@ -265,4 +268,11 @@ async fn try_load_drive(client: &ApiClient, bucket_id: &str, metadata_id: &str) 
             None
         }
     }
+}
+
+fn vec_to_js_array<T>(vec: Vec<T>) -> js_sys::Array
+where
+    T: Into<JsValue>,
+{
+    vec.into_iter().map(|x| x.into()).collect()
 }

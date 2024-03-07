@@ -4,7 +4,7 @@ use nom::bytes::streaming::take;
 use crate::codec::ParserResult;
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) enum NodeKind {
+pub enum NodeKind {
     File,
     AssociatedData,
     Directory,

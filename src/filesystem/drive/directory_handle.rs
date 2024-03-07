@@ -10,16 +10,17 @@ use crate::codec::filesystem::NodeKind;
 use crate::codec::*;
 
 use crate::codec::crypto::SigningKey;
-use crate::filesystem::drive::{InnerDrive, OperationError, WalkState};
+use crate::filesystem::drive::{DirectoryEntry, InnerDrive, OperationError, WalkState};
 use crate::filesystem::nodes::{Node, NodeData, NodeId, NodeName};
 use crate::filesystem::NodeBuilder;
 
 const MAX_PATH_DEPTH: usize = 32;
 
+#[derive(Clone)]
 pub struct DirectoryHandle {
-    current_key: Arc<SigningKey>,
-    cwd_id: NodeId,
-    inner: Arc<RwLock<InnerDrive>>,
+    pub(crate) current_key: Arc<SigningKey>,
+    pub(crate) cwd_id: NodeId,
+    pub(crate) inner: Arc<RwLock<InnerDrive>>,
 }
 
 impl DirectoryHandle {
@@ -46,7 +47,7 @@ impl DirectoryHandle {
     }
 
     #[instrument(level = Level::DEBUG, skip(self))]
-    pub async fn ls(&self, path: &[&str]) -> Result<Vec<(NodeName, PermanentId)>, OperationError> {
+    pub async fn ls(&self, path: &[&str]) -> Result<Vec<DirectoryEntry>, OperationError> {
         trace!(cwd_id = self.cwd_id, "directory::ls");
 
         // These behaviors are slightly different mostly in the error cases, in the first case we
@@ -56,7 +57,7 @@ impl DirectoryHandle {
         let inner_read = self.inner.read().await;
         let children = if path.is_empty() {
             match inner_read.nodes[self.cwd_id].data() {
-                NodeData::Directory { children, .. } => children,
+                NodeData::Directory { children, .. } => children.values(),
                 _ => {
                     return Err(OperationError::InternalCorruption(
                         self.cwd_id,
@@ -73,14 +74,27 @@ impl DirectoryHandle {
             let listed_node = &inner_read.nodes[node_id];
 
             match listed_node.data() {
-                NodeData::Directory { children, .. } => children,
-                _ => return Ok(vec![(listed_node.name(), listed_node.permanent_id())]),
+                NodeData::Directory { children, .. } => children.values(),
+                _ => {
+                    let entry = DirectoryEntry::from((self, listed_node));
+                    return Ok(vec![entry]);
+                }
             }
         };
 
-        let children = children.iter().map(|(k, v)| (k.clone(), *v)).collect();
+        let mut entries = Vec::new();
 
-        Ok(children)
+        for perm_id in children.into_iter() {
+            let node_id = *inner_read
+                .permanent_id_map
+                .get(perm_id)
+                .ok_or(OperationError::MissingPermanentId(*perm_id))?;
+
+            let node = &inner_read.nodes[node_id];
+            entries.push(DirectoryEntry::from((self, node)));
+        }
+
+        Ok(entries)
     }
 
     #[instrument(level = Level::TRACE, skip(current_key, inner))]

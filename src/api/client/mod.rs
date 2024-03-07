@@ -322,6 +322,10 @@ pub enum ApiError {
 
     #[error("unexpected API response: {0}")]
     UnexpectedResponse(&'static str),
+
+    #[cfg(target_arch = "wasm32")]
+    #[error("WASM internal error: {0}")]
+    WasmInternal(String),
 }
 
 impl From<ApiError> for BanyanFsError {

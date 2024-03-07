@@ -1,7 +1,7 @@
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Debug)]
-pub struct BanyanFsError(String);
+pub struct BanyanFsError(pub(crate) String);
 
 impl From<&'static str> for BanyanFsError {
     fn from(val: &'static str) -> Self {

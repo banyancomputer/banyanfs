@@ -80,20 +80,14 @@ async fn main() -> BanyanFsResult<()> {
         }
 
         match testing_dir.ls(&[]).await {
-            Ok(contents) => {
-                let names: Vec<NodeName> = contents.into_iter().map(|(name, _)| name).collect();
-                info!(?names, "contents");
-            }
+            Ok(contents) => info!(?contents, "contents"),
             Err(err) => error!("failed to list directory: {}", err),
         }
 
         // get a fresh handle on the root directory
         let root = drive.root().await;
         match root.ls(&["testing", "paths", "deeply"]).await {
-            Ok(contents) => {
-                let names: Vec<NodeName> = contents.into_iter().map(|(name, _)| name).collect();
-                info!(?names, "contents");
-            }
+            Ok(contents) => info!(?contents, "contents"),
             Err(err) => error!("failed to list directory: {}", err),
         }
 
@@ -160,8 +154,7 @@ async fn main() -> BanyanFsResult<()> {
     // todo: should add convenient methods on the drive itself for the directory operations
     match root_dir.ls(&["testing", "paths", "deeply"]).await {
         Ok(dir_contents) => {
-            let names: Vec<NodeName> = dir_contents.into_iter().map(|(name, _)| name).collect();
-            tracing::info!("dir_contents: {names:?}");
+            tracing::info!("dir_contents: {dir_contents:?}");
         }
         Err(err) => {
             tracing::error!("failed to list directory from loaded drive: {err}");

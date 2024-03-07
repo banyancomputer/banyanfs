@@ -42,11 +42,6 @@ impl Fingerprint {
 
 impl std::fmt::Debug for Fingerprint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let fingerprint_str: String = self
-            .0
-            .iter()
-            .fold(String::new(), |acc, &b| format!("{acc}{:02x}", b));
-
         write!(f, "{{0x{}}}", self.to_hex())
     }
 }

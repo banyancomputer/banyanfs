@@ -6,7 +6,10 @@ use nom::number::streaming::le_u8;
 use crate::codec::ParserResult;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct NodeName(NodeNameInner);
+pub enum NodeName {
+    Root,
+    Named(String),
+}
 
 const NAME_TYPE_ROOT_ID: u8 = 0x00;
 
@@ -14,9 +17,9 @@ const NAME_TYPE_NAMED_ID: u8 = 0x01;
 
 impl NodeName {
     pub fn as_str(&self) -> &str {
-        match &self.0 {
-            NodeNameInner::Root => "{:root:}",
-            NodeNameInner::Named(name) => name,
+        match &self {
+            Self::Root => "{:root:}",
+            Self::Named(name) => name,
         }
     }
 
@@ -26,12 +29,12 @@ impl NodeName {
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
 
-        match &self.0 {
-            NodeNameInner::Root => {
+        match &self {
+            Self::Root => {
                 writer.write_all(&[NAME_TYPE_ROOT_ID]).await?;
                 written_bytes += 1;
             }
-            NodeNameInner::Named(name) => {
+            Self::Named(name) => {
                 let name_bytes = name.as_bytes();
                 if name_bytes.len() > 255 {
                     return Err(StdError::new(
@@ -73,18 +76,18 @@ impl NodeName {
 
         // todo: extra validation, reserved names and characters etc..
 
-        Ok(Self(NodeNameInner::Named(name)))
+        Ok(Self::Named(name))
     }
 
     pub fn is_root(&self) -> bool {
-        matches!(self.0, NodeNameInner::Root)
+        matches!(self, Self::Root)
     }
 
     pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, name_type) = le_u8(input)?;
 
         match name_type {
-            NAME_TYPE_ROOT_ID => Ok((input, Self(NodeNameInner::Root))),
+            NAME_TYPE_ROOT_ID => Ok((input, Self::Root)),
             NAME_TYPE_NAMED_ID => {
                 let (input, name_length) = le_u8(input)?;
                 let (input, name) = nom::bytes::streaming::take(name_length as usize)(input)?;
@@ -92,7 +95,7 @@ impl NodeName {
                 let name = String::from_utf8(name.to_vec()).map_err(|_| {
                     nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
                 })?;
-                Ok((input, Self(NodeNameInner::Named(name))))
+                Ok((input, Self::Named(name)))
             }
             _ => {
                 let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
@@ -102,7 +105,7 @@ impl NodeName {
     }
 
     pub(crate) fn root() -> Self {
-        Self(NodeNameInner::Root)
+        Self::Root
     }
 }
 
@@ -130,10 +133,7 @@ pub enum NodeNameError {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(crate) enum NodeNameInner {
-    Root,
-    Named(String),
-}
+pub(crate) enum NodeNameInner {}
 
 #[cfg(test)]
 mod tests {
