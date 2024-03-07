@@ -11,3 +11,5 @@ pub use api_metadata::{ApiMetadata, ApiMetadataId, ApiMetadataState};
 pub use api_snapshot::{ApiSnapshot, ApiSnapshotId, ApiSnapshotState};
 pub use drive_kind::DriveKind;
 pub use storage_class::StorageClass;
+
+pub type ApiKeyId = String;

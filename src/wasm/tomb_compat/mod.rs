@@ -57,8 +57,21 @@ impl TombCompat {
 impl TombCompat {
     // new transfered and checked
     #[wasm_bindgen(js_name = approveDeviceApiKey)]
-    pub async fn approve_device_api_key(&mut self, _pem: String) -> BanyanFsResult<()> {
-        todo!()
+    pub async fn approve_device_api_key(&mut self, public_pem: String) -> BanyanFsResult<()> {
+        use platform::requests::account;
+
+        let public_key = match VerifyingKey::from_spki(&public_pem) {
+            Ok(key) => key,
+            Err(err) => {
+                return Err(BanyanFsError::from(format!(
+                    "failed to load public key: {err}"
+                )))
+            }
+        };
+
+        account::register_api_key(&self.client, &public_key).await?;
+
+        Ok(())
     }
 
     // appears to no longer be present, likely migrated to create_bucket_and_mount
@@ -139,7 +152,7 @@ impl TombCompat {
         let id = platform::requests::drives::create(&self.client, &name, &public_key).await?;
 
         let wasm_bucket = WasmBucket(TombBucket::from_components(id.clone(), name, sc, dk));
-        let wasm_mount = WasmMount::new(wasm_bucket.clone(), self.clone());
+        let wasm_mount = WasmMount::initialize(wasm_bucket.clone(), self.clone()).await?;
 
         Ok(WasmBucketMount::new(wasm_bucket, wasm_mount))
     }

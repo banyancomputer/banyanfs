@@ -18,6 +18,12 @@ impl Fingerprint {
         Ok(self.0.len())
     }
 
+    pub(crate) fn to_hex(&self) -> String {
+        self.0
+            .iter()
+            .fold(String::new(), |acc, &b| format!("{acc}{:02x}", b))
+    }
+
     pub fn key_id(&self) -> KeyId {
         let mut key_id = [0u8; 2];
         key_id.copy_from_slice(&self.0[..2]);
@@ -41,7 +47,7 @@ impl std::fmt::Debug for Fingerprint {
             .iter()
             .fold(String::new(), |acc, &b| format!("{acc}{:02x}", b));
 
-        write!(f, "{{0x{fingerprint_str}}}")
+        write!(f, "{{0x{}}}", self.to_hex())
     }
 }
 

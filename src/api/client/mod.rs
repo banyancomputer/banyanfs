@@ -302,7 +302,7 @@ pub enum ApiError {
     #[error("network client experienced issue: {0}")]
     ClientError(#[from] reqwest::Error),
 
-    #[error("the data provided the API client wasn't valid: {0}")]
+    #[error("the data provided to the API client wasn't valid: {0}")]
     InvalidData(String),
 
     #[error("Request URL is invalid: {0}")]
@@ -310,6 +310,9 @@ pub enum ApiError {
 
     #[error("API returned {status_code} response with message: {message}")]
     Message { status_code: u16, message: String },
+
+    #[error("response from API did not match our expectations: {0}")]
+    MismatchedData(String),
 
     #[error("failed to generate token for platform platform: {0}")]
     PlatformTokenError(#[from] PlatformTokenError),
