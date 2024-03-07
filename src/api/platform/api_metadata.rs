@@ -24,6 +24,10 @@ impl ApiMetadata {
     pub fn id(&self) -> ApiMetadataId {
         self.id.clone()
     }
+
+    pub fn snapshot_id(&self) -> Option<SnapshotId> {
+        self.snapshot_id.clone()
+    }
 }
 
 pub type ApiMetadataId = String;

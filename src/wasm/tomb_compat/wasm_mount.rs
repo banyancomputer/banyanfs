@@ -40,8 +40,6 @@ impl WasmMount {
         let drive = Drive::initialize_private_with_id(&mut rng, signing_key, filesystem_id)
             .map_err(|e| BanyanFsError::from(e.to_string()))?;
 
-        tracing::warn!("impl needed: push initial metadata to the platform");
-
         let mount = Self {
             wasm_client,
 
@@ -162,17 +160,78 @@ impl WasmMount {
     }
 
     // checked
-    pub async fn mkdir(&mut self, _path_segments: js_sys::Array) -> BanyanFsResult<()> {
-        todo!()
+    pub async fn mkdir(&mut self, path_segments: js_sys::Array) -> BanyanFsResult<()> {
+        let path_segments = parse_js_path(path_segments)?;
+        let path_refs = path_segments.iter().map(|x| x.as_str()).collect::<Vec<_>>();
+
+        let unlocked_drive = match &self.drive {
+            Some(drive) => drive,
+            None => {
+                return Err(BanyanFsError::from(
+                    "unable to create new directories in a locked bucket",
+                ));
+            }
+        };
+
+        let mut rng = chacha_rng().map_err(|e| BanyanFsError::from(e.to_string()))?;
+        let mut drive_root = unlocked_drive.root().await;
+
+        drive_root
+            .mkdir(&mut rng, path_refs.as_slice(), true)
+            .await
+            .map_err(|err| {
+                BanyanFsError::from(format!(
+                    "error creating directory {}: {}",
+                    path_segments.join("/"),
+                    err
+                ))
+            })?;
+
+        Ok(())
     }
 
     // checked
     pub async fn mv(
         &mut self,
-        _from_path_segments: js_sys::Array,
-        _to_path_segments: js_sys::Array,
+        src_path_segments: js_sys::Array,
+        dst_path_segments: js_sys::Array,
     ) -> BanyanFsResult<()> {
-        todo!()
+        let src_path_segments = parse_js_path(src_path_segments)?;
+        let src_path_refs = src_path_segments
+            .iter()
+            .map(|x| x.as_str())
+            .collect::<Vec<_>>();
+
+        let dst_path_segments = parse_js_path(dst_path_segments)?;
+        let dst_path_refs = dst_path_segments
+            .iter()
+            .map(|x| x.as_str())
+            .collect::<Vec<_>>();
+
+        let unlocked_drive = match &self.drive {
+            Some(drive) => drive,
+            None => {
+                return Err(BanyanFsError::from(
+                    "unable to move contents in a locked bucket",
+                ));
+            }
+        };
+
+        let mut rng = chacha_rng().map_err(|e| BanyanFsError::from(e.to_string()))?;
+        let mut drive_root = unlocked_drive.root().await;
+
+        drive_root
+            .mv(&mut rng, src_path_refs.as_slice(), dst_path_refs.as_slice())
+            .await
+            .map_err(|err| {
+                BanyanFsError::from(format!(
+                    "error moving fs entry {}: {}",
+                    src_path_segments.join("/"),
+                    err
+                ))
+            })?;
+
+        Ok(())
     }
 
     // checked
@@ -284,4 +343,26 @@ where
     T: Into<JsValue>,
 {
     vec.into_iter().map(|x| x.into()).collect()
+}
+
+fn parse_js_path(path_arr: js_sys::Array) -> BanyanFsResult<Vec<String>> {
+    let mut strings = Vec::new();
+
+    for i in 0..path_arr.length() {
+        let js_value = path_arr.get(i);
+
+        let js_str = match js_value.dyn_into::<js_sys::JsString>() {
+            Ok(js_str) => js_str,
+            Err(_) => {
+                return Err(BanyanFsError::from("non-string value present in path"));
+            }
+        };
+
+        match js_str.as_string() {
+            Some(string) => strings.push(string),
+            None => return Err(BanyanFsError::from("invalid string present in path")),
+        }
+    }
+
+    Ok(strings)
 }

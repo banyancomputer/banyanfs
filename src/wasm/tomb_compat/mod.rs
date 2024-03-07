@@ -154,6 +154,8 @@ impl TombCompat {
         let wasm_bucket = WasmBucket(TombBucket::from_components(id.clone(), name, sc, dk));
         let wasm_mount = WasmMount::initialize(wasm_bucket.clone(), self.clone()).await?;
 
+        // todo(sstelfox): should probably sync drive here
+
         Ok(WasmBucketMount::new(wasm_bucket, wasm_mount))
     }
 
