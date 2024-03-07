@@ -1,6 +1,6 @@
-use async_std::sync::{Arc, RwLock};
 use futures::io::Cursor;
 use futures::StreamExt;
+use uuid::Uuid;
 
 use crate::prelude::*;
 
@@ -9,6 +9,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::filesystem::{Drive, DriveLoader};
 use crate::wasm::tomb_compat::{TombCompat, WasmBucket, WasmBucketMetadata, WasmSnapshot};
+use crate::wasm::utils::chacha_rng;
 
 #[derive(Clone)]
 #[wasm_bindgen]
@@ -20,7 +21,34 @@ pub struct WasmMount {
 }
 
 impl WasmMount {
+    pub(crate) async fn initialize(
+        bucket: WasmBucket,
+        wasm_client: TombCompat,
+    ) -> BanyanFsResult<Self> {
+        let mut rng = chacha_rng().map_err(|e| BanyanFsError::from(e.to_string()))?;
+        let signing_key = wasm_client.signing_key();
+
+        let api_assigned_id = bucket.id();
+        let fs_uuid =
+            Uuid::try_parse(&api_assigned_id).map_err(|e| BanyanFsError::from(e.to_string()))?;
+        let filesystem_id = FilesystemId::from(fs_uuid.to_bytes_le());
+
+        let drive = Drive::initialize_private_with_id(&mut rng, signing_key, filesystem_id)
+            .map_err(|e| BanyanFsError::from(e.to_string()))?;
+
+        let mount = Self {
+            wasm_client,
+
+            bucket,
+            drive: Some(drive),
+        };
+
+        Ok(mount)
+    }
+
     pub(crate) fn new(bucket: WasmBucket, wasm_client: TombCompat) -> Self {
+        tracing::warn!("creating a new mount without a drive, this is likely an error");
+
         Self {
             wasm_client,
 

@@ -31,7 +31,7 @@ async fn main() -> BanyanFsResult<()> {
 
     let mut rng = banyanfs::utils::crypto_rng();
 
-    let signing_key = SigningKey::generate(&mut rng);
+    let signing_key = std::sync::Arc::new(SigningKey::generate(&mut rng));
     let verifying_key = signing_key.verifying_key();
     let actor_id = verifying_key.actor_id();
 

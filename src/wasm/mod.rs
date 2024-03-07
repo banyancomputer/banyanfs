@@ -6,6 +6,9 @@ use wasm_bindgen::prelude::*;
 pub(crate) mod tomb_compat;
 
 #[cfg(feature = "tomb-compat")]
+pub(crate) mod utils;
+
+#[cfg(feature = "tomb-compat")]
 pub use tomb_compat::*;
 
 use crate::error::BanyanFsError;

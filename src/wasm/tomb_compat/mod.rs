@@ -47,6 +47,10 @@ impl TombCompat {
     pub(crate) fn client(&self) -> &ApiClient {
         &self.client
     }
+
+    pub(crate) fn signing_key(&self) -> Arc<SigningKey> {
+        self.key.clone()
+    }
 }
 
 #[wasm_bindgen(js_class = TombWasm)]

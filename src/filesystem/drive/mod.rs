@@ -136,14 +136,14 @@ impl Drive {
         self.filesystem_id
     }
 
-    pub fn initialize_private(
+    pub fn initialize_private_with_id(
         rng: &mut impl CryptoRngCore,
-        current_key: SigningKey,
+        current_key: Arc<SigningKey>,
+        filesystem_id: FilesystemId,
     ) -> Result<Self, DriveError> {
         let verifying_key = current_key.verifying_key();
         let actor_id = verifying_key.actor_id();
 
-        let filesystem_id = FilesystemId::generate(rng);
         trace!(?actor_id, ?filesystem_id, "drive::initializing_private");
 
         let kas = KeyAccessSettingsBuilder::private()
@@ -169,7 +169,6 @@ impl Drive {
         permanent_id_map.insert(directory.permanent_id(), root_node_id);
         node_entry.insert(directory);
 
-        let current_key = Arc::new(current_key);
         let journal_start = JournalCheckpoint::initialize();
 
         let drive = Self {
@@ -189,6 +188,14 @@ impl Drive {
         };
 
         Ok(drive)
+    }
+
+    pub fn initialize_private(
+        rng: &mut impl CryptoRngCore,
+        current_key: Arc<SigningKey>,
+    ) -> Result<Self, DriveError> {
+        let filesystem_id = FilesystemId::generate(rng);
+        Self::initialize_private_with_id(rng, current_key, filesystem_id)
     }
 
     pub async fn root(&self) -> DirectoryHandle {
