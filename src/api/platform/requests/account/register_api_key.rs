@@ -1,11 +1,16 @@
 use async_trait::async_trait;
 use reqwest::Method;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::api::client::{ApiRequest, PlatformApiRequest};
-use crate::api::platform::ApiKeyId;
+use crate::api::platform::ApiDriveKey;
 use crate::codec::crypto::VerifyingKey;
 
+// todo(sstelfox): currently we support registering any key with permissions to the account, then
+// that key gets full access to the account and any encrypted data even if the user doesn't have
+// access. We need to adjust our permission model to restrict the key usage to the buckets it has
+// permission over. We'll need a workflow to upgrade keys to the root of the account for things
+// like managing billing.
 #[derive(Serialize)]
 pub struct RegisterApiKey {
     #[serde(skip)]
@@ -32,7 +37,7 @@ impl RegisterApiKey {
 
 #[async_trait]
 impl ApiRequest for RegisterApiKey {
-    type Response = RegisterApiKeyResponse;
+    type Response = ApiDriveKey;
 
     const IS_PAYLOAD: bool = true;
 
@@ -44,19 +49,3 @@ impl ApiRequest for RegisterApiKey {
 }
 
 impl PlatformApiRequest for RegisterApiKey {}
-
-#[derive(Debug, Deserialize)]
-pub struct RegisterApiKeyResponse {
-    id: ApiKeyId,
-    fingerprint: String,
-}
-
-impl RegisterApiKeyResponse {
-    pub fn fingerprint(&self) -> &str {
-        &self.fingerprint
-    }
-
-    pub fn id(&self) -> &ApiKeyId {
-        &self.id
-    }
-}
