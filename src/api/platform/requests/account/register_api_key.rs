@@ -34,16 +34,12 @@ impl RegisterApiKey {
 impl ApiRequest for RegisterApiKey {
     type Response = RegisterApiKeyResponse;
 
-    fn method(&self) -> Method {
-        Method::POST
-    }
+    const IS_PAYLOAD: bool = true;
+
+    const METHOD: Method = Method::POST;
 
     fn path(&self) -> String {
         "/api/v1/auth/device_api_key".to_string()
-    }
-
-    fn is_payload(&self) -> bool {
-        true
     }
 }
 

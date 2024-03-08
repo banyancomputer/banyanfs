@@ -33,9 +33,7 @@ impl CurrentUsageLimitResponse {
 impl ApiRequest for CurrentUsageLimit {
     type Response = CurrentUsageLimitResponse;
 
-    fn method(&self) -> Method {
-        Method::GET
-    }
+    const METHOD: Method = Method::GET;
 
     fn path(&self) -> String {
         "/api/v1/buckets/usage_limit".to_string()

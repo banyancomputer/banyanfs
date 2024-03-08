@@ -13,7 +13,7 @@ use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
-use nom::number::streaming::{le_u32, le_u64, le_u8};
+use nom::number::streaming::{le_i64, le_u32, le_u8};
 
 use crate::codec::crypto::AccessKey;
 use crate::codec::filesystem::NodeKind;
@@ -31,8 +31,8 @@ pub struct Node {
     permanent_id: PermanentId,
     owner_id: ActorId,
 
-    created_at: u64,
-    modified_at: u64,
+    created_at: i64,
+    modified_at: i64,
 
     name: NodeName,
     metadata: HashMap<String, Vec<u8>>,
@@ -45,7 +45,7 @@ impl Node {
         self.cid.as_ref()
     }
 
-    pub fn created_at(&self) -> u64 {
+    pub fn created_at(&self) -> i64 {
         self.created_at
     }
 
@@ -160,7 +160,7 @@ impl Node {
         &self.metadata
     }
 
-    pub fn modified_at(&self) -> u64 {
+    pub fn modified_at(&self) -> i64 {
         self.modified_at
     }
 
@@ -208,8 +208,8 @@ impl Node {
         let (node_data_buf, owner_id) = ActorId::parse(node_data_buf)?;
         tracing::trace!(?permanent_id, ?owner_id, "identity");
 
-        let (node_data_buf, created_at) = le_u64(node_data_buf)?;
-        let (node_data_buf, modified_at) = le_u64(node_data_buf)?;
+        let (node_data_buf, created_at) = le_i64(node_data_buf)?;
+        let (node_data_buf, modified_at) = le_i64(node_data_buf)?;
         tracing::trace!(?created_at, ?modified_at, "timestamps");
 
         let (node_data_buf, name) = NodeName::parse(node_data_buf)?;

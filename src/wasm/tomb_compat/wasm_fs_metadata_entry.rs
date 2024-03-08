@@ -41,30 +41,20 @@ impl TryFrom<DirectoryEntry> for WasmFsMetadataEntry {
     fn try_from(dir_entry: DirectoryEntry) -> Result<Self, Self::Error> {
         let name = match dir_entry.name() {
             NodeName::Named(name) => name,
-            _ => return Err(WasmEntryError("expected an entry name".to_string())),
+            _ => return Err("expected an entry name".into()),
         };
 
         let entry_kind = match dir_entry.kind() {
             NodeKind::File => "file",
             NodeKind::Directory => "directory",
-            _ => return Err(WasmEntryError("unsupported entry kind".to_string())),
+            _ => return Err("unsupported entry kind".into()),
         };
 
-        let mut metadata = js_sys::Object::new();
+        let metadata = js_sys::Object::new();
 
-        for (key, value) in dir_entry.metadata().into_iter() {
-            let value = match key.as_str() {
-                //"owner_id" | "permanent_id" => String::from_utf8_lossy(value.as_slice()).into(),
-                //"created_at" | "modified_at" => i64::try_from(value).into(),
-                _ => js_sys::Uint8Array::from(value.as_slice()).into(),
-            };
-
-            tracing::warn!("likely skipping proper metadata parsing");
-
-            let js_key = JsValue::from_str(key);
-            js_sys::Reflect::set(&metadata, &js_key, &value)
-                .map_err(|_| WasmEntryError("failed convert metadata entries".to_string()))?;
-        }
+        let js_key = JsValue::from_str("created_at");
+        js_sys::Reflect::set(&metadata, &js_key, &dir_entry.created_at().into())
+            .map_err(|_| "failed convert created_at")?;
 
         Ok(Self {
             name,
@@ -84,6 +74,12 @@ impl StdDisplay for WasmEntryError {
 }
 
 impl std::error::Error for WasmEntryError {}
+
+impl From<&'static str> for WasmEntryError {
+    fn from(error: &'static str) -> Self {
+        WasmEntryError(error.to_string())
+    }
+}
 
 impl From<WasmEntryError> for BanyanFsError {
     fn from(error: WasmEntryError) -> Self {

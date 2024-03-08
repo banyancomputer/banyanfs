@@ -1,9 +1,11 @@
 mod create_request;
+mod delete_request;
 mod get_all_request;
 mod get_request;
 mod update_request;
 
 use create_request::CreateRequest;
+use delete_request::DeleteRequest;
 use get_all_request::GetAllRequest;
 use get_request::GetRequest;
 use update_request::UpdateRequest;
@@ -32,6 +34,11 @@ pub async fn create(
     let created_drive = client.platform_request_full(request).await?;
 
     Ok(created_drive.id)
+}
+
+pub async fn delete(client: &ApiClient, drive_id: String) -> Result<(), ApiError> {
+    let request = DeleteRequest::new(drive_id);
+    client.platform_request_empty_response(request).await
 }
 
 pub async fn get(client: &ApiClient, drive_id: String) -> Result<ApiDrive, ApiError> {

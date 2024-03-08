@@ -11,24 +11,18 @@ use crate::api::client::ApiError;
 
 // todo(sstelfox): The request itself shouldn't require the Serialize implmentation, I should
 // support building a custom payload (and maybe an entire reqwest::Body for stream support). This
-// is a lazy hack for speed right now
+// is a lazy hack for speed right now.
 #[async_trait]
 pub(crate) trait ApiRequest: Serialize {
     type Response: FromReqwestResponse;
 
-    fn method(&self) -> Method {
-        Method::GET
-    }
+    const IS_PAYLOAD: bool = false;
+
+    const METHOD: Method = Method::GET;
+
+    const REQUIRES_AUTH: bool = true;
 
     fn path(&self) -> String;
-
-    fn is_payload(&self) -> bool {
-        false
-    }
-
-    fn requires_auth(&self) -> bool {
-        true
-    }
 }
 
 #[async_trait(?Send)]

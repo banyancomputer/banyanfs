@@ -22,16 +22,12 @@ pub(crate) struct CreateRequest {
 impl ApiRequest for CreateRequest {
     type Response = ApiDrive;
 
-    fn method(&self) -> Method {
-        Method::POST
-    }
+    const IS_PAYLOAD: bool = true;
+
+    const METHOD: Method = Method::POST;
 
     fn path(&self) -> String {
         "/api/v1/buckets".to_string()
-    }
-
-    fn is_payload(&self) -> bool {
-        true
     }
 }
 

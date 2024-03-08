@@ -40,7 +40,7 @@ impl WasmMount {
         let drive = Drive::initialize_private_with_id(&mut rng, signing_key, filesystem_id)
             .map_err(|e| BanyanFsError::from(e.to_string()))?;
 
-        let mount = Self {
+        let mut mount = Self {
             wasm_client,
 
             bucket,
@@ -48,6 +48,8 @@ impl WasmMount {
             drive: Some(drive),
             dirty: true,
         };
+
+        mount.sync().await?;
 
         Ok(mount)
     }
@@ -77,6 +79,19 @@ impl WasmMount {
         };
 
         Ok(mount)
+    }
+
+    pub(crate) async fn sync(&mut self) -> BanyanFsResult<()> {
+        let _unlocked_drive = self
+            .drive
+            .as_ref()
+            .ok_or(BanyanFsError::from("unable to sync locked bucket"))?;
+
+        tracing::warn!("impl needed: sync, not actually writing to the remote yet");
+
+        self.dirty = false;
+
+        Ok(())
     }
 }
 

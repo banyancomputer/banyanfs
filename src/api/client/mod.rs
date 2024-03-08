@@ -70,14 +70,14 @@ impl ApiClient {
         &self,
         request: R,
     ) -> Result<Option<R::Response>, ApiError> {
-        debug!(method = %request.method(), url = %request.path(), "platform_request");
+        debug!(method = %R::METHOD, url = %request.path(), "platform_request");
 
-        if request.requires_auth() && self.auth.is_none() {
+        if R::REQUIRES_AUTH && self.auth.is_none() {
             return Err(ApiError::RequiresAuth);
         }
 
         let full_url = self.base_url.join(&request.path())?;
-        let mut request_builder = self.client.request(request.method(), full_url);
+        let mut request_builder = self.client.request(R::METHOD, full_url);
 
         // Send authentication if its available even if the request is not marked as requiring it
         if let Some(auth) = &self.auth {
@@ -85,7 +85,7 @@ impl ApiClient {
             request_builder = request_builder.bearer_auth(token);
         }
 
-        if request.is_payload() {
+        if R::IS_PAYLOAD {
             request_builder = request_builder.json(&request)
         };
 

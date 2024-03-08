@@ -62,11 +62,7 @@ impl TombCompat {
 
         let public_key = match VerifyingKey::from_spki(&public_pem) {
             Ok(key) => key,
-            Err(err) => {
-                return Err(BanyanFsError::from(format!(
-                    "failed to load public key: {err}"
-                )))
-            }
+            Err(err) => return Err(format!("failed to load public key: {err}").into()),
         };
 
         account::register_api_key(&self.client, &public_key).await?;

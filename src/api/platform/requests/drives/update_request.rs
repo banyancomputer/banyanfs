@@ -21,16 +21,12 @@ impl UpdateRequest {
 impl ApiRequest for UpdateRequest {
     type Response = ();
 
-    fn method(&self) -> Method {
-        Method::PUT
-    }
+    const IS_PAYLOAD: bool = true;
+
+    const METHOD: Method = Method::PUT;
 
     fn path(&self) -> String {
         format!("api/v1/buckets/{}", self.id)
-    }
-
-    fn is_payload(&self) -> bool {
-        true
     }
 }
 

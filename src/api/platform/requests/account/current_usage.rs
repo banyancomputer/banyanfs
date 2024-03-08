@@ -23,9 +23,7 @@ impl CurrentUsageResponse {
 impl ApiRequest for CurrentUsage {
     type Response = CurrentUsageResponse;
 
-    fn method(&self) -> Method {
-        Method::GET
-    }
+    const METHOD: Method = Method::GET;
 
     fn path(&self) -> String {
         "/api/v1/buckets/usage".to_string()
