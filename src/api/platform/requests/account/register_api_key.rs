@@ -39,9 +39,11 @@ impl RegisterApiKey {
 impl ApiRequest for RegisterApiKey {
     type Response = ApiDriveKey;
 
-    const IS_PAYLOAD: bool = true;
-
     const METHOD: Method = Method::POST;
+
+    fn add_payload(&self, request_builder: RequestBuilder) -> RequestBuilder {
+        request_builder.json(self)
+    }
 
     fn path(&self) -> String {
         "/api/v1/auth/device_api_key".to_string()

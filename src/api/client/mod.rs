@@ -16,7 +16,7 @@ use std::sync::Arc;
 use async_std::sync::RwLock;
 use jwt_simple::prelude::*;
 use reqwest::header::{HeaderMap, HeaderValue};
-use reqwest::Url;
+use reqwest::{Client, Url};
 use serde::Deserialize;
 use time::OffsetDateTime;
 use tracing::debug;
@@ -31,7 +31,7 @@ pub(crate) const PLATFORM_AUDIENCE: &str = "banyan-platform";
 pub struct ApiClient {
     auth: Option<ApiAuth>,
     base_url: Url,
-    client: reqwest::Client,
+    client: Client,
 }
 
 impl ApiClient {
@@ -85,9 +85,7 @@ impl ApiClient {
             request_builder = request_builder.bearer_auth(token);
         }
 
-        if R::IS_PAYLOAD {
-            request_builder = request_builder.json(&request)
-        };
+        request_builder = request.add_payload(request_builder).await?;
 
         let response = request_builder.send().await?;
         let status = response.status();

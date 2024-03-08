@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use reqwest::Method;
+use reqwest::{Method, RequestBuilder};
 use serde::Serialize;
 
-use crate::api::client::{ApiRequest, PlatformApiRequest};
+use crate::api::client::{ApiError, ApiRequest, PlatformApiRequest};
 use crate::api::platform::{ApiDriveId, ApiDriveUpdateAttributes};
 
 #[derive(Serialize)]
@@ -17,13 +17,18 @@ impl UpdateRequest {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl ApiRequest for UpdateRequest {
     type Response = ();
 
-    const IS_PAYLOAD: bool = true;
-
     const METHOD: Method = Method::PUT;
+
+    async fn add_payload(
+        &self,
+        request_builder: RequestBuilder,
+    ) -> Result<RequestBuilder, ApiError> {
+        Ok(request_builder.json(&self))
+    }
 
     fn path(&self) -> String {
         format!("api/v1/buckets/{}", self.id)

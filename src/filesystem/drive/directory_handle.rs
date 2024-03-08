@@ -96,6 +96,8 @@ impl DirectoryHandle {
             entries.push(entry);
         }
 
+        trace!(?entries, "directory::ls::success");
+
         Ok(entries)
     }
 
