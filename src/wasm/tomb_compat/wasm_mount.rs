@@ -54,12 +54,10 @@ impl WasmMount {
     }
 
     pub(crate) async fn pull(bucket: WasmBucket, wasm_client: TombCompat) -> BanyanFsResult<Self> {
-        use platform::requests::metadata;
-
         let client = wasm_client.client();
         let bucket_id = bucket.id();
 
-        let current_metadata = metadata::get_current(client, &bucket_id).await?;
+        let current_metadata = platform::metadata::get_current(client, &bucket_id).await?;
         let metadata_id = current_metadata.id();
 
         // note(sstelfox): It doesn't make sense that we wouldn't have a signing key here, but if anything goes
@@ -281,10 +279,11 @@ impl WasmMount {
 }
 
 async fn try_load_drive(client: &ApiClient, bucket_id: &str, metadata_id: &str) -> Option<Drive> {
-    use platform::requests::metadata;
-
     let key = client.signing_key()?;
-    let mut stream = match metadata::pull_stream(client, bucket_id, metadata_id).await {
+
+    // todo(sstelfox): we should return something other than a 404 when we've seen at least once
+    // metadata for a drive (if we've seen zero its safe to create a new drive, its not otherwise).
+    let mut stream = match platform::metadata::pull_stream(client, bucket_id, metadata_id).await {
         Ok(stream) => stream,
         Err(err) => {
             // note(sstelfox): there is a chance to dodge the API design issue mentioned in the

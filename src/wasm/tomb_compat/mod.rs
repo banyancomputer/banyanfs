@@ -58,14 +58,12 @@ impl TombCompat {
     // new transfered and checked
     #[wasm_bindgen(js_name = approveDeviceApiKey)]
     pub async fn approve_device_api_key(&mut self, public_pem: String) -> BanyanFsResult<()> {
-        use platform::requests::account;
-
         let public_key = match VerifyingKey::from_spki(&public_pem) {
             Ok(key) => key,
             Err(err) => return Err(format!("failed to load public key: {err}").into()),
         };
 
-        account::register_api_key(&self.client, &public_key).await?;
+        platform::account::register_api_key(&self.client, &public_key).await?;
 
         Ok(())
     }
@@ -129,7 +127,7 @@ impl TombCompat {
             return Err("only interactive buckets are allowed to be created".into());
         }
 
-        let id = platform::requests::drives::create(&self.client, &name, &public_key).await?;
+        let id = platform::drives::create(&self.client, &name, &public_key).await?;
 
         let wasm_bucket = WasmBucket(TombBucket::from_components(id.clone(), name, sc, dk));
         let wasm_mount = WasmMount::initialize(wasm_bucket.clone(), self.clone()).await?;
@@ -146,21 +144,21 @@ impl TombCompat {
     // checked, no return
     #[wasm_bindgen(js_name = deleteBucket)]
     pub async fn delete_bucket(&mut self, bucket_id: String) -> BanyanFsResult<()> {
-        platform::requests::drives::delete(&self.client, bucket_id).await?;
+        platform::drives::delete(&self.client, bucket_id).await?;
         Ok(())
     }
 
     // checked, returns Account::usage response, changed return type from u64 to usize
     #[wasm_bindgen(js_name = getUsage)]
     pub async fn get_usage(&mut self) -> BanyanFsResult<usize> {
-        let current_usage = platform::requests::account::current_usage(&self.client).await?;
+        let current_usage = platform::account::current_usage(&self.client).await?;
         Ok(current_usage.total_usage())
     }
 
     // checked, returns Account::usage_limit response, changed return type from u64 to usize
     #[wasm_bindgen(js_name = getUsageLimit)]
     pub async fn get_usage_limit(&mut self) -> BanyanFsResult<usize> {
-        let current_usage = platform::requests::account::current_usage_limit(&self.client).await?;
+        let current_usage = platform::account::current_usage_limit(&self.client).await?;
         Ok(current_usage.soft_hot_storage_limit())
     }
 
@@ -169,7 +167,7 @@ impl TombCompat {
     // seems to be fine so far
     #[wasm_bindgen(js_name = listBuckets)]
     pub async fn list_buckets(&mut self) -> BanyanFsResult<js_sys::Array> {
-        let all_drives = crate::api::platform::requests::drives::get_all(&self.client).await?;
+        let all_drives = crate::api::platform::drives::get_all(&self.client).await?;
 
         let buckets = all_drives
             .into_iter()
@@ -192,7 +190,7 @@ impl TombCompat {
         &mut self,
         bucket_id: String,
     ) -> BanyanFsResult<js_sys::Array> {
-        let snapshots = platform::requests::snapshots::get_all(&self.client, &bucket_id).await?;
+        let snapshots = platform::snapshots::get_all(&self.client, &bucket_id).await?;
 
         let js_snaps = snapshots
             .into_iter()
@@ -220,12 +218,14 @@ impl TombCompat {
             //return Err("provided private key doesn't match initialized webkey".into());
         }
 
-        let drive = platform::requests::drives::get(&self.client, bucket_id.to_string()).await?;
+        let drive = platform::drives::get(&self.client, bucket_id.to_string()).await?;
         let wasm_bucket = WasmBucket(TombBucket::from(drive));
 
-        // todo: need to retrieve the bucket, retrieve the metadata, and attempt to unlock the
-        // drive
         let mount = WasmMount::pull(wasm_bucket.clone(), self.clone()).await?;
+
+        // note(sstelfox): the old version attempts to unlock the mount here, but I've migrated that into the
+        // pull itself if the key matches. This mount will only fail if the bucket doesn't have any
+        // metadata or the current key is incorrect.
 
         Ok(mount)
     }
@@ -255,7 +255,7 @@ impl TombCompat {
     #[wasm_bindgen(js_name = renameBucket)]
     pub async fn rename_bucket(&mut self, bucket_id: String, name: String) -> BanyanFsResult<()> {
         let attrs = platform::ApiDriveUpdateAttributes { name };
-        platform::requests::drives::update(&self.client, bucket_id, attrs).await?;
+        platform::drives::update(&self.client, bucket_id, attrs).await?;
         Ok(())
     }
 }
