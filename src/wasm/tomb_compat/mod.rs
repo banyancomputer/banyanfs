@@ -100,57 +100,39 @@ impl TombCompat {
     ) -> BanyanFsResult<WasmBucketMount> {
         let private_key = match SigningKey::from_pkcs8_pem(&private_key_pem) {
             Ok(key) => Arc::new(key),
-            Err(err) => {
-                return Err(BanyanFsError::from(format!(
-                    "failed to load private key: {err}"
-                )))
-            }
+            Err(err) => return Err(format!("failed to load private key: {err}").into()),
         };
         private_key_pem.zeroize();
 
         if self.key.key_id() != private_key.key_id() {
             tracing::warn!(init_key_id = ?self.key.key_id(), private_key_id = ?private_key.key_id(), "provided private key doesn't match initialized webkey");
-            //return Err(BanyanFsError::from(
-            //    "provided private key doesn't match initialized webkey",
-            //));
+            //return Err("provided private key doesn't match initialized webkey".into());
         }
 
         let public_key = match VerifyingKey::from_spki(&public_key_pem) {
             Ok(key) => key,
-            Err(err) => {
-                return Err(BanyanFsError::from(format!(
-                    "failed to load public key: {err}"
-                )))
-            }
+            Err(err) => return Err(format!("failed to load public key: {err}").into()),
         };
 
         if private_key.key_id() != public_key.key_id() {
-            return Err(BanyanFsError::from(
-                "provided public key doesn't match provided private key",
-            ));
+            return Err("provided public key doesn't match provided private key".into());
         }
 
         // Just confirm they're valid and the kind we support
         let sc = StorageClass::from_str(&storage_class)?;
         if sc != StorageClass::Hot {
-            return Err(BanyanFsError::from(
-                "only hot storage is allowed to be created",
-            ));
+            return Err("only hot storage is allowed to be created".into());
         }
 
         let dk = DriveKind::from_str(&bucket_type)?;
         if dk != DriveKind::Interactive {
-            return Err(BanyanFsError::from(
-                "only interactive buckets are allowed to be created",
-            ));
+            return Err("only interactive buckets are allowed to be created".into());
         }
 
         let id = platform::requests::drives::create(&self.client, &name, &public_key).await?;
 
         let wasm_bucket = WasmBucket(TombBucket::from_components(id.clone(), name, sc, dk));
         let wasm_mount = WasmMount::initialize(wasm_bucket.clone(), self.clone()).await?;
-
-        // todo(sstelfox): should probably sync drive here
 
         Ok(WasmBucketMount::new(wasm_bucket, wasm_mount))
     }
@@ -163,8 +145,9 @@ impl TombCompat {
 
     // checked, no return
     #[wasm_bindgen(js_name = deleteBucket)]
-    pub async fn delete_bucket(&mut self, _bucket_id: String) -> BanyanFsResult<()> {
-        todo!()
+    pub async fn delete_bucket(&mut self, bucket_id: String) -> BanyanFsResult<()> {
+        platform::requests::drives::delete(&self.client, bucket_id).await?;
+        Ok(())
     }
 
     // checked, returns Account::usage response, changed return type from u64 to usize
@@ -228,19 +211,13 @@ impl TombCompat {
     ) -> BanyanFsResult<WasmMount> {
         let private_key = match SigningKey::from_pkcs8_pem(&private_key_pem) {
             Ok(key) => Arc::new(key),
-            Err(err) => {
-                return Err(BanyanFsError::from(format!(
-                    "failed to load private key: {err}"
-                )))
-            }
+            Err(err) => return Err(format!("failed to load private key: {err}").into()),
         };
         private_key_pem.zeroize();
 
         if self.key.key_id() != private_key.key_id() {
             tracing::warn!(init_key_id = ?self.key.key_id(), private_key_id = ?private_key.key_id(), "provided private key doesn't match initialized webkey");
-            //return Err(BanyanFsError::from(
-            //    "provided private key doesn't match initialized webkey",
-            //));
+            //return Err("provided private key doesn't match initialized webkey".into());
         }
 
         let drive = platform::requests::drives::get(&self.client, bucket_id.to_string()).await?;

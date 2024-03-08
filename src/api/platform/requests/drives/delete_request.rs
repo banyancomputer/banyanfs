@@ -19,8 +19,6 @@ impl DeleteRequest {
 impl ApiRequest for DeleteRequest {
     type Response = ();
 
-    const IS_PAYLOAD: bool = false;
-
     const METHOD: Method = Method::DELETE;
 
     fn path(&self) -> String {

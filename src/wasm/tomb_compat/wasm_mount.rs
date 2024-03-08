@@ -44,7 +44,6 @@ impl WasmMount {
             wasm_client,
 
             bucket,
-
             drive: Some(drive),
             dirty: true,
         };
@@ -132,32 +131,24 @@ impl WasmMount {
     pub async fn ls(&mut self, path_segments: js_sys::Array) -> BanyanFsResult<js_sys::Array> {
         let path_segments = path_segments
             .iter()
-            .map(|x| {
-                x.as_string().ok_or(BanyanFsError::from(
-                    "invalid path segment provided to wasm_mount#ls",
-                ))
-            })
+            .map(|x| x.as_string().ok_or("invalid path segments"))
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| BanyanFsError::from(e.to_string()))?;
 
         let unlocked_drive = match &self.drive {
             Some(drive) => drive,
-            None => {
-                return Err(BanyanFsError::from(
-                    "unable to list directory contents of a locked bucket",
-                ));
-            }
+            None => return Err("unable to list directory contents of a locked bucket".into()),
         };
 
         let drive_root = unlocked_drive.root().await;
 
         let path_references = path_segments.iter().map(|x| x.as_str()).collect::<Vec<_>>();
         let entries = drive_root.ls(&path_references).await.map_err(|err| {
-            BanyanFsError::from(format!(
+            format!(
                 "error listing directory contents of {}: {}",
-                path_segments.join("/"),
+                path_refs.join("/"),
                 err
-            ))
+            )
         })?;
 
         let mut wasm_entries = Vec::new();
@@ -181,11 +172,7 @@ impl WasmMount {
 
         let unlocked_drive = match &self.drive {
             Some(drive) => drive,
-            None => {
-                return Err(BanyanFsError::from(
-                    "unable to create new directories in a locked bucket",
-                ));
-            }
+            None => return Err("unable to create new directories in a locked bucket".into()),
         };
 
         let mut rng = chacha_rng().map_err(|e| BanyanFsError::from(e.to_string()))?;
@@ -194,13 +181,7 @@ impl WasmMount {
         drive_root
             .mkdir(&mut rng, path_refs.as_slice(), true)
             .await
-            .map_err(|err| {
-                BanyanFsError::from(format!(
-                    "error creating directory {}: {}",
-                    path_segments.join("/"),
-                    err
-                ))
-            })?;
+            .map_err(|err| format!("error creating directory {}: {}", path_refs.join("/"), err))?;
 
         Ok(())
     }
@@ -225,11 +206,7 @@ impl WasmMount {
 
         let unlocked_drive = match &self.drive {
             Some(drive) => drive,
-            None => {
-                return Err(BanyanFsError::from(
-                    "unable to move contents in a locked bucket",
-                ));
-            }
+            None => return Err("unable to move contents in a locked bucket".into()),
         };
 
         let mut rng = chacha_rng().map_err(|e| BanyanFsError::from(e.to_string()))?;
@@ -238,13 +215,7 @@ impl WasmMount {
         drive_root
             .mv(&mut rng, src_path_refs.as_slice(), dst_path_refs.as_slice())
             .await
-            .map_err(|err| {
-                BanyanFsError::from(format!(
-                    "error moving fs entry {}: {}",
-                    src_path_segments.join("/"),
-                    err
-                ))
-            })?;
+            .map_err(|err| format!("error moving fs entry {}: {}", src_path_refs.join("/"), err))?;
 
         Ok(())
     }
@@ -262,9 +233,7 @@ impl WasmMount {
     // checked
     #[wasm_bindgen]
     pub async fn remount(&mut self, _key_pem: String) -> BanyanFsResult<()> {
-        tracing::warn!(
-            "impl needed: remount, should be less necessary now but still should be implemented"
-        );
+        tracing::warn!("impl needed: remount");
         Ok(())
     }
 

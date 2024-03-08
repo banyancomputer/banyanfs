@@ -10,19 +10,19 @@ pub struct WasmBucket(pub(crate) TombBucket);
 impl WasmBucket {
     #[wasm_bindgen(js_name = bucketType)]
     pub fn bucket_type(&self) -> String {
-        self.0.kind()
+        todo!()
     }
 
     pub fn id(&self) -> String {
-        self.0.id()
+        todo!()
     }
 
     pub fn name(&self) -> String {
-        self.0.name()
+        todo!()
     }
 
     #[wasm_bindgen(js_name = storageClass)]
     pub fn storage_class(&self) -> String {
-        self.0.storage_class()
+        todo!()
     }
 }
