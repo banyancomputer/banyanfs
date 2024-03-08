@@ -142,8 +142,8 @@ impl WasmMount {
 
         let drive_root = unlocked_drive.root().await;
 
-        let path_references = path_segments.iter().map(|x| x.as_str()).collect::<Vec<_>>();
-        let entries = drive_root.ls(&path_references).await.map_err(|err| {
+        let path_refs = path_segments.iter().map(|x| x.as_str()).collect::<Vec<_>>();
+        let entries = drive_root.ls(&path_refs).await.map_err(|err| {
             format!(
                 "error listing directory contents of {}: {}",
                 path_refs.join("/"),

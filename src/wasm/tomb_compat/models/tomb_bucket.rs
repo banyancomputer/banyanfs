@@ -29,19 +29,19 @@ impl TombBucket {
         }
     }
 
-    pub fn id(&self) -> String {
+    pub(crate) fn id(&self) -> String {
         self.id.clone()
     }
 
-    pub fn kind(&self) -> String {
+    pub(crate) fn kind(&self) -> String {
         self.kind.to_string()
     }
 
-    pub fn name(&self) -> String {
+    pub(crate) fn name(&self) -> String {
         self.name.clone()
     }
 
-    pub fn storage_class(&self) -> String {
+    pub(crate) fn storage_class(&self) -> String {
         self.storage_class.to_string()
     }
 }
