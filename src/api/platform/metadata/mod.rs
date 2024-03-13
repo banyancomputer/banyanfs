@@ -1,8 +1,10 @@
 mod get_current_request;
 mod pull_request;
+mod push_request;
 
 use get_current_request::GetCurrentRequest;
 use pull_request::PullRequest;
+use push_request::PushRequest;
 
 use bytes::Bytes;
 use futures::Stream;
@@ -26,4 +28,16 @@ pub async fn pull_stream(
         .await?;
 
     Ok(response.consume().bytes_stream())
+}
+
+pub async fn push_stream(
+    client: &ApiClient,
+    bucket_id: &str,
+    stream: impl Into<reqwest::Body>,
+) -> Result<ApiMetadata, ApiError> {
+    let response = client
+        .platform_request_full(PushRequest::new(bucket_id.into(), stream))
+        .await?;
+
+    todo!()
 }

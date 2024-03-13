@@ -1,5 +1,3 @@
-#![allow(clippy::vec_init_then_push)]
-
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
@@ -10,6 +8,7 @@ fn report_build_profile() {
     );
 }
 
+#[allow(clippy::vec_init_then_push)]
 fn report_enabled_features() {
     let mut enabled_features: Vec<&str> = Vec::new();
 
