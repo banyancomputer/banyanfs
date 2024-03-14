@@ -25,7 +25,7 @@ impl ApiRequest for CreateRequest {
     const METHOD: Method = Method::POST;
 
     async fn add_payload(
-        &self,
+        &mut self,
         request_builder: RequestBuilder,
     ) -> Result<RequestBuilder, ApiError> {
         Ok(request_builder.json(&self))

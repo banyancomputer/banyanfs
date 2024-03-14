@@ -41,8 +41,8 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn cid(&self) -> Option<&Cid> {
-        self.cid.as_ref()
+    pub fn cid(&self) -> Option<Cid> {
+        self.cid.clone()
     }
 
     pub fn created_at(&self) -> i64 {

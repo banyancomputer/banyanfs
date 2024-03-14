@@ -15,7 +15,7 @@ pub(crate) trait ApiRequest {
     const REQUIRES_AUTH: bool = true;
 
     async fn add_payload(
-        &self,
+        &mut self,
         request_builder: RequestBuilder,
     ) -> Result<RequestBuilder, ApiError> {
         Ok(request_builder)

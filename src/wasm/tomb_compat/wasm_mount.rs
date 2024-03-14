@@ -21,7 +21,9 @@ pub struct WasmMount {
     bucket: WasmBucket,
 
     drive: Option<Drive>,
+
     dirty: bool,
+    previous_version_id: Option<String>,
 }
 
 impl WasmMount {
@@ -46,6 +48,8 @@ impl WasmMount {
             bucket,
             drive: Some(drive),
             dirty: true,
+
+            previous_version_id: None,
         };
 
         mount.sync().await?;
@@ -73,20 +77,57 @@ impl WasmMount {
             bucket,
             drive,
             dirty,
+
+            previous_version_id: Some(metadata_id),
         };
 
         Ok(mount)
     }
 
     pub(crate) async fn sync(&mut self) -> BanyanFsResult<()> {
-        let _unlocked_drive = self
+        let mut rng = chacha_rng().map_err(|e| BanyanFsError::from(e.to_string()))?;
+
+        let unlocked_drive = self
             .drive
             .as_ref()
             .ok_or(BanyanFsError::from("unable to sync locked bucket"))?;
 
-        tracing::warn!("impl needed: sync, not actually writing to the remote yet");
+        let content_options = ContentOptions::metadata();
+
+        let mut encoded_drive = Vec::new();
+        unlocked_drive
+            .encode(&mut rng, content_options, &mut encoded_drive)
+            .await
+            .map_err(|e| format!("error while encoding drive for sync: {}", e))?;
+
+        tracing::warn!("impl needed not reporting true pending data size");
+        let expected_data_size = 0;
+
+        let root_cid = unlocked_drive
+            .root_cid()
+            .await
+            .map_err(|e| format!("error while getting root cid for sync: {}", e))?
+            .ok_or("missing root cid")?;
+
+        let valid_keys = vec![];
+        let deleted_block_cids = vec![];
+
+        let drive_stream = crate::api::client::utils::vec_to_pinned_stream(encoded_drive);
+
+        let push_response = platform::metadata::push_stream(
+            self.wasm_client.client(),
+            &self.bucket.id(),
+            expected_data_size,
+            root_cid,
+            self.previous_version_id.clone(),
+            drive_stream,
+            valid_keys,
+            deleted_block_cids,
+        )
+        .await?;
 
         self.dirty = false;
+        self.previous_version_id = Some(push_response.id());
 
         Ok(())
     }

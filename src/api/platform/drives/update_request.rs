@@ -24,7 +24,7 @@ impl ApiRequest for UpdateRequest {
     const METHOD: Method = Method::PUT;
 
     async fn add_payload(
-        &self,
+        &mut self,
         request_builder: RequestBuilder,
     ) -> Result<RequestBuilder, ApiError> {
         Ok(request_builder.json(&self))

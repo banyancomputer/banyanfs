@@ -68,7 +68,7 @@ impl ApiClient {
 
     pub(crate) async fn platform_request<R: PlatformApiRequest>(
         &self,
-        request: R,
+        mut request: R,
     ) -> Result<Option<R::Response>, ApiError> {
         debug!(method = %R::METHOD, url = %request.path(), "platform_request");
 
@@ -315,8 +315,17 @@ pub enum ApiError {
     #[error("failed to generate token for platform platform: {0}")]
     PlatformTokenError(#[from] PlatformTokenError),
 
+    #[error("unable to reuse streaming requests")]
+    RequestReused,
+
     #[error("API request requires authentication but client is not authenticated")]
     RequiresAuth,
+
+    #[error("failed to during json (de)serialization: {0}")]
+    Serde(#[from] serde_json::Error),
+
+    #[error("unexpected I/O error in API client: {0}")]
+    StreamingIo(#[from] std::io::Error),
 
     #[error("unexpected API response: {0}")]
     UnexpectedResponse(&'static str),

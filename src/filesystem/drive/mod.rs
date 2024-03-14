@@ -201,9 +201,17 @@ impl Drive {
     pub async fn root(&self) -> DirectoryHandle {
         let inner_read = self.inner.read().await;
         let root_node_id = inner_read.root_node_id;
-        drop(inner_read);
-
         DirectoryHandle::new(self.current_key.clone(), root_node_id, self.inner.clone()).await
+    }
+
+    pub async fn root_cid(&self) -> Result<Option<Cid>, DriveError> {
+        let inner_read = self.inner.read().await;
+
+        let root_node = inner_read.nodes.get(inner_read.root_node_id).ok_or(
+            OperationError::InternalCorruption(inner_read.root_node_id, "missing root node"),
+        )?;
+
+        Ok(root_node.cid())
     }
 }
 

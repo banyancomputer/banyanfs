@@ -23,6 +23,10 @@ impl Cid {
         Ok(self.0.len())
     }
 
+    pub fn as_base64url_multicodec(&self) -> String {
+        todo!()
+    }
+
     pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (remaining, cid_bytes) = take(CID_LENGTH)(input)?;
 
@@ -39,11 +43,7 @@ impl Cid {
 
 impl std::fmt::Debug for Cid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let cid_str: String = self
-            .0
-            .iter()
-            .fold(String::new(), |acc, &b| format!("{acc}{:02x}", b));
-
+        let cid_str = crate::codec::utils::bytes_to_hex_string(&self.0);
         write!(f, "{{0x{cid_str}}}")
     }
 }
