@@ -11,6 +11,23 @@ pub struct Cid([u8; CID_LENGTH]);
 impl Cid {
     pub const IDENTITY: Cid = Cid([0u8; CID_LENGTH]);
 
+    pub fn as_base64url_multicodec(&self) -> String {
+        use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        use base64::Engine;
+
+        let mut inner_bytes = Vec::with_capacity(CID_LENGTH + 1);
+
+        // raw inner data multicodec is 0x55, blake3 multihash is 0x1e
+        inner_bytes.extend_from_slice(&[0x55, 0x1e]);
+        // the hash itself
+        inner_bytes.extend_from_slice(&self.0);
+
+        let encoded = URL_SAFE_NO_PAD.encode(&inner_bytes);
+
+        // base code identifier for base64url is 'u'
+        format!("u{}", encoded)
+    }
+
     pub fn as_bytes(&self) -> &[u8; CID_LENGTH] {
         &self.0
     }
@@ -21,10 +38,6 @@ impl Cid {
     ) -> std::io::Result<usize> {
         writer.write_all(&self.0).await?;
         Ok(self.0.len())
-    }
-
-    pub fn as_base64url_multicodec(&self) -> String {
-        todo!()
     }
 
     pub fn parse(input: &[u8]) -> ParserResult<Self> {
