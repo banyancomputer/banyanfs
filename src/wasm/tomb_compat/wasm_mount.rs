@@ -126,6 +126,8 @@ impl WasmMount {
         )
         .await?;
 
+        tracing::warn!("impl metadata synced but data remains outstanding");
+
         self.dirty = false;
         self.previous_version_id = Some(push_response.id());
 

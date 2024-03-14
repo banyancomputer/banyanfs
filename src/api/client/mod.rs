@@ -15,7 +15,6 @@ use std::sync::Arc;
 
 use async_std::sync::RwLock;
 use jwt_simple::prelude::*;
-use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::{Client, Url};
 use serde::Deserialize;
 use time::OffsetDateTime;
@@ -146,15 +145,9 @@ impl ApiClient {
 }
 
 fn default_reqwest_client() -> Result<reqwest::Client, ApiClientError> {
-    let mut default_headers = HeaderMap::new();
-    default_headers.insert("Content-Type", HeaderValue::from_static("application/json"));
-
     let user_agent = format!("banyanfs/{}", crate::version::minimal_version());
 
-    let client = reqwest::Client::builder()
-        .default_headers(default_headers)
-        .user_agent(user_agent)
-        .build()?;
+    let client = reqwest::Client::builder().user_agent(user_agent).build()?;
 
     Ok(client)
 }

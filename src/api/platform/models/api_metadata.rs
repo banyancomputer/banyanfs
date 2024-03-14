@@ -10,7 +10,6 @@ pub struct ApiMetadata {
     root_cid: RootCid,
     metadata_cid: MetadataCid,
     data_size: u64,
-    metadata_size: u64,
 
     state: ApiMetadataState,
 
