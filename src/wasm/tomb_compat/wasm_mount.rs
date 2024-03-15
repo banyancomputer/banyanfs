@@ -194,8 +194,12 @@ impl WasmMount {
 
         let mut wasm_entries = Vec::new();
         for we in entries.into_iter() {
-            let wasm_entry = WasmFsMetadataEntry::try_from(we)?;
-            wasm_entries.push(wasm_entry);
+            match WasmFsMetadataEntry::try_from(we) {
+                Ok(wasm_entry) => wasm_entries.push(wasm_entry),
+                Err(err) => {
+                    tracing::warn!("error converting fs entry (skipping): {}", err);
+                }
+            }
         }
 
         Ok(vec_to_js_array(wasm_entries))

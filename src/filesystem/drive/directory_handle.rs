@@ -518,6 +518,8 @@ fn walk_path<'a>(
             .ok_or(OperationError::MissingPermanentId(*perm_id))?;
 
         let next_node = &inner_read.nodes[next_node_id];
+        trace!(?next_node_id, next_node_kind = ?next_node.kind(), "drive::walk_directory::next_node");
+
         if !matches!(next_node.kind(), NodeKind::Directory) {
             return Ok(WalkState::NotTraversable {
                 working_directory_id,

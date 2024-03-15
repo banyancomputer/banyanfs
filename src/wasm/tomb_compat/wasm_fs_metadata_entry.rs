@@ -21,6 +21,7 @@ pub struct WasmFsMetadataEntry {
 impl WasmFsMetadataEntry {
     #[wasm_bindgen(getter = entry_type)]
     pub fn entry_kind(&self) -> String {
+        tracing::trace!(?self.entry_kind, "entry_type getter called");
         self.entry_kind.clone()
     }
 
@@ -52,9 +53,17 @@ impl TryFrom<DirectoryEntry> for WasmFsMetadataEntry {
 
         let metadata = js_sys::Object::new();
 
-        let js_key = JsValue::from_str("created_at");
+        let js_key = JsValue::from_str("created");
         js_sys::Reflect::set(&metadata, &js_key, &dir_entry.created_at().into())
-            .map_err(|_| "failed convert created_at")?;
+            .map_err(|_| "failed to convert created_at")?;
+
+        let js_key = JsValue::from_str("modified");
+        js_sys::Reflect::set(&metadata, &js_key, &dir_entry.modified_at().into())
+            .map_err(|_| "failed to convert modified_at")?;
+
+        //let js_key = JsValue::from_str("size");
+        //js_sys::Reflect::set(&metadata, &js_key, &dir_entry.size().into())
+        //    .map_err(|_| "failed to convert size")?;
 
         Ok(Self {
             name,

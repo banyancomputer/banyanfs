@@ -12,6 +12,8 @@ pub struct DirectoryEntry {
 
     name: NodeName,
     kind: NodeKind,
+
+    size: u64,
 }
 
 impl DirectoryEntry {
@@ -34,12 +36,20 @@ impl DirectoryEntry {
     pub fn permanent_id(&self) -> PermanentId {
         self.permanent_id
     }
+
+    pub fn size(&self) -> u64 {
+        self.size
+    }
 }
 
 impl TryFrom<&Node> for DirectoryEntry {
     type Error = OperationError;
 
     fn try_from(node: &Node) -> Result<Self, Self::Error> {
+        let size = 0;
+
+        tracing::warn!("directory entry size not being properly calculated");
+
         Ok(Self {
             permanent_id: node.permanent_id(),
 
@@ -48,6 +58,8 @@ impl TryFrom<&Node> for DirectoryEntry {
 
             name: node.name().clone(),
             kind: node.kind().clone(),
+
+            size,
         })
     }
 }
