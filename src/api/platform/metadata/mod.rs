@@ -1,8 +1,10 @@
 mod get_current_request;
+mod get_request;
 mod pull_request;
 mod push_request;
 
 use get_current_request::GetCurrentRequest;
+use get_request::GetRequest;
 use pull_request::PullRequest;
 use push_request::{PushRequest, PushResponse};
 
@@ -17,6 +19,16 @@ use crate::codec::Cid;
 pub async fn get_current(client: &ApiClient, drive_id: &str) -> Result<ApiMetadata, ApiError> {
     client
         .platform_request_full(GetCurrentRequest::new(drive_id.into()))
+        .await
+}
+
+pub async fn get(
+    client: &ApiClient,
+    drive_id: &str,
+    metadata_id: &str,
+) -> Result<ApiMetadata, ApiError> {
+    client
+        .platform_request_full(GetRequest::new(drive_id.into(), metadata_id.into()))
         .await
 }
 

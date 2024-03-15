@@ -5,6 +5,12 @@ use crate::api::platform::{ApiDriveId, ApiMetadata};
 #[wasm_bindgen]
 pub struct WasmBucketMetadata(ApiDriveId, ApiMetadata);
 
+impl WasmBucketMetadata {
+    pub(crate) fn new(bucket_id: String, metadata: ApiMetadata) -> Self {
+        WasmBucketMetadata(bucket_id.into(), metadata)
+    }
+}
+
 #[wasm_bindgen]
 impl WasmBucketMetadata {
     #[wasm_bindgen(getter = bucketId)]

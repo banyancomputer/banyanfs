@@ -23,7 +23,7 @@ pub struct WasmMount {
     drive: Option<Drive>,
 
     dirty: bool,
-    previous_version_id: Option<String>,
+    last_saved_version_id: Option<String>,
 }
 
 impl WasmMount {
@@ -49,7 +49,7 @@ impl WasmMount {
             drive: Some(drive),
             dirty: true,
 
-            previous_version_id: None,
+            last_saved_version_id: None,
         };
 
         mount.sync().await?;
@@ -78,7 +78,7 @@ impl WasmMount {
             drive,
             dirty,
 
-            previous_version_id: Some(metadata_id),
+            last_saved_version_id: Some(metadata_id),
         };
 
         Ok(mount)
@@ -119,7 +119,7 @@ impl WasmMount {
             &self.bucket.id(),
             expected_data_size,
             root_cid,
-            self.previous_version_id.clone(),
+            self.last_saved_version_id.clone(),
             drive_stream,
             valid_keys,
             deleted_block_cids,
@@ -129,7 +129,7 @@ impl WasmMount {
         tracing::warn!("impl metadata synced but data remains outstanding");
 
         self.dirty = false;
-        self.previous_version_id = Some(push_response.id());
+        self.last_saved_version_id = Some(push_response.id());
 
         Ok(())
     }
@@ -207,7 +207,20 @@ impl WasmMount {
 
     // checked
     pub async fn metadata(&self) -> BanyanFsResult<WasmBucketMetadata> {
-        todo!()
+        let drive_id = self.bucket.id();
+        let metadata_id = match &self.last_saved_version_id {
+            Some(mid) => mid,
+            None => return Err("mount appears to be unsaved, no metadata available".into()),
+        };
+
+        let api_metadata =
+            platform::metadata::get(self.wasm_client.client(), &drive_id, &metadata_id)
+                .await
+                .map_err(|e| format!("error fetching metadata: {}", e))?;
+
+        let wasm_bindgen_metadata = WasmBucketMetadata::new(drive_id, api_metadata);
+
+        Ok(wasm_bindgen_metadata)
     }
 
     // checked
