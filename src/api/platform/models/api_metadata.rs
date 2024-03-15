@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 // todo(sstelfox): it comes up often enough that this should also return the ID of the bucket/drive
 // owner
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct ApiMetadata {
     id: ApiMetadataId,

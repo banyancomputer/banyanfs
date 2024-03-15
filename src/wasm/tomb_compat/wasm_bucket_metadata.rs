@@ -3,11 +3,16 @@ use wasm_bindgen::prelude::*;
 use crate::api::platform::{ApiDriveId, ApiMetadata};
 
 #[wasm_bindgen]
+#[derive(Clone)]
 pub struct WasmBucketMetadata(ApiDriveId, ApiMetadata);
 
 impl WasmBucketMetadata {
     pub(crate) fn new(bucket_id: String, metadata: ApiMetadata) -> Self {
         WasmBucketMetadata(bucket_id.into(), metadata)
+    }
+
+    pub(crate) fn api_metadata(&self) -> &ApiMetadata {
+        &self.1
     }
 }
 
