@@ -1,5 +1,5 @@
 #[test]
-fn rust_test() {
+fn test_rust_sample() {
     assert_eq!(1, 1);
 }
 

@@ -138,7 +138,10 @@ impl TombCompat {
     // checked, returns WasmBucketKey instance
     #[wasm_bindgen(js_name = createBucketKey)]
     pub async fn create_bucket_key(&mut self, _bucket_id: String) -> BanyanFsResult<WasmBucketKey> {
-        todo!()
+        // I don't think this actually needs to be implemented... This definitely isn't the way we
+        // want to create them, they should only come in through by inclusion of a signed update of
+        // the bucket's metadata.
+        unimplemented!("shouldn't be used");
     }
 
     // checked, no return
@@ -167,7 +170,7 @@ impl TombCompat {
     // seems to be fine so far
     #[wasm_bindgen(js_name = listBuckets)]
     pub async fn list_buckets(&mut self) -> BanyanFsResult<js_sys::Array> {
-        let all_drives = crate::api::platform::drives::get_all(&self.client).await?;
+        let all_drives = platform::drives::get_all(&self.client).await?;
 
         let buckets = all_drives
             .into_iter()
@@ -181,8 +184,7 @@ impl TombCompat {
     // checked, returns list of WasmBucketKey instances
     #[wasm_bindgen(js_name = listBucketKeys)]
     pub async fn list_bucket_keys(&mut self, bucket_id: String) -> BanyanFsResult<js_sys::Array> {
-        let all_drive_keys =
-            crate::api::platform::drive_keys::get_all(&self.client, &bucket_id).await?;
+        let all_drive_keys = platform::drive_keys::get_all(&self.client, &bucket_id).await?;
 
         let bucket_keys = all_drive_keys
             .into_iter()
