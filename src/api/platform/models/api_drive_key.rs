@@ -1,11 +1,9 @@
 use serde::Deserialize;
 
-use crate::api::platform::ApiDriveId;
-
+// todo(sstelfox): This should return the drive IDs its a member of as well
 #[derive(Debug, Deserialize)]
 pub struct ApiDriveKey {
     id: ApiDriveKeyId,
-    drive_id: ApiDriveId,
 
     fingerprint: String,
 
@@ -18,10 +16,6 @@ pub struct ApiDriveKey {
 impl ApiDriveKey {
     pub fn approved(&self) -> bool {
         self.approved
-    }
-
-    pub fn drive_id(&self) -> &ApiDriveKeyId {
-        &self.drive_id
     }
 
     pub fn fingerprint(&self) -> &str {

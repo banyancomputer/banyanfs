@@ -188,7 +188,7 @@ impl TombCompat {
 
         let bucket_keys = all_drive_keys
             .into_iter()
-            .map(WasmBucketKey::from)
+            .map(|dk| WasmBucketKey::from((bucket_id.clone(), dk)))
             .map(JsValue::from)
             .collect::<js_sys::Array>();
 
