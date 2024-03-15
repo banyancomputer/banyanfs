@@ -54,16 +54,19 @@ impl TryFrom<DirectoryEntry> for WasmFsMetadataEntry {
         let metadata = js_sys::Object::new();
 
         let js_key = JsValue::from_str("created");
-        js_sys::Reflect::set(&metadata, &js_key, &dir_entry.created_at().into())
+        let created_value = (dir_entry.created_at() / 1000) as u32;
+        js_sys::Reflect::set(&metadata, &js_key, &created_value.into())
             .map_err(|_| "failed to convert created_at")?;
 
         let js_key = JsValue::from_str("modified");
-        js_sys::Reflect::set(&metadata, &js_key, &dir_entry.modified_at().into())
+        let modified_value = (dir_entry.modified_at() / 1000) as u32;
+        js_sys::Reflect::set(&metadata, &js_key, &modified_value.into())
             .map_err(|_| "failed to convert modified_at")?;
 
-        //let js_key = JsValue::from_str("size");
-        //js_sys::Reflect::set(&metadata, &js_key, &dir_entry.size().into())
-        //    .map_err(|_| "failed to convert size")?;
+        let js_key = JsValue::from_str("size");
+        let size_value = dir_entry.size() as u32;
+        js_sys::Reflect::set(&metadata, &js_key, &size_value.into())
+            .map_err(|_| "failed to convert size")?;
 
         Ok(Self {
             name,
