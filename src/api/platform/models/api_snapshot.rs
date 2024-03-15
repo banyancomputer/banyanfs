@@ -2,15 +2,17 @@ use serde::{Deserialize, Serialize};
 
 use crate::api::platform::ApiMetadataId;
 
+// note(sstelfox): This api should return a bucket ID as well
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct ApiSnapshot {
     id: ApiSnapshotId,
     metadata_id: ApiMetadataId,
-    created_at: i64,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     size: Option<i64>,
+
+    created_at: i64,
 }
 
 impl ApiSnapshot {
