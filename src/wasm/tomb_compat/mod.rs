@@ -58,13 +58,13 @@ impl TombCompat {
     // new transfered and checked
     #[wasm_bindgen(js_name = approveDeviceApiKey)]
     pub async fn approve_device_api_key(&mut self, public_pem: String) -> BanyanFsResult<()> {
-        let _public_key = match VerifyingKey::from_spki(&public_pem) {
+        let public_key = match VerifyingKey::from_spki(&public_pem) {
             Ok(key) => key,
             Err(err) => return Err(format!("failed to load public key: {err}").into()),
         };
 
-        //platform::account::register_api_key(&self.client, &public_key).await?;
-        tracing::warn!("attempt to use broken API key registration, needs to be reworked");
+        tracing::warn!("using broken API key registration, needs to be reworked");
+        platform::account::register_api_key(&self.client, &public_key).await?;
 
         Ok(())
     }
@@ -78,7 +78,6 @@ impl TombCompat {
     //    bucket_type: String,
     //    public_key: CryptoKey,
     //) -> BanyanFsResult<WasmBucket> {
-    //    todo!()
     //}
 
     // new transfered and checked,
@@ -181,8 +180,17 @@ impl TombCompat {
 
     // checked, returns list of WasmBucketKey instances
     #[wasm_bindgen(js_name = listBucketKeys)]
-    pub async fn list_bucket_keys(&mut self, _bucket_id: String) -> BanyanFsResult<js_sys::Array> {
-        todo!()
+    pub async fn list_bucket_keys(&mut self, bucket_id: String) -> BanyanFsResult<js_sys::Array> {
+        let all_drive_keys =
+            crate::api::platform::drive_keys::get_all(&self.client, &bucket_id).await?;
+
+        let bucket_keys = all_drive_keys
+            .into_iter()
+            .map(WasmBucketKey::from)
+            .map(JsValue::from)
+            .collect::<js_sys::Array>();
+
+        Ok(bucket_keys)
     }
 
     // checked, returns list of WasmSnapshot instances
@@ -227,6 +235,9 @@ impl TombCompat {
         // note(sstelfox): the old version attempts to unlock the mount here, but I've migrated that into the
         // pull itself if the key matches. This mount will only fail if the bucket doesn't have any
         // metadata or the current key is incorrect.
+        //
+        // Given this is an explicit mount operation it likely should be an error if we're unable
+        // to do so...
 
         Ok(mount)
     }

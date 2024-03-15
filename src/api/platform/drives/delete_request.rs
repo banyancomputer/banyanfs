@@ -1,10 +1,8 @@
 use async_trait::async_trait;
 use reqwest::Method;
-use serde::Serialize;
 
 use crate::api::client::{ApiRequest, PlatformApiRequest};
 
-#[derive(Debug, Serialize)]
 pub(crate) struct DeleteRequest {
     drive_id: String,
 }

@@ -1,10 +1,8 @@
 use async_trait::async_trait;
-use serde::Serialize;
 
 use crate::api::client::{ApiRequest, PlatformApiRequest};
 use crate::api::platform::ApiDrive;
 
-#[derive(Debug, Serialize)]
 pub(crate) struct GetRequest {
     drive_id: String,
 }

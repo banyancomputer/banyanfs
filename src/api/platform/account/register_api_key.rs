@@ -1,9 +1,9 @@
 use async_trait::async_trait;
-use reqwest::Method;
+use reqwest::{Method, RequestBuilder};
 use serde::Serialize;
 
-use crate::api::client::{ApiRequest, PlatformApiRequest};
-use crate::api::platform::ApiDriveKey;
+use crate::api::client::{ApiError, ApiRequest, PlatformApiRequest};
+use crate::api::platform::ApiKey;
 use crate::codec::crypto::VerifyingKey;
 
 // todo(sstelfox): currently we support registering any key with permissions to the account, then
@@ -35,14 +35,17 @@ impl RegisterApiKey {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl ApiRequest for RegisterApiKey {
-    type Response = ApiDriveKey;
+    type Response = ApiKey;
 
     const METHOD: Method = Method::POST;
 
-    fn add_payload(&self, request_builder: RequestBuilder) -> RequestBuilder {
-        request_builder.json(self)
+    async fn add_payload(
+        &mut self,
+        request_builder: RequestBuilder,
+    ) -> Result<RequestBuilder, ApiError> {
+        Ok(request_builder.json(self))
     }
 
     fn path(&self) -> String {
