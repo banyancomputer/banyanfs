@@ -5,18 +5,18 @@ use crate::api::client::{ApiRequest, PlatformApiRequest};
 use crate::api::platform::{ApiDriveId, ApiSnapshot};
 
 #[derive(Serialize)]
-pub(crate) struct GetAllSnapshotsRequest {
+pub(crate) struct GetAllRequest {
     drive_id: ApiDriveId,
 }
 
-impl GetAllSnapshotsRequest {
+impl GetAllRequest {
     pub(crate) fn new(drive_id: ApiDriveId) -> Self {
         Self { drive_id }
     }
 }
 
 #[async_trait]
-impl ApiRequest for GetAllSnapshotsRequest {
+impl ApiRequest for GetAllRequest {
     type Response = Vec<ApiSnapshot>;
 
     fn path(&self) -> String {
@@ -24,4 +24,4 @@ impl ApiRequest for GetAllSnapshotsRequest {
     }
 }
 
-impl PlatformApiRequest for GetAllSnapshotsRequest {}
+impl PlatformApiRequest for GetAllRequest {}

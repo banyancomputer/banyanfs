@@ -41,6 +41,10 @@ impl TombBucket {
         self.name.clone()
     }
 
+    pub(crate) fn set_name(&mut self, name: String) {
+        self.name = name;
+    }
+
     pub(crate) fn storage_class(&self) -> String {
         self.storage_class.to_string()
     }

@@ -37,5 +37,6 @@ struct InitialBucketKey {
 
 #[derive(Debug, Default, Serialize)]
 pub struct ApiDriveUpdateAttributes {
-    pub(crate) name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) name: Option<String>,
 }

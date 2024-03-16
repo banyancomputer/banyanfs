@@ -58,16 +58,16 @@ impl WasmMount {
 
     pub(crate) async fn pull(bucket: WasmBucket, wasm_client: TombCompat) -> BanyanFsResult<Self> {
         let client = wasm_client.client();
-        let bucket_id = bucket.id();
+        let drive_id = bucket.id();
 
-        let current_metadata = platform::metadata::get_current(client, &bucket_id).await?;
+        let current_metadata = platform::metadata::get_current(client, &drive_id).await?;
         let metadata_id = current_metadata.id();
 
         // note(sstelfox): It doesn't make sense that we wouldn't have a signing key here, but if anything goes
         // wrong at this point we simply consider the drive to remain locked. There could be a 404
         // in here indicating that an initial metadata hasn't be pushed but that is a weird failure
         // case. We should really enforce an initial metadata push during the bucket creation...
-        let drive = try_load_drive(client, &bucket_id, &metadata_id).await;
+        let drive = try_load_drive(client, &drive_id, &metadata_id).await;
         let dirty = drive.is_none();
 
         let mount = Self {
@@ -77,7 +77,7 @@ impl WasmMount {
             drive,
             dirty,
 
-            last_saved_metadata: Some(WasmBucketMetadata::new(bucket_id, current_metadata)),
+            last_saved_metadata: Some(WasmBucketMetadata::new(drive_id, current_metadata)),
         };
 
         Ok(mount)
@@ -294,14 +294,22 @@ impl WasmMount {
     // checked
     #[wasm_bindgen]
     pub async fn remount(&mut self, _key_pem: String) -> BanyanFsResult<()> {
-        tracing::warn!("impl might be needed: remount");
+        tracing::warn!("impl might be needed: WasmMount#remount");
         Ok(())
     }
 
     // checked
-    pub async fn rename(&mut self, _name: String) -> BanyanFsResult<()> {
+    pub async fn rename(&mut self, name: String) -> BanyanFsResult<()> {
+        let client = self.wasm_client.client();
         let drive_id = self.bucket.id();
-        todo!()
+
+        let update_drive_attrs = platform::ApiDriveUpdateAttributes {
+            name: Some(name.clone()),
+        };
+        platform::drives::update(client, &drive_id, update_drive_attrs).await?;
+        self.bucket.0.set_name(name);
+
+        Ok(())
     }
 
     // checked
@@ -310,8 +318,24 @@ impl WasmMount {
     }
 
     // checked
-    pub async fn rm(&mut self, _path_segments: js_sys::Array) -> BanyanFsResult<()> {
-        todo!()
+    pub async fn rm(&mut self, path_segments: js_sys::Array) -> BanyanFsResult<()> {
+        let path_segments = parse_js_path(path_segments)?;
+        let path_refs = path_segments.iter().map(|x| x.as_str()).collect::<Vec<_>>();
+
+        let unlocked_drive = match &self.drive {
+            Some(drive) => drive,
+            None => return Err("unable to delete content of a locked bucket".into()),
+        };
+
+        let mut rng = chacha_rng().map_err(|e| BanyanFsError::from(e.to_string()))?;
+        let mut drive_root = unlocked_drive.root().await;
+
+        drive_root
+            .rm(&mut rng, path_refs.as_slice())
+            .await
+            .map_err(|err| format!("error deleting fs entry {}: {}", path_refs.join("/"), err))?;
+
+        Ok(())
     }
 
     // checked, returns URL to access file
@@ -342,12 +366,12 @@ impl WasmMount {
     }
 }
 
-async fn try_load_drive(client: &ApiClient, bucket_id: &str, metadata_id: &str) -> Option<Drive> {
+async fn try_load_drive(client: &ApiClient, drive_id: &str, metadata_id: &str) -> Option<Drive> {
     let key = client.signing_key()?;
 
     // todo(sstelfox): we should return something other than a 404 when we've seen at least once
     // metadata for a drive (if we've seen zero its safe to create a new drive, its not otherwise).
-    let mut stream = match platform::metadata::pull_stream(client, bucket_id, metadata_id).await {
+    let mut stream = match platform::metadata::pull_stream(client, drive_id, metadata_id).await {
         Ok(stream) => stream,
         Err(err) => {
             // note(sstelfox): there is a chance to dodge the API design issue mentioned in the

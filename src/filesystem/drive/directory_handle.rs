@@ -466,6 +466,15 @@ impl DirectoryHandle {
 
         Ok(())
     }
+
+    #[instrument(level = Level::DEBUG, skip(self))]
+    pub async fn size(&self) -> Result<u64, OperationError> {
+        //let inner_read = self.inner.read().await;
+
+        tracing::warn!("impl generic dir entry size not yet implemented");
+
+        Ok(0)
+    }
 }
 
 // todo: should these operations be using the permanent ids? Is that worth the extra

@@ -147,7 +147,7 @@ impl TombCompat {
     // checked, no return
     #[wasm_bindgen(js_name = deleteBucket)]
     pub async fn delete_bucket(&mut self, bucket_id: String) -> BanyanFsResult<()> {
-        platform::drives::delete(&self.client, bucket_id).await?;
+        platform::drives::delete(&self.client, &bucket_id).await?;
         Ok(())
     }
 
@@ -215,7 +215,7 @@ impl TombCompat {
     #[wasm_bindgen(js_name = mount)]
     pub async fn mount(
         &mut self,
-        bucket_id: String,
+        drive_id: String,
         mut private_key_pem: String,
     ) -> BanyanFsResult<WasmMount> {
         let private_key = match SigningKey::from_pkcs8_pem(&private_key_pem) {
@@ -229,7 +229,7 @@ impl TombCompat {
             //return Err("provided private key doesn't match initialized webkey".into());
         }
 
-        let drive = platform::drives::get(&self.client, bucket_id.to_string()).await?;
+        let drive = platform::drives::get(&self.client, &drive_id).await?;
         let wasm_bucket = WasmBucket(TombBucket::from(drive));
 
         let mount = WasmMount::pull(wasm_bucket.clone(), self.clone()).await?;
@@ -268,8 +268,8 @@ impl TombCompat {
     // new transfered and checked
     #[wasm_bindgen(js_name = renameBucket)]
     pub async fn rename_bucket(&mut self, bucket_id: String, name: String) -> BanyanFsResult<()> {
-        let attrs = platform::ApiDriveUpdateAttributes { name };
-        platform::drives::update(&self.client, bucket_id, attrs).await?;
+        let attrs = platform::ApiDriveUpdateAttributes { name: Some(name) };
+        platform::drives::update(&self.client, &bucket_id, attrs).await?;
         Ok(())
     }
 }

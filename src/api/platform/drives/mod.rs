@@ -36,13 +36,13 @@ pub async fn create(
     Ok(created_drive.id)
 }
 
-pub async fn delete(client: &ApiClient, drive_id: String) -> Result<(), ApiError> {
-    let request = DeleteRequest::new(drive_id);
+pub async fn delete(client: &ApiClient, drive_id: &str) -> Result<(), ApiError> {
+    let request = DeleteRequest::new(drive_id.into());
     client.platform_request_empty_response(request).await
 }
 
-pub async fn get(client: &ApiClient, drive_id: String) -> Result<ApiDrive, ApiError> {
-    let request = GetRequest::new(drive_id);
+pub async fn get(client: &ApiClient, drive_id: &str) -> Result<ApiDrive, ApiError> {
+    let request = GetRequest::new(drive_id.into());
     let drive = client.platform_request_full(request).await?;
     Ok(drive)
 }
@@ -53,9 +53,9 @@ pub async fn get_all(client: &ApiClient) -> Result<Vec<ApiDrive>, ApiError> {
 
 pub async fn update(
     client: &ApiClient,
-    drive_id: String,
+    drive_id: &str,
     attrs: ApiDriveUpdateAttributes,
 ) -> Result<(), ApiError> {
-    let request = UpdateRequest::new(drive_id, attrs);
+    let request = UpdateRequest::new(drive_id.into(), attrs);
     client.platform_request_empty_response(request).await
 }
