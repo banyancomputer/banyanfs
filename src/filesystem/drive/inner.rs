@@ -11,14 +11,16 @@ use crate::codec::*;
 use crate::filesystem::drive::DriveAccess;
 use crate::filesystem::nodes::{Node, NodeId};
 
+use super::OperationError;
+
 pub(crate) struct InnerDrive {
-    pub(crate) access: DriveAccess,
+    access: DriveAccess,
 
-    pub(crate) journal_start: JournalCheckpoint,
-    pub(crate) root_node_id: NodeId,
+    journal_start: JournalCheckpoint,
+    root_node_id: NodeId,
 
-    pub(crate) nodes: Slab<Node>,
-    pub(crate) permanent_id_map: HashMap<PermanentId, NodeId>,
+    nodes: Slab<Node>,
+    permanent_id_map: HashMap<PermanentId, NodeId>,
 }
 
 impl InnerDrive {
@@ -123,7 +125,46 @@ impl InnerDrive {
         Ok(written_bytes)
     }
 
-    pub fn parse<'a>(
+    pub(crate) fn by_id(&self, node_id: NodeId) -> Result<&Node, OperationError> {
+        self.nodes
+            .get(node_id)
+            .ok_or(OperationError::InternalCorruption(
+                node_id,
+                "missing expected node ID",
+            ))
+    }
+
+    pub(crate) fn by_id_mut(&mut self, node_id: NodeId) -> Result<&mut Node, OperationError> {
+        self.nodes
+            .get_mut(node_id)
+            .ok_or(OperationError::InternalCorruption(
+                node_id,
+                "missing expected node ID",
+            ))
+    }
+
+    pub(crate) fn by_perm_id(&self, permanent_id: &PermanentId) -> Result<&Node, OperationError> {
+        let node_id = self
+            .permanent_id_map
+            .get(permanent_id)
+            .ok_or(OperationError::MissingPermanentId(*permanent_id))?;
+
+        self.by_id(*node_id)
+    }
+
+    pub(crate) fn by_perm_id_mut(
+        &mut self,
+        permanent_id: &PermanentId,
+    ) -> Result<&mut Node, OperationError> {
+        let node_id = self
+            .permanent_id_map
+            .get(permanent_id)
+            .ok_or(OperationError::MissingPermanentId(*permanent_id))?;
+
+        self.by_id_mut(*node_id)
+    }
+
+    pub(crate) fn parse<'a>(
         input: &'a [u8],
         drive_access: DriveAccess,
         journal_start: JournalCheckpoint,

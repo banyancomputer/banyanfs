@@ -56,7 +56,8 @@ impl DirectoryHandle {
         // node.
         let inner_read = self.inner.read().await;
         let children = if path.is_empty() {
-            match inner_read.nodes[self.cwd_id].data() {
+            let current_node = inner_read.by_id(self.cwd_id)?;
+            match current_node.data() {
                 NodeData::Directory { children, .. } => children.values(),
                 _ => {
                     return Err(OperationError::InternalCorruption(
@@ -71,7 +72,7 @@ impl DirectoryHandle {
                 _ => return Err(OperationError::NotADirectory),
             };
 
-            let listed_node = &inner_read.nodes[node_id];
+            let listed_node = inner_read.by_id(node_id)?;
 
             match listed_node.data() {
                 NodeData::Directory { children, .. } => children.values(),
@@ -85,12 +86,7 @@ impl DirectoryHandle {
         let mut entries = Vec::new();
 
         for perm_id in children.into_iter() {
-            let node_id = *inner_read
-                .permanent_id_map
-                .get(perm_id)
-                .ok_or(OperationError::MissingPermanentId(*perm_id))?;
-
-            let node = &inner_read.nodes[node_id];
+            let node = inner_read.by_perm_id(perm_id)?;
             let entry = DirectoryEntry::try_from(node)?;
 
             entries.push(entry);
@@ -108,15 +104,6 @@ impl DirectoryHandle {
         inner: Arc<RwLock<InnerDrive>>,
     ) -> Self {
         trace!("directory::new");
-
-        let inner_read = inner.read().await;
-
-        debug_assert!(inner_read.nodes.contains(cwd_id));
-        debug_assert!(matches!(
-            inner_read.nodes[cwd_id].kind(),
-            NodeKind::Directory { .. }
-        ));
-        drop(inner_read);
 
         Self {
             current_key,
@@ -140,12 +127,7 @@ impl DirectoryHandle {
         trace!("directory::insert_node");
 
         let inner_read = self.inner.read().await;
-        let parent_node_id = *inner_read
-            .permanent_id_map
-            .get(&parent_permanent_id)
-            .ok_or(OperationError::MissingPermanentId(parent_permanent_id))?;
-
-        let parent_node = &inner_read.nodes[parent_node_id];
+        let parent_node = inner_read.by_perm_id(&parent_permanent_id)?;
         if !parent_node.is_directory() {
             return Err(OperationError::ParentMustBeDirectory);
         }
@@ -167,14 +149,7 @@ impl DirectoryHandle {
         node_entry.insert(node);
         inner_write.permanent_id_map.insert(permanent_id, node_id);
 
-        let parent_node =
-            inner_write
-                .nodes
-                .get_mut(parent_node_id)
-                .ok_or(OperationError::InternalCorruption(
-                    parent_node_id,
-                    "expected referenced parent to exist",
-                ))?;
+        let parent_node = inner_write.by_perm_id_mut(&parent_permanent_id)?;
 
         let parent_children = match parent_node.data_mut() {
             NodeData::Directory { children, .. } => children,
@@ -188,7 +163,7 @@ impl DirectoryHandle {
 
         if parent_children.insert(name, permanent_id).is_some() {
             return Err(OperationError::InternalCorruption(
-                parent_node_id,
+                parent_node.id(),
                 "wrote new directory over existing entry",
             ));
         }
@@ -213,9 +188,11 @@ impl DirectoryHandle {
             match walk_path(&self.inner.clone(), self.cwd_id, path, 0).await? {
                 WalkState::FoundNode { node_id } => {
                     debug!(node_id, "drive::mkdir::already_exists");
-                    let inner_read = self.inner.read().await;
 
-                    match inner_read.nodes[node_id].kind() {
+                    let inner_read = self.inner.read().await;
+                    let node = inner_read.by_id(node_id)?;
+
+                    match node.kind() {
                         NodeKind::Directory => return Ok(()),
                         NodeKind::File => return Err(OperationError::Exists(node_id)),
                         _ => unimplemented!(),
@@ -236,7 +213,8 @@ impl DirectoryHandle {
                     }
 
                     let inner_read = self.inner.read().await;
-                    let parent_permanent_id = inner_read.nodes[working_directory_id].permanent_id();
+                    let parent_permanent_id =
+                        inner_read.by_id(working_directory_id)?.permanent_id();
                     drop(inner_read);
 
                     self.insert_node(
@@ -287,7 +265,7 @@ impl DirectoryHandle {
         let dst_parent_id = match walk_path(&self.inner, self.cwd_id, dst_path, 0).await? {
             WalkState::FoundNode { node_id } => {
                 let inner_read = self.inner.read().await;
-                let found_node = &inner_read.nodes[node_id];
+                let found_node = inner_read.by_id(node_id)?;
 
                 // Node is a directory, we'll put the node in it instead
                 if found_node.kind() != NodeKind::Directory {
@@ -311,7 +289,7 @@ impl DirectoryHandle {
         };
 
         let mut inner_write = self.inner.write().await;
-        let src_node = &mut inner_write.nodes[src_node_id];
+        let src_node = inner_write.by_id_mut(src_node_id)?;
         let src_parent_perm_id = src_node
             .parent_id()
             .ok_or(OperationError::InternalCorruption(
@@ -322,33 +300,18 @@ impl DirectoryHandle {
         let src_perm_id = src_node.permanent_id();
         src_node.set_parent_id(src_perm_id);
 
-        let src_parent_node_id = *inner_write
-            .permanent_id_map
-            .get(&src_parent_perm_id)
-            .ok_or(OperationError::MissingPermanentId(src_parent_perm_id))?;
-
-        let src_parent_node = &mut inner_write.nodes.get_mut(src_parent_node_id).ok_or(
-            OperationError::InternalCorruption(
-                src_parent_node_id,
-                "parent node was missing during a move",
-            ),
-        )?;
+        let src_parent_node = inner_write.by_perm_id_mut(&src_parent_perm_id)?;
         match src_parent_node.data_mut() {
             NodeData::Directory { children, .. } => children.remove(&src_name),
             _ => {
                 return Err(OperationError::InternalCorruption(
-                    src_parent_node_id,
+                    src_parent_node.id(),
                     "source node parent is not a directory",
                 ));
             }
         };
 
-        let dst_parent_node = &mut inner_write.nodes.get_mut(dst_parent_id).ok_or(
-            OperationError::InternalCorruption(
-                dst_parent_id,
-                "destination parent node was missing during a move",
-            ),
-        )?;
+        let dst_parent_node = inner_write.by_id_mut(dst_parent_id)?;
 
         let last_dst_element = dst_path.last().ok_or(OperationError::UnexpectedEmptyPath)?;
         let new_dst_name = NodeName::named(last_dst_element.to_string())?;
@@ -371,15 +334,8 @@ impl DirectoryHandle {
         }
 
         let dst_parent_perm_id = dst_parent_node.permanent_id();
+        let tgt_node = inner_write.by_id_mut(src_node_id)?;
 
-        let tgt_node =
-            inner_write
-                .nodes
-                .get_mut(src_node_id)
-                .ok_or(OperationError::InternalCorruption(
-                    src_node_id,
-                    "src node referencible but missing from node map",
-                ))?;
         tgt_node.set_parent_id(dst_parent_perm_id);
         tgt_node.set_name(new_dst_name);
 
@@ -403,31 +359,13 @@ impl DirectoryHandle {
         };
 
         let mut inner_write = self.inner.write().await;
-        let initial_node =
-            inner_write
-                .nodes
-                .get(initial_node_id)
-                .ok_or(OperationError::InternalCorruption(
-                    initial_node_id,
-                    "node ID referenced but missing",
-                ))?;
+        let initial_node = inner_write.by_id_mut(initial_node_id)?;
 
         let mut perm_ids_to_remove = vec![initial_node.permanent_id()];
         let mut deleted_ids = Vec::new();
 
         while let Some(perm_id) = perm_ids_to_remove.pop() {
-            let node_id = *inner_write
-                .permanent_id_map
-                .get(&perm_id)
-                .ok_or(OperationError::MissingPermanentId(perm_id))?;
-
-            let node = inner_write
-                .nodes
-                .get(node_id)
-                .ok_or(OperationError::InternalCorruption(
-                    node_id,
-                    "unable to remove missing node",
-                ))?;
+            let node = inner_write.by_perm_id(&perm_id)?;
 
             let node_name = node.name();
             perm_ids_to_remove.extend(node.children());
@@ -438,20 +376,13 @@ impl DirectoryHandle {
             ))?;
 
             if !deleted_ids.contains(&parent_perm_id) {
-                let parent_id = *inner_write
-                    .permanent_id_map
-                    .get(&parent_perm_id)
-                    .ok_or(OperationError::MissingPermanentId(parent_perm_id))?;
-
-                let parent_node = inner_write.nodes.get_mut(parent_id).ok_or(
-                    OperationError::InternalCorruption(node_id, "node missing from map"),
-                )?;
+                let parent_node = inner_write.by_perm_id_mut(&parent_perm_id)?;
 
                 if let NodeData::Directory { children, .. } = parent_node.data_mut() {
                     children.remove(&node_name);
                 } else {
                     return Err(OperationError::InternalCorruption(
-                        parent_id,
+                        parent_node.id(),
                         "parent node is not a directory",
                     ));
                 }
@@ -490,9 +421,7 @@ fn walk_path<'a>(
 
     async move {
         let inner_read = inner.read().await;
-        let current_node = inner_read.nodes.get(working_directory_id).ok_or(
-            OperationError::InternalCorruption(working_directory_id, "missing working directory"),
-        )?;
+        let current_node = inner_read.by_id(working_directory_id)?;
 
         let children = match current_node.data() {
             NodeData::Directory { children, .. } => children,
@@ -521,13 +450,9 @@ fn walk_path<'a>(
             }
         };
 
-        let next_node_id = *inner_read
-            .permanent_id_map
-            .get(perm_id)
-            .ok_or(OperationError::MissingPermanentId(*perm_id))?;
-
-        let next_node = &inner_read.nodes[next_node_id];
-        trace!(?next_node_id, next_node_kind = ?next_node.kind(), "drive::walk_directory::next_node");
+        let next_node = inner_read.by_perm_id(perm_id)?;
+        let next_node_id = next_node.id();
+        trace!(node_id = ?next_node_id, next_node_kind = ?next_node.kind(), "drive::walk_directory::next_node");
 
         if !matches!(next_node.kind(), NodeKind::Directory) {
             return Ok(WalkState::NotTraversable {
