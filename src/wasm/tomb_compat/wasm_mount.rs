@@ -7,11 +7,10 @@ use crate::prelude::*;
 use js_sys::{Array, ArrayBuffer, Uint8Array};
 use wasm_bindgen::prelude::*;
 
-use crate::filesystem::{Drive, DriveLoader};
+use crate::utils::crypto_rng;
 use crate::wasm::tomb_compat::{
     TombCompat, WasmBucket, WasmBucketMetadata, WasmFsMetadataEntry, WasmSnapshot,
 };
-use crate::wasm::utils::chacha_rng;
 
 #[derive(Clone)]
 #[wasm_bindgen]
@@ -30,7 +29,7 @@ impl WasmMount {
         bucket: WasmBucket,
         wasm_client: TombCompat,
     ) -> BanyanFsResult<Self> {
-        let mut rng = chacha_rng().map_err(|e| BanyanFsError::from(e.to_string()))?;
+        let mut rng = crypto_rng();
         let signing_key = wasm_client.signing_key();
 
         let api_assigned_id = bucket.id();
@@ -84,7 +83,7 @@ impl WasmMount {
     }
 
     pub(crate) async fn sync(&mut self) -> BanyanFsResult<()> {
-        let mut rng = chacha_rng().map_err(|e| BanyanFsError::from(e.to_string()))?;
+        let mut rng = crypto_rng();
 
         let unlocked_drive = self
             .drive
@@ -236,7 +235,7 @@ impl WasmMount {
             None => return Err("unable to create new directories in a locked bucket".into()),
         };
 
-        let mut rng = chacha_rng().map_err(|e| BanyanFsError::from(e.to_string()))?;
+        let mut rng = crypto_rng();
         let mut drive_root = unlocked_drive.root().await;
 
         drive_root
@@ -270,7 +269,7 @@ impl WasmMount {
             None => return Err("unable to move contents in a locked bucket".into()),
         };
 
-        let mut rng = chacha_rng().map_err(|e| BanyanFsError::from(e.to_string()))?;
+        let mut rng = crypto_rng();
         let mut drive_root = unlocked_drive.root().await;
 
         drive_root
@@ -327,7 +326,7 @@ impl WasmMount {
             None => return Err("unable to delete content of a locked bucket".into()),
         };
 
-        let mut rng = chacha_rng().map_err(|e| BanyanFsError::from(e.to_string()))?;
+        let mut rng = crypto_rng();
         let mut drive_root = unlocked_drive.root().await;
 
         drive_root

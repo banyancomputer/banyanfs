@@ -132,9 +132,6 @@ pub enum NodeNameError {
     TooLong(usize),
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(crate) enum NodeNameInner {}
-
 #[cfg(test)]
 mod tests {
     use super::*;

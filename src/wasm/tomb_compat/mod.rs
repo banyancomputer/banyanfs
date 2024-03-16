@@ -31,7 +31,6 @@ use zeroize::Zeroize;
 // submodules should be exported in the prelude.
 use crate::prelude::*;
 
-use crate::api::platform;
 use crate::api::platform::{DriveKind, StorageClass};
 
 use models::TombBucket;
