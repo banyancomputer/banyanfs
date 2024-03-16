@@ -26,6 +26,8 @@ pub struct Node {
     id: NodeId,
 
     cid: Option<Cid>,
+    dirty: bool,
+
     parent_id: Option<PermanentId>,
 
     permanent_id: PermanentId,
@@ -42,6 +44,14 @@ pub struct Node {
 
 impl Node {
     pub fn cid(&self) -> Option<Cid> {
+        // todo(sstelfox): this should always return a CID, if we're dirty or
+        // its not present we should generate a fresh CID and mark ourselves as
+        // clean.
+        //
+        // note(sstelfox): that above change is going to require this type being mutable, we may
+        // want to use a RwLock or something to manage the dirty state and cid itself so we can
+        // update that and do the calculation without forcing any caller that wants our CID to grab
+        // a mutable handle on the whole drive.
         self.cid.clone()
     }
 
@@ -54,6 +64,11 @@ impl Node {
     }
 
     pub fn data_mut(&mut self) -> &mut NodeData {
+        // note(sstelfox): we should probably arbitrate changes to the inner data in a way that
+        // allows us to detect if changes actually occurred. For now we have to assume that by
+        // grabbing a mutable handle they intend to mutate the content which will invalidate our
+        // CID so we mark ourselves as dirty.
+        self.dirty = true;
         &mut self.inner
     }
 
@@ -131,6 +146,7 @@ impl Node {
 
         written_bytes += cid.encode(writer).await?;
         self.cid = Some(cid);
+        self.dirty = false;
 
         let node_data_len = node_data.len() as u32;
         let node_data_len_bytes = node_data_len.to_le_bytes();
@@ -243,6 +259,7 @@ impl Node {
             id: allocated_id,
 
             cid: Some(cid),
+            dirty: false,
             parent_id,
 
             permanent_id,
@@ -268,7 +285,13 @@ impl Node {
         self.name = new_name;
     }
 
+    pub(crate) fn remove_child(&mut self, child_id: PermanentId) -> Result<(), NodeError> {
+        self.dirty = true;
+        todo!()
+    }
+
     pub(crate) fn set_parent_id(&mut self, parent_id: PermanentId) {
+        self.dirty = true;
         self.parent_id = Some(parent_id);
     }
 
@@ -277,6 +300,7 @@ impl Node {
     }
 
     pub fn set_attribute(&mut self, key: String, value: Vec<u8>) -> Option<Vec<u8>> {
+        self.dirty = true;
         self.metadata.insert(key, value)
     }
 }
@@ -304,4 +328,10 @@ impl std::fmt::Debug for Node {
                 .finish(),
         }
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum NodeError {
+    #[error("attempted to perform a child operation on a node without children")]
+    HasNoChildren,
 }

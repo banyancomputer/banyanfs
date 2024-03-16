@@ -352,48 +352,17 @@ impl DirectoryHandle {
             return Err(OperationError::UnexpectedEmptyPath);
         }
 
-        let initial_node_id = match walk_path(&self.inner, self.cwd_id, path, 0).await? {
+        let target_node_id = match walk_path(&self.inner, self.cwd_id, path, 0).await? {
             WalkState::FoundNode { node_id } => node_id,
             WalkState::NotTraversable { .. } => return Err(OperationError::NotADirectory),
             WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
         };
 
         let mut inner_write = self.inner.write().await;
-        let initial_node = inner_write.by_id_mut(initial_node_id)?;
+        let target_node = inner_write.by_id(target_node_id)?;
+        let target_node_perm_id = target_node.permanent_id();
 
-        let mut perm_ids_to_remove = vec![initial_node.permanent_id()];
-        let mut deleted_ids = Vec::new();
-
-        while let Some(perm_id) = perm_ids_to_remove.pop() {
-            let node = inner_write.by_perm_id(&perm_id)?;
-
-            let node_name = node.name();
-            perm_ids_to_remove.extend(node.children());
-
-            let parent_perm_id = node.parent_id().ok_or(OperationError::InternalCorruption(
-                node_id,
-                "node missing parent",
-            ))?;
-
-            if !deleted_ids.contains(&parent_perm_id) {
-                let parent_node = inner_write.by_perm_id_mut(&parent_perm_id)?;
-
-                if let NodeData::Directory { children, .. } = parent_node.data_mut() {
-                    children.remove(&node_name);
-                } else {
-                    return Err(OperationError::InternalCorruption(
-                        parent_node.id(),
-                        "parent node is not a directory",
-                    ));
-                }
-            }
-
-            inner_write.nodes.remove(node_id);
-            inner_write.permanent_id_map.remove(&perm_id);
-
-            tracing::trace!(?node_id, ?perm_id, "drive::rm::removed");
-            deleted_ids.push(perm_id);
-        }
+        inner_write.remove_node(target_node_perm_id);
 
         Ok(())
     }
@@ -402,7 +371,7 @@ impl DirectoryHandle {
     pub async fn size(&self) -> Result<u64, OperationError> {
         //let inner_read = self.inner.read().await;
 
-        tracing::warn!("impl generic dir entry size not yet implemented");
+        tracing::warn!("impl generic dir entry size / not yet implemented");
 
         Ok(0)
     }

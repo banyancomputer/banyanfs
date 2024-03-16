@@ -1,5 +1,5 @@
 use crate::codec::meta::PermanentId;
-use crate::filesystem::nodes::{NodeBuilderError, NodeId, NodeNameError};
+use crate::filesystem::nodes::{NodeBuilderError, NodeError, NodeId, NodeNameError};
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -19,8 +19,14 @@ pub enum OperationError {
     #[error("missing permanent id in the filesystem: {0:?}")]
     MissingPermanentId(PermanentId),
 
+    #[error("node operation failed: {0}")]
+    NodeFailure(#[from] NodeError),
+
     #[error("path attempted to traverse a non-directory node")]
     NotADirectory,
+
+    #[error("Node({0:?}) was orphaned in filesystem and is unsafe to remove")]
+    OrphanNode(PermanentId),
 
     #[error("filesystem entries can only be placed under a directory")]
     ParentMustBeDirectory,

@@ -75,6 +75,17 @@ impl Drive {
         written_bytes += PublicSettings::new(false, true).encode(writer).await?;
 
         let meta_key = MetaKey::generate(rng);
+        // note(sstelfox): I think this only reason we need a write lock here is for the CID
+        // calculation, but there is a solution for that in the proposed cid method, we wouldn't
+        // want to encode the node entirely twice, so we should able to provide our calculation
+        // from the outside or perhaps delegate the entire encoding process to the node...
+        //
+        // note(sstelfox): We actually have a bit of a problem here... if we include CIDs of
+        // children and we need to encode the child before the parent... but we're encoding from
+        // the top down... I don't think there is a way to do this without a two pass encoding...
+        //
+        // Maybe its worth holding on to a copy of the encoded data for the current CID as an in
+        // memory cache... memory / time tradeoff but this shouldn't be that big.
         let mut inner_write = self.inner.write().await;
 
         let key_list = inner_write.access.sorted_actor_settings();

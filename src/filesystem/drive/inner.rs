@@ -250,4 +250,44 @@ impl InnerDrive {
 
         Ok((node_input, inner_drive))
     }
+
+    pub(crate) fn remove_node(&mut self, perm_id: PermanentId) -> Result<(), OperationError> {
+        // We need to first make this node an orphan by removing it from its parent and marking the
+        // parent as dirty.
+        let target_node = self.by_perm_id(&perm_id)?;
+        let parent_perm_id = target_node
+            .parent_id()
+            .ok_or(OperationError::OrphanNode(perm_id))?;
+
+        let parent_node = self.by_perm_id_mut(&parent_perm_id)?;
+        parent_node.remove_child(perm_id)?;
+
+        let mut nodes_to_remove = vec![perm_id];
+
+        while let Some(next_node_perm_id) = nodes_to_remove.pop() {
+            let node_id = self
+                .permanent_id_map
+                .remove(&next_node_perm_id)
+                .ok_or(OperationError::MissingPermanentId(next_node_perm_id))?;
+
+            let node = self
+                .nodes
+                .try_remove(node_id)
+                .ok_or(OperationError::InternalCorruption(
+                    node_id,
+                    "missing node for removal",
+                ))?;
+
+            todo!("need to identify any child nodes and add them to the node to remove");
+
+            // todo(sstelfox): I'll need to track any remotely deleted data nodes here for the next
+            // sync...
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn root_node(&self) -> Result<&Node, OperationError> {
+        self.by_id(self.root_node_id)
+    }
 }
