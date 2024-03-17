@@ -136,6 +136,7 @@ impl WasmMount {
         .await
         .map_err(|e| format!("error while fetching new metadata: {}", e))?;
 
+        tracing::info!(metadata_id = &new_metadata_id, "drive synced");
         self.last_saved_metadata = Some(WasmBucketMetadata::new(self.bucket.id(), new_metadata));
 
         Ok(())
@@ -242,6 +243,11 @@ impl WasmMount {
             .await
             .map_err(|err| format!("error creating directory {}: {}", path_refs.join("/"), err))?;
 
+        // note(sstelfox): ideally we don't need to sync after every change, but it doesn't seem
+        // like there are any external checks currently to ensure changes are being written.
+        self.dirty = true;
+        self.sync().await?;
+
         Ok(())
     }
 
@@ -275,6 +281,11 @@ impl WasmMount {
             .mv(&mut rng, src_path_refs.as_slice(), dst_path_refs.as_slice())
             .await
             .map_err(|err| format!("error moving fs entry {}: {}", src_path_refs.join("/"), err))?;
+
+        // note(sstelfox): ideally we don't need to sync after every change, but it doesn't seem
+        // like there are any external checks currently to ensure changes are being written.
+        self.dirty = true;
+        self.sync().await?;
 
         Ok(())
     }
@@ -332,6 +343,11 @@ impl WasmMount {
             .rm(&mut rng, path_refs.as_slice())
             .await
             .map_err(|err| format!("error deleting fs entry {}: {}", path_refs.join("/"), err))?;
+
+        // note(sstelfox): ideally we don't need to sync after every change, but it doesn't seem
+        // like there are any external checks currently to ensure changes are being written.
+        self.dirty = true;
+        self.sync().await?;
 
         Ok(())
     }
