@@ -2,7 +2,7 @@ use futures::{AsyncWrite, AsyncWriteExt};
 use nom::number::streaming::{le_u64, le_u8};
 
 use crate::codec::crypto::SymLockedAccessKey;
-use crate::codec::ParserResult;
+use crate::codec::{Cid, ParserResult};
 use crate::filesystem::ContentReference;
 
 const FILE_CONTENT_TYPE_STUB: u8 = 0x01;
@@ -15,9 +15,11 @@ const FILE_CONTENT_TYPE_ENCRYPTED: u8 = 0x03;
 pub enum FileContent {
     Encrypted {
         locked_access_key: SymLockedAccessKey,
+        cid: Cid,
         content: Vec<ContentReference>,
     },
     Public {
+        cid: Cid,
         content: Vec<ContentReference>,
     },
     Stub {
@@ -26,6 +28,15 @@ pub enum FileContent {
 }
 
 impl FileContent {
+    /// Return the CID over the plaintext content of the file. Be careful not to confuse these with
+    /// the data CIDs which are the CIDs of the stored data blocks.
+    pub fn cid(&self) -> Option<Cid> {
+        match self {
+            Self::Encrypted { cid, .. } | Self::Public { cid, .. } => Some(cid.clone()),
+            Self::Stub { .. } => None,
+        }
+    }
+
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
@@ -41,20 +52,23 @@ impl FileContent {
                 writer.write_all(&size_bytes).await?;
                 written_bytes += size_bytes.len();
             }
-            Self::Public { content } => {
+            Self::Public { cid, content } => {
                 writer.write_all(&[FILE_CONTENT_TYPE_PUBLIC]).await?;
                 written_bytes += 1;
 
+                written_bytes += cid.encode(writer).await?;
                 written_bytes += encode_content_list(writer, content).await?;
             }
             Self::Encrypted {
                 locked_access_key,
+                cid,
                 content,
             } => {
                 writer.write_all(&[FILE_CONTENT_TYPE_ENCRYPTED]).await?;
                 written_bytes += 1;
-                written_bytes += locked_access_key.encode(writer).await?;
 
+                written_bytes += cid.encode(writer).await?;
+                written_bytes += locked_access_key.encode(writer).await?;
                 written_bytes += encode_content_list(writer, content).await?;
             }
         }
@@ -66,7 +80,16 @@ impl FileContent {
         matches!(self, Self::Encrypted { .. })
     }
 
-    pub fn parse<'a>(input: &'a [u8]) -> ParserResult<'a, Self> {
+    pub fn ordered_data_cids(&self) -> Vec<Cid> {
+        match self {
+            Self::Encrypted { content, .. } | Self::Public { content, .. } => {
+                content.iter().map(|c| c.data_block_cid()).collect()
+            }
+            Self::Stub { .. } => Vec::new(),
+        }
+    }
+
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, content_type) = le_u8(input)?;
 
         let parsed = match content_type {
@@ -75,18 +98,22 @@ impl FileContent {
                 (input, FileContent::Stub { size })
             }
             FILE_CONTENT_TYPE_PUBLIC => {
+                let (input, cid) = Cid::parse(input)?;
                 let (input, ref_count) = le_u8(input)?;
                 let (input, content) = ContentReference::parse_many(input, ref_count)?;
 
-                (input, FileContent::Public { content })
+                (input, FileContent::Public { cid, content })
             }
             FILE_CONTENT_TYPE_ENCRYPTED => {
+                let (input, cid) = Cid::parse(input)?;
+
                 let (input, locked_access_key) = SymLockedAccessKey::parse(input)?;
 
                 let (input, ref_count) = le_u8(input)?;
                 let (input, content) = ContentReference::parse_many(input, ref_count)?;
 
                 let data = FileContent::Encrypted {
+                    cid,
                     locked_access_key,
                     content,
                 };
@@ -105,7 +132,7 @@ impl FileContent {
     pub fn size(&self) -> u64 {
         match self {
             FileContent::Encrypted { content, .. } => content.iter().map(|c| c.size()).sum(),
-            FileContent::Public { content } => content.iter().map(|c| c.size()).sum(),
+            FileContent::Public { content, .. } => content.iter().map(|c| c.size()).sum(),
             FileContent::Stub { size } => *size,
         }
     }

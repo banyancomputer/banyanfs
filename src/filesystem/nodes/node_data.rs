@@ -86,7 +86,7 @@ impl NodeData {
     }
 
     pub(crate) fn ordered_child_pids(&self) -> Vec<PermanentId> {
-        let _children = match self {
+        let children = match self {
             NodeData::File {
                 associated_data, ..
             } => associated_data,
@@ -94,11 +94,16 @@ impl NodeData {
             _ => return Vec::new(),
         };
 
-        todo!("order children by permanent ID and return them")
+        let mut child_pairs = children.iter().collect::<Vec<_>>();
+        child_pairs.sort_by(|(_, a), (_, b)| a.cmp(b));
+        child_pairs.into_iter().map(|(_, id)| *id).collect()
     }
 
     pub(crate) fn ordered_data_cids(&self) -> Vec<Cid> {
-        todo!("get data cids, preserve offset order")
+        match self {
+            NodeData::File { content, .. } => content.ordered_data_cids(),
+            _ => Vec::new(),
+        }
     }
 
     #[tracing::instrument(skip(self, writer))]
