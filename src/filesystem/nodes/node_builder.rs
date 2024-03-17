@@ -1,5 +1,6 @@
-use elliptic_curve::rand_core::CryptoRngCore;
 use std::collections::HashMap;
+
+use elliptic_curve::rand_core::CryptoRngCore;
 
 use crate::codec::filesystem::NodeKind;
 use crate::codec::meta::ActorId;
@@ -39,12 +40,12 @@ impl NodeBuilder {
         let new_node = Node {
             id,
             parent_id: self.parent_id,
+            permanent_id: PermanentId::generate(rng),
+            owner_id,
 
             cid: CidCache::empty(),
-            permanent_id: PermanentId::generate(rng),
 
             name: self.name,
-            owner_id,
 
             created_at: current_ts,
             modified_at: current_ts,

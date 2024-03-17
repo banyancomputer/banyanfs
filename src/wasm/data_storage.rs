@@ -83,6 +83,10 @@ impl DataStorage {
         Ok(())
     }
 
+    pub fn unsynced_cid_iter(&self) -> impl Iterator<Item = &Cid> {
+        self.unsynced_cids.iter()
+    }
+
     pub fn unsynced_data_size(&self) -> u64 {
         self.unsynced_data_size
     }

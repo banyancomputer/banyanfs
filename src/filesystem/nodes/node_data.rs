@@ -2,7 +2,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::number::streaming::le_u16;
+use nom::number::streaming::{le_u16, le_u64};
 
 use crate::codec::filesystem::{DirectoryPermissions, FilePermissions};
 use crate::codec::{Cid, ParserResult, PermanentId};
@@ -18,6 +18,7 @@ pub enum NodeData {
     AssoicatedData,
     Directory {
         permissions: DirectoryPermissions,
+        size: u64,
         children: HashMap<NodeName, PermanentId>,
     },
 }
@@ -117,6 +118,21 @@ impl NodeData {
         tracing::trace!(kind = ?self.kind(), encode_len = written_bytes, "kind");
 
         match &self {
+            NodeData::Directory {
+                permissions,
+                size,
+                children,
+            } => {
+                written_bytes += permissions.encode(writer).await?;
+
+                let size_bytes = size.to_le_bytes();
+                writer.write_all(&size_bytes).await?;
+                written_bytes += size_bytes.len();
+
+                written_bytes += encode_children(children, writer).await?;
+
+                Ok(written_bytes)
+            }
             NodeData::File {
                 permissions,
                 associated_data,
@@ -125,15 +141,6 @@ impl NodeData {
                 written_bytes += permissions.encode(writer).await?;
                 written_bytes += encode_children(associated_data, writer).await?;
                 written_bytes += content.encode(writer).await?;
-
-                Ok(written_bytes)
-            }
-            NodeData::Directory {
-                permissions,
-                children,
-            } => {
-                written_bytes += permissions.encode(writer).await?;
-                written_bytes += encode_children(children, writer).await?;
 
                 Ok(written_bytes)
             }
@@ -152,6 +159,7 @@ impl NodeData {
     pub fn new_directory() -> Self {
         Self::Directory {
             permissions: DirectoryPermissions::default(),
+            size: 0,
             children: HashMap::new(),
         }
     }
@@ -176,10 +184,12 @@ impl NodeData {
             //NodeKind::AssociatedData => {}
             NodeKind::Directory => {
                 let (data_buf, permissions) = DirectoryPermissions::parse(input)?;
+                let (data_buf, size) = le_u64(data_buf)?;
                 let (data_buf, children) = parse_children(data_buf)?;
 
                 let data = NodeData::Directory {
                     permissions,
+                    size,
                     children,
                 };
 

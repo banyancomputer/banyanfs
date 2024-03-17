@@ -26,12 +26,11 @@ pub(crate) type NodeId = usize;
 
 pub struct Node {
     id: NodeId,
-
-    cid: CidCache,
     parent_id: Option<PermanentId>,
-
     permanent_id: PermanentId,
     owner_id: ActorId,
+
+    cid: CidCache,
 
     created_at: i64,
     modified_at: i64,
@@ -49,9 +48,7 @@ impl Node {
         child_id: PermanentId,
     ) -> Result<(), NodeError> {
         self.inner.add_child(name, child_id)?;
-
-        self.cid.mark_dirty().await;
-        self.modified_at = crate::utils::current_time_ms();
+        self.notify_of_change().await;
 
         Ok(())
     }
@@ -87,7 +84,7 @@ impl Node {
         // allows us to detect if changes actually occurred. For now we have to assume that by
         // grabbing a mutable handle they intend to mutate the content which will invalidate our
         // CID so we mark ourselves as dirty.
-        self.cid.mark_dirty().await;
+        self.notify_of_change().await;
         &mut self.inner
     }
 
@@ -196,12 +193,41 @@ impl Node {
         self.name.clone()
     }
 
+    async fn notify_of_change(&mut self) {
+        self.cid.mark_dirty().await;
+        self.modified_at = crate::utils::current_time_ms();
+    }
+
     pub(crate) fn ordered_child_pids(&self) -> Vec<PermanentId> {
         self.inner.ordered_child_pids()
     }
 
     pub(crate) fn ordered_data_cids(&self) -> Vec<Cid> {
         self.inner.ordered_data_cids()
+    }
+
+    /// This returns the esimated amount of storage that is taken up by attributes at this level of
+    /// indirection without the contents of the data itself. This is used internally to dynamically
+    /// estimate of the total encoding size of the node.
+    fn outer_size_estimate(&self) -> u64 {
+        let mut encoded_size = self
+            .parent_id
+            .as_ref()
+            .map_or(1, |_| 1 + PermanentId::size() as u64);
+
+        encoded_size += (Cid::size() + PermanentId::size() + ActorId::size() + 8 * 2) as u64;
+        encoded_size += match self.name {
+            NodeName::Root => 1,
+            NodeName::Named(ref name) => 2 + name.as_bytes().len() as u64,
+        };
+
+        encoded_size += self
+            .metadata()
+            .iter()
+            .map(|(k, v)| (2 + k.as_bytes().len() + v.len()) as u64)
+            .sum::<u64>();
+
+        encoded_size
     }
 
     pub fn owner_id(&self) -> ActorId {
@@ -288,11 +314,10 @@ impl Node {
         Ok((input, (node, desired_node_ids)))
     }
 
+    #[allow(dead_code)]
     pub(crate) async fn remove_child(&mut self, child_name: &NodeName) -> Result<(), NodeError> {
         self.inner.remove_child(child_name)?;
-
-        self.cid.mark_dirty().await;
-        self.modified_at = crate::utils::current_time_ms();
+        self.notify_of_change().await;
 
         Ok(())
     }
@@ -302,25 +327,19 @@ impl Node {
         child_id: &PermanentId,
     ) -> Result<(), NodeError> {
         self.inner.remove_permanent_id(child_id)?;
-
-        self.cid.mark_dirty().await;
-        self.modified_at = crate::utils::current_time_ms();
+        self.notify_of_change().await;
 
         Ok(())
     }
 
     pub(crate) async fn set_name(&mut self, new_name: NodeName) {
         self.name = new_name;
-
-        self.cid.mark_dirty().await;
-        self.modified_at = crate::utils::current_time_ms();
+        self.notify_of_change().await;
     }
 
     pub(crate) async fn set_parent_id(&mut self, parent_id: PermanentId) {
         self.parent_id = Some(parent_id);
-
-        self.cid.mark_dirty().await;
-        self.modified_at = crate::utils::current_time_ms();
+        self.notify_of_change().await;
     }
 
     pub(crate) fn supports_children(&self) -> bool {
@@ -337,10 +356,7 @@ impl Node {
 
     pub async fn set_attribute(&mut self, key: String, value: Vec<u8>) -> Option<Vec<u8>> {
         let old_value = self.metadata.insert(key, value);
-
-        self.cid.mark_dirty().await;
-        self.modified_at = crate::utils::current_time_ms();
-
+        self.notify_of_change().await;
         old_value
     }
 }

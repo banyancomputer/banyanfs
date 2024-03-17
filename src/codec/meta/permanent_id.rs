@@ -35,6 +35,10 @@ impl PermanentId {
 
         Ok((remaining, Self(bytes)))
     }
+
+    pub const fn size() -> usize {
+        PERMANENT_ID_SIZE
+    }
 }
 
 impl std::fmt::Debug for PermanentId {

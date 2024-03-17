@@ -22,6 +22,10 @@ impl ActorId {
         let (remaining, fingerprint) = Fingerprint::parse(input)?;
         Ok((remaining, ActorId(fingerprint)))
     }
+
+    pub const fn size() -> usize {
+        Fingerprint::size()
+    }
 }
 
 impl From<Fingerprint> for ActorId {

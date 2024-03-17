@@ -38,6 +38,10 @@ impl Fingerprint {
 
         Ok((remaining, Self(bytes)))
     }
+
+    pub const fn size() -> usize {
+        FINGERPRINT_SIZE
+    }
 }
 
 impl std::fmt::Debug for Fingerprint {
