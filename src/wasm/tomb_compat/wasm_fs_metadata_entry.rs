@@ -10,6 +10,7 @@ use super::BanyanFsError;
 
 // todo: this had a lot of try from JS value traits, probably just being used as a stub type for
 // parsing, this also didn't have wasm_bindgen before but I think its an improvement...
+#[derive(Debug)]
 #[wasm_bindgen]
 pub struct WasmFsMetadataEntry {
     name: String,
@@ -19,9 +20,8 @@ pub struct WasmFsMetadataEntry {
 
 #[wasm_bindgen]
 impl WasmFsMetadataEntry {
-    #[wasm_bindgen(getter = entry_type)]
+    #[wasm_bindgen(getter = type)]
     pub fn entry_kind(&self) -> String {
-        tracing::trace!(?self.entry_kind, "entry_type getter called");
         self.entry_kind.clone()
     }
 
@@ -47,7 +47,7 @@ impl TryFrom<DirectoryEntry> for WasmFsMetadataEntry {
 
         let entry_kind = match dir_entry.kind() {
             NodeKind::File => "file",
-            NodeKind::Directory => "directory",
+            NodeKind::Directory => "dir",
             _ => return Err("unsupported entry kind".into()),
         };
 
