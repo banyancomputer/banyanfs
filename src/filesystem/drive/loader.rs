@@ -55,7 +55,8 @@ impl<'a> DriveLoader<'a> {
 
             if let Some(segment_res) = streamer.next().await {
                 let (hash, drive) = segment_res?;
-                debug!(full_drive_hash = ?hash, "loaded drive");
+                let root_cid = drive.root_cid().await;
+                debug!(drive_hash = ?hash, drive_root_cid = ?root_cid, "loaded drive");
                 return Ok(drive);
             };
         }

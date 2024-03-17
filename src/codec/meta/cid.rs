@@ -61,8 +61,7 @@ impl Cid {
 
 impl std::fmt::Debug for Cid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let cid_str = crate::codec::utils::bytes_to_hex_string(&self.0);
-        write!(f, "{{0x{cid_str}}}")
+        write!(f, "{}", self.as_base64url_multicodec())
     }
 }
 
