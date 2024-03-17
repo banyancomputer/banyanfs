@@ -17,7 +17,6 @@ pub(crate) use inner::InnerDrive;
 pub(crate) use operations::OperationError;
 pub(crate) use walk_state::WalkState;
 
-use std::collections::HashMap;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 use std::ops::Deref;
 use std::sync::Arc;
@@ -25,13 +24,12 @@ use std::sync::Arc;
 use async_std::sync::RwLock;
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
-use slab::Slab;
 use tracing::trace;
 
 use crate::codec::crypto::*;
 use crate::codec::header::*;
 use crate::codec::*;
-use crate::filesystem::nodes::{NodeBuilder, NodeBuilderError};
+use crate::filesystem::nodes::NodeBuilderError;
 
 #[derive(Clone)]
 pub struct Drive {
@@ -75,28 +73,17 @@ impl Drive {
         written_bytes += PublicSettings::new(false, true).encode(writer).await?;
 
         let meta_key = MetaKey::generate(rng);
-        // note(sstelfox): I think this only reason we need a write lock here is for the CID
-        // calculation, but there is a solution for that in the proposed cid method, we wouldn't
-        // want to encode the node entirely twice, so we should able to provide our calculation
-        // from the outside or perhaps delegate the entire encoding process to the node...
-        //
-        // note(sstelfox): We actually have a bit of a problem here... if we include CIDs of
-        // children and we need to encode the child before the parent... but we're encoding from
-        // the top down... I don't think there is a way to do this without a two pass encoding...
-        //
-        // Maybe its worth holding on to a copy of the encoded data for the current CID as an in
-        // memory cache... memory / time tradeoff but this shouldn't be that big.
-        let mut inner_write = self.inner.write().await;
+        let inner_read = self.inner.read().await;
 
-        let key_list = inner_write.access.sorted_actor_settings();
+        let key_list = inner_read.access().sorted_actor_settings();
         written_bytes += meta_key.encode_escrow(rng, writer, key_list).await?;
 
         let mut header_buffer = EncryptedBuffer::default();
 
-        let mut inner_header_size = inner_write.access.encode(rng, &mut *header_buffer).await?;
+        let mut inner_header_size = inner_read.access().encode(rng, &mut *header_buffer).await?;
         inner_header_size += content_options.encode(&mut *header_buffer).await?;
-        inner_header_size += inner_write
-            .journal_start
+        inner_header_size += inner_read
+            .journal_start()
             .encode(&mut *header_buffer)
             .await?;
 
@@ -110,14 +97,14 @@ impl Drive {
         if content_options.include_filesystem() {
             let mut fs_buffer = EncryptedBuffer::default();
 
-            let filesystem_key = inner_write
-                .access
+            let filesystem_key = inner_read
+                .access()
                 .permission_keys()
                 .and_then(|pk| pk.filesystem.as_ref())
                 .ok_or(StdError::new(StdErrorKind::Other, "no filesystem key"))?
                 .clone();
 
-            written_bytes += inner_write.encode(rng, &mut *fs_buffer).await?;
+            written_bytes += inner_read.encode(rng, &mut *fs_buffer).await?;
 
             // todo: use filesystem ID and encoded length bytes as AD
             let buffer_length = fs_buffer.encrypted_len() as u64;
@@ -135,16 +122,24 @@ impl Drive {
 
     pub async fn has_read_access(&self, actor_id: ActorId) -> bool {
         let inner = self.inner.read().await;
-        inner.access.has_read_access(actor_id)
+        inner.access().has_read_access(actor_id)
     }
 
     pub async fn has_write_access(&self, actor_id: ActorId) -> bool {
         let inner = self.inner.read().await;
-        inner.access.has_write_access(actor_id)
+        inner.access().has_write_access(actor_id)
     }
 
     pub fn id(&self) -> FilesystemId {
         self.filesystem_id
+    }
+
+    pub fn initialize_private(
+        rng: &mut impl CryptoRngCore,
+        current_key: Arc<SigningKey>,
+    ) -> Result<Self, DriveError> {
+        let filesystem_id = FilesystemId::generate(rng);
+        Self::initialize_private_with_id(rng, current_key, filesystem_id)
     }
 
     pub fn initialize_private_with_id(
@@ -166,63 +161,31 @@ impl Drive {
         let mut access = DriveAccess::init_private(rng, actor_id);
         access.register_actor(verifying_key, kas);
 
-        let mut nodes = Slab::with_capacity(32);
-        let mut permanent_id_map = HashMap::new();
-
-        let node_entry = nodes.vacant_entry();
-        let root_node_id = node_entry.key();
-
-        let directory = NodeBuilder::root()
-            .with_id(root_node_id)
-            .with_owner(actor_id)
-            .build(rng)?;
-
-        permanent_id_map.insert(directory.permanent_id(), root_node_id);
-        node_entry.insert(directory);
-
-        let journal_start = JournalCheckpoint::initialize();
+        let inner = InnerDrive::initialize(rng, actor_id, access.clone())?;
 
         let drive = Self {
             current_key,
             filesystem_id,
             private: true,
-
-            inner: Arc::new(RwLock::new(InnerDrive {
-                access,
-
-                journal_start,
-
-                nodes,
-                root_node_id,
-                permanent_id_map,
-            })),
+            inner: Arc::new(RwLock::new(inner)),
         };
 
         Ok(drive)
     }
 
-    pub fn initialize_private(
-        rng: &mut impl CryptoRngCore,
-        current_key: Arc<SigningKey>,
-    ) -> Result<Self, DriveError> {
-        let filesystem_id = FilesystemId::generate(rng);
-        Self::initialize_private_with_id(rng, current_key, filesystem_id)
-    }
-
     pub async fn root(&self) -> DirectoryHandle {
         let inner_read = self.inner.read().await;
-        let root_node_id = inner_read.root_node_id;
+        let root_node_id = inner_read.root_node_id();
         DirectoryHandle::new(self.current_key.clone(), root_node_id, self.inner.clone()).await
     }
 
-    pub async fn root_cid(&self) -> Result<Option<Cid>, DriveError> {
+    pub async fn root_cid(&self) -> Result<Cid, DriveError> {
         let inner_read = self.inner.read().await;
 
-        let root_node = inner_read.nodes.get(inner_read.root_node_id).ok_or(
-            OperationError::InternalCorruption(inner_read.root_node_id, "missing root node"),
-        )?;
+        let root_node = inner_read.root_node()?;
+        let root_cid = root_node.cid().await?;
 
-        Ok(root_node.cid())
+        Ok(root_cid)
     }
 }
 

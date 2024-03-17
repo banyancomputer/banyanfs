@@ -155,7 +155,7 @@ impl DirectoryHandle {
             NodeData::Directory { children, .. } => children,
             _ => {
                 return Err(OperationError::InternalCorruption(
-                    parent_node_id,
+                    parent_node.id(),
                     "parent node must be a directory",
                 ));
             }

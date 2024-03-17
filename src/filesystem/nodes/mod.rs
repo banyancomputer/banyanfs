@@ -1,7 +1,9 @@
+mod cid_cache;
 mod node_builder;
 mod node_data;
 mod node_name;
 
+pub(crate) use cid_cache::CidCache;
 pub(crate) use node_builder::{NodeBuilder, NodeBuilderError};
 
 pub use node_data::NodeData;
@@ -19,15 +21,14 @@ use crate::codec::crypto::AccessKey;
 use crate::codec::filesystem::NodeKind;
 use crate::codec::meta::{ActorId, Cid, PermanentId};
 use crate::codec::ParserResult;
+use crate::filesystem::drive::OperationError;
 
 pub(crate) type NodeId = usize;
 
 pub struct Node {
     id: NodeId,
 
-    cid: Option<Cid>,
-    dirty: bool,
-
+    cid: CidCache,
     parent_id: Option<PermanentId>,
 
     permanent_id: PermanentId,
@@ -43,16 +44,18 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn cid(&self) -> Option<Cid> {
-        // todo(sstelfox): this should always return a CID, if we're dirty or
-        // its not present we should generate a fresh CID and mark ourselves as
-        // clean.
-        //
-        // note(sstelfox): that above change is going to require this type being mutable, we may
-        // want to use a RwLock or something to manage the dirty state and cid itself so we can
-        // update that and do the calculation without forcing any caller that wants our CID to grab
-        // a mutable handle on the whole drive.
-        self.cid.clone()
+    pub async fn cached_encoding(&self) -> Option<Vec<u8>> {
+        self.cid.take_cached().await
+    }
+
+    pub async fn cid(&self) -> Result<Cid, OperationError> {
+        // todo(sstelfox): this should always return a CID, if we can't get it
+        // from the cache we should encode ourselves, cache it and return the
+        // generated CID.
+        match self.cid.cid().await {
+            Ok(cid) => Some(cid),
+            Err(_) => None,
+        }
     }
 
     pub fn created_at(&self) -> i64 {
@@ -68,12 +71,12 @@ impl Node {
         // allows us to detect if changes actually occurred. For now we have to assume that by
         // grabbing a mutable handle they intend to mutate the content which will invalidate our
         // CID so we mark ourselves as dirty.
-        self.dirty = true;
+        self.cid.mark_dirty();
         &mut self.inner
     }
 
     pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
-        &mut self,
+        &self,
         rng: &mut impl CryptoRngCore,
         writer: &mut W,
         data_key: Option<&AccessKey>,
@@ -135,18 +138,23 @@ impl Node {
             node_data.write_all(val).await?;
         }
 
+        // todo(sstelfox): not sure if this is quite the right place, but I need to make sure that
+        // child CIDs are referenced alongside their permanent IDs in the child hierarchy so we can
+        // detect whole tree changes.
         let (data_len, child_ids, data_cids) =
             self.data().encode(rng, &mut node_data, data_key).await?;
         tracing::trace!(node_data_len = data_len, "node_data::encoded");
 
-        let hash: [u8; 32] = blake3::hash(&node_data).into();
-        let cid = Cid::from(hash);
+        self.cid.set_with_ref(&node_data).await;
 
         let mut written_bytes = 0;
 
+        let cid = self
+            .cid
+            .cid()
+            .await
+            .map_err(|_| StdError::new(StdErrorKind::Other, "failed to get CID"))?;
         written_bytes += cid.encode(writer).await?;
-        self.cid = Some(cid);
-        self.dirty = false;
 
         let node_data_len = node_data.len() as u32;
         let node_data_len_bytes = node_data_len.to_le_bytes();
@@ -258,8 +266,7 @@ impl Node {
         let node = Self {
             id: allocated_id,
 
-            cid: Some(cid),
-            dirty: false,
+            cid: CidCache::empty(),
             parent_id,
 
             permanent_id,
@@ -286,12 +293,12 @@ impl Node {
     }
 
     pub(crate) fn remove_child(&mut self, child_id: PermanentId) -> Result<(), NodeError> {
-        self.dirty = true;
+        self.cid.mark_dirty();
         todo!()
     }
 
     pub(crate) fn set_parent_id(&mut self, parent_id: PermanentId) {
-        self.dirty = true;
+        self.cid.mark_dirty();
         self.parent_id = Some(parent_id);
     }
 
@@ -300,7 +307,7 @@ impl Node {
     }
 
     pub fn set_attribute(&mut self, key: String, value: Vec<u8>) -> Option<Vec<u8>> {
-        self.dirty = true;
+        self.cid.mark_dirty();
         self.metadata.insert(key, value)
     }
 }
@@ -312,7 +319,6 @@ impl std::fmt::Debug for Node {
             NodeData::File { .. } => f
                 .debug_tuple("NodeFile")
                 .field(&self.id)
-                .field(&self.cid)
                 .field(&self.permanent_id)
                 .field(&self.owner_id)
                 .field(&self.name)
@@ -321,7 +327,6 @@ impl std::fmt::Debug for Node {
             NodeData::Directory { .. } => f
                 .debug_tuple("NodeDirectory")
                 .field(&self.id)
-                .field(&self.cid)
                 .field(&self.permanent_id)
                 .field(&self.owner_id)
                 .field(&self.name)

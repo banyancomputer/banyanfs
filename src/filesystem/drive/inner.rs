@@ -9,7 +9,7 @@ use slab::Slab;
 use crate::codec::crypto::AccessKey;
 use crate::codec::*;
 use crate::filesystem::drive::DriveAccess;
-use crate::filesystem::nodes::{Node, NodeId};
+use crate::filesystem::nodes::{Node, NodeBuilder, NodeId};
 
 use super::OperationError;
 
@@ -24,105 +24,8 @@ pub(crate) struct InnerDrive {
 }
 
 impl InnerDrive {
-    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
-        &mut self,
-        rng: &mut impl CryptoRngCore,
-        writer: &mut W,
-    ) -> std::io::Result<usize> {
-        let mut written_bytes = 0;
-
-        // todo(sstelfox): there is a complex use case here that needs to be handled. Someone with
-        // access to the filesystem and maintenance key, but without the data key can make changes
-        // as long as they preserve the data key they loaded the filesystem with.
-        //
-        // Ideally data wrapping keys would be rotated everytime there was a full save but that won't work for
-        // now. Both these cases can be iteratively added on later to the library.
-
-        let data_key = self
-            .access
-            .permission_keys()
-            .and_then(|pk| pk.data.as_ref())
-            .ok_or(StdError::new(StdErrorKind::Other, "no data key"))?;
-
-        // Walk the nodes starting from the root, encoding them one at a time, we want to make sure
-        // we only encode things once and do so in a consistent order to ensure our content is
-        // reproducible. This will silently discard any disconnected leaf nodes. Loops are
-        // tolerated.
-
-        let mut seen_ids = HashSet::new();
-        let mut outstanding_ids = vec![self.root_node_id];
-        let mut all_data_cids = Vec::new();
-
-        let mut node_buffer = Vec::new();
-        while let Some(node_id) = outstanding_ids.pop() {
-            let node = self.nodes.get_mut(node_id).ok_or_else(|| {
-                StdError::new(StdErrorKind::Other, "node ID missing from internal nodes")
-            })?;
-
-            // Deduplicate nodes as we go through them
-            let permanent_id = node.permanent_id();
-            if seen_ids.contains(&permanent_id) {
-                continue;
-            }
-            seen_ids.insert(permanent_id);
-
-            let (node_size, child_pids, data_cids) =
-                node.encode(rng, &mut node_buffer, Some(data_key)).await?;
-
-            let child_count = child_pids.as_ref().map_or(0, |p| p.len());
-            let data_count = data_cids.as_ref().map_or(0, |d| d.len());
-
-            let mut added_children = 0;
-            if let Some(pid_list) = child_pids {
-                for child_perm_id in pid_list.into_iter() {
-                    if seen_ids.contains(&child_perm_id) {
-                        continue;
-                    }
-
-                    let child_node_id =
-                        self.permanent_id_map.get(&child_perm_id).ok_or_else(|| {
-                            StdError::new(
-                                StdErrorKind::Other,
-                                "referenced child's permanent ID missing from internal nodes",
-                            )
-                        })?;
-
-                    outstanding_ids.push(*child_node_id);
-                    added_children += 1;
-                }
-            }
-
-            tracing::trace!(?permanent_id, cid = ?node.cid(), node_kind = ?node.kind(), node_size, added_children, child_count, data_count, "node_encoding::complete");
-
-            if let Some(data) = data_cids {
-                all_data_cids.extend(data);
-            }
-        }
-
-        // TODO: should scan the slab for any nodes that are not reachable from the root and track
-        // them for removal in the journal and maintenance logs. It really shoudn't happen but be
-        // defensive against errors...
-
-        let root_node = &self.nodes[self.root_node_id];
-        let root_perm_id = root_node.permanent_id();
-        let encoded_len = root_perm_id.encode(writer).await?;
-        written_bytes += encoded_len;
-        tracing::trace!(?root_perm_id, encoded_len, "node_encoding::root_perm_id");
-
-        let node_count = seen_ids.len() as u64;
-        let node_count_bytes = node_count.to_le_bytes();
-        writer.write_all(&node_count_bytes).await?;
-        written_bytes += node_count_bytes.len();
-        tracing::trace!(
-            ?node_count,
-            encode_len = node_count_bytes.len(),
-            "node_encoding::node_count"
-        );
-
-        writer.write_all(&node_buffer).await?;
-        written_bytes += node_buffer.len();
-
-        Ok(written_bytes)
+    pub(crate) fn access(&self) -> &DriveAccess {
+        &self.access
     }
 
     pub(crate) fn by_id(&self, node_id: NodeId) -> Result<&Node, OperationError> {
@@ -162,6 +65,144 @@ impl InnerDrive {
             .ok_or(OperationError::MissingPermanentId(*permanent_id))?;
 
         self.by_id_mut(*node_id)
+    }
+
+    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        rng: &mut impl CryptoRngCore,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let mut written_bytes = 0;
+
+        // todo(sstelfox): there is a complex use case here that needs to be handled. Someone with
+        // access to the filesystem and maintenance key, but without the data key can make changes
+        // as long as they preserve the data key they loaded the filesystem with.
+        //
+        // Ideally data wrapping keys would be rotated everytime there was a full save but that won't work for
+        // now. Both these cases can be iteratively added on later to the library.
+
+        let data_key = self
+            .access
+            .permission_keys()
+            .and_then(|pk| pk.data.as_ref())
+            .ok_or(StdError::new(StdErrorKind::Other, "no data key"))?;
+
+        // Walk the nodes starting from the root, encoding them one at a time, we want to make sure
+        // we only encode things once and do so in a consistent order to ensure our content is
+        // reproducible. This will silently discard any disconnected leaf nodes. Loops are
+        // tolerated.
+
+        let mut seen_ids = HashSet::new();
+        let mut outstanding_ids = vec![self.root_node_id];
+        let mut all_data_cids = Vec::new();
+
+        let mut node_buffer = Vec::new();
+        while let Some(node_id) = outstanding_ids.pop() {
+            let node = self.nodes.get(node_id).ok_or_else(|| {
+                StdError::new(StdErrorKind::Other, "node ID missing from internal nodes")
+            })?;
+
+            // Deduplicate nodes as we go through them
+            let permanent_id = node.permanent_id();
+            if seen_ids.contains(&permanent_id) {
+                continue;
+            }
+            seen_ids.insert(permanent_id);
+
+            let (node_size, child_pids, data_cids) =
+                node.encode(rng, &mut node_buffer, Some(data_key)).await?;
+
+            let child_count = child_pids.as_ref().map_or(0, |p| p.len());
+            let data_count = data_cids.as_ref().map_or(0, |d| d.len());
+
+            let mut added_children = 0;
+            if let Some(pid_list) = child_pids {
+                for child_perm_id in pid_list.into_iter() {
+                    if seen_ids.contains(&child_perm_id) {
+                        continue;
+                    }
+
+                    let child_node_id =
+                        self.permanent_id_map.get(&child_perm_id).ok_or_else(|| {
+                            StdError::new(
+                                StdErrorKind::Other,
+                                "referenced child's permanent ID missing from internal nodes",
+                            )
+                        })?;
+
+                    outstanding_ids.push(*child_node_id);
+                    added_children += 1;
+                }
+            }
+
+            tracing::trace!(?permanent_id, node_kind = ?node.kind(), node_size, added_children, child_count, data_count, "node_encoding::complete");
+
+            if let Some(data) = data_cids {
+                all_data_cids.extend(data);
+            }
+        }
+
+        // TODO: should scan the slab for any nodes that are not reachable from the root and track
+        // them for removal in the journal and maintenance logs. It really shoudn't happen but be
+        // defensive against errors...
+
+        let root_node = &self.nodes[self.root_node_id];
+        let root_perm_id = root_node.permanent_id();
+        let encoded_len = root_perm_id.encode(writer).await?;
+        written_bytes += encoded_len;
+        tracing::trace!(?root_perm_id, encoded_len, "node_encoding::root_perm_id");
+
+        let node_count = seen_ids.len() as u64;
+        let node_count_bytes = node_count.to_le_bytes();
+        writer.write_all(&node_count_bytes).await?;
+        written_bytes += node_count_bytes.len();
+        tracing::trace!(
+            ?node_count,
+            encode_len = node_count_bytes.len(),
+            "node_encoding::node_count"
+        );
+
+        writer.write_all(&node_buffer).await?;
+        written_bytes += node_buffer.len();
+
+        Ok(written_bytes)
+    }
+
+    pub(crate) fn initialize(
+        rng: &mut impl CryptoRngCore,
+        actor_id: ActorId,
+        access: DriveAccess,
+    ) -> Result<Self, OperationError> {
+        let journal_start = JournalCheckpoint::initialize();
+
+        let mut nodes = Slab::with_capacity(32);
+        let mut permanent_id_map = HashMap::new();
+
+        let node_entry = nodes.vacant_entry();
+        let root_node_id = node_entry.key();
+
+        let directory = NodeBuilder::root()
+            .with_id(root_node_id)
+            .with_owner(actor_id)
+            .build(rng)?;
+
+        permanent_id_map.insert(directory.permanent_id(), root_node_id);
+        node_entry.insert(directory);
+
+        let inner = Self {
+            access,
+            journal_start,
+
+            nodes,
+            root_node_id,
+            permanent_id_map,
+        };
+
+        Ok(inner)
+    }
+
+    pub(crate) fn journal_start(&self) -> JournalCheckpoint {
+        self.journal_start
     }
 
     pub(crate) fn parse<'a>(
@@ -289,5 +330,9 @@ impl InnerDrive {
 
     pub(crate) fn root_node(&self) -> Result<&Node, OperationError> {
         self.by_id(self.root_node_id)
+    }
+
+    pub(crate) fn root_node_id(&self) -> NodeId {
+        self.root_node_id
     }
 }

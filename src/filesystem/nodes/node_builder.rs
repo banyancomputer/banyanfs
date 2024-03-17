@@ -3,7 +3,9 @@ use std::collections::HashMap;
 
 use crate::codec::filesystem::NodeKind;
 use crate::codec::meta::ActorId;
-use crate::filesystem::nodes::{Node, NodeData, NodeId, NodeName, NodeNameError, PermanentId};
+use crate::filesystem::nodes::{
+    CidCache, Node, NodeData, NodeId, NodeName, NodeNameError, PermanentId,
+};
 
 pub(crate) struct NodeBuilder {
     id: Option<NodeId>,
@@ -38,8 +40,7 @@ impl NodeBuilder {
             id,
             parent_id: self.parent_id,
 
-            cid: None,
-            dirty: true,
+            cid: CidCache::empty(),
             permanent_id: PermanentId::generate(rng),
 
             name: self.name,
