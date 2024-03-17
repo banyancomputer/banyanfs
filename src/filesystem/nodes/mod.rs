@@ -262,7 +262,9 @@ impl Node {
             node_data_buf = meta_buf;
         }
 
-        let (remaining, (inner, desired_node_ids)) = NodeData::parse(node_data_buf, data_key)?;
+        let (remaining, inner) = NodeData::parse(node_data_buf)?;
+        let desired_node_ids = inner.ordered_child_pids();
+
         debug_assert!(remaining.is_empty());
 
         let node = Self {

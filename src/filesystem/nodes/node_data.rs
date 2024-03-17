@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::number::streaming::le_u16;
 
-use crate::codec::crypto::AccessKey;
 use crate::codec::filesystem::{DirectoryPermissions, FilePermissions};
 use crate::codec::{Cid, ParserResult, PermanentId};
 use crate::filesystem::nodes::{NodeKind, NodeName};
@@ -87,7 +86,7 @@ impl NodeData {
     }
 
     pub(crate) fn ordered_child_pids(&self) -> Vec<PermanentId> {
-        let children = match self {
+        let _children = match self {
             NodeData::File {
                 associated_data, ..
             } => associated_data,
@@ -152,19 +151,14 @@ impl NodeData {
         }
     }
 
-    pub(crate) fn parse<'a>(
-        input: &'a [u8],
-        data_key: Option<&AccessKey>,
-    ) -> ParserResult<'a, (Self, Vec<PermanentId>)> {
+    pub(crate) fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, kind) = NodeKind::parse(input)?;
 
-        let (input, node_data) = match kind {
+        match kind {
             NodeKind::File => {
                 let (data_buf, permissions) = FilePermissions::parse(input)?;
                 let (data_buf, associated_data) = parse_children(data_buf)?;
-                let (data_buf, content) = FileContent::parse(data_buf, data_key)?;
-
-                let desired_node_ids = associated_data.values().cloned().collect::<Vec<_>>();
+                let (data_buf, content) = FileContent::parse(data_buf)?;
 
                 let data = NodeData::File {
                     permissions,
@@ -172,26 +166,22 @@ impl NodeData {
                     content,
                 };
 
-                (data_buf, (data, desired_node_ids))
+                Ok((data_buf, data))
             }
             //NodeKind::AssociatedData => {}
             NodeKind::Directory => {
                 let (data_buf, permissions) = DirectoryPermissions::parse(input)?;
                 let (data_buf, children) = parse_children(data_buf)?;
 
-                let desired_node_ids = children.values().cloned().collect::<Vec<_>>();
-
                 let data = NodeData::Directory {
                     permissions,
                     children,
                 };
 
-                (data_buf, (data, desired_node_ids))
+                Ok((data_buf, data))
             }
             _ => unimplemented!(),
-        };
-
-        Ok((input, node_data))
+        }
     }
 
     pub fn stub_file(size: u64) -> Self {

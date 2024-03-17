@@ -106,23 +106,9 @@ impl InnerDrive {
 
     pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
-        rng: &mut impl CryptoRngCore,
         writer: &mut W,
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
-
-        // todo(sstelfox): there is a complex use case here that needs to be handled. Someone with
-        // access to the filesystem and maintenance key, but without the data key can make changes
-        // as long as they preserve the data key they loaded the filesystem with.
-        //
-        // Ideally data wrapping keys would be rotated everytime there was a full save but that won't work for
-        // now. Both these cases can be iteratively added on later to the library.
-
-        let data_key = self
-            .access
-            .permission_keys()
-            .and_then(|pk| pk.data.as_ref())
-            .ok_or(StdError::new(StdErrorKind::Other, "no data key"))?;
 
         // Walk the nodes starting from the root, encoding them one at a time, we want to make sure
         // we only encode things once and do so in a consistent order to ensure our content is

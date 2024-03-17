@@ -21,7 +21,7 @@ pub(crate) struct PushRequest {
 
     stream_body: Option<Body>,
 
-    // todo(sstelfox): The following attributes are superceded by the format itself
+    // note(sstelfox): The following attributes are superceded by the format itself
     // and will no longer be needed but need to be passed in from the outside until
     // the server side has been updated to consume this information from the format
     // itself.
@@ -36,7 +36,7 @@ impl PushRequest {
         expected_data_size: u64,
         merkle_root_cid: Cid,
 
-        // todo: this should also be a Cid but I'm delaying writing the string parser for the
+        // note(sstelfox): this should also be a Cid but I'm delaying writing the string parser for the
         // format. Should update this in the future.
         previous_merkle_root_cid: Option<String>,
 
@@ -57,7 +57,7 @@ impl PushRequest {
         //    Body::wrap_stream(stream_body)
         //};
 
-        // todo(sstelfox): For the client case and general writing cases we need to wrap this in a
+        // note(sstelfox): For the client case and general writing cases we need to wrap this in a
         // stream when not targeting WASM, a rough cut was left above. For expendiency I didn't
         // want to diagnose and test both cases so implmented the universal and simpler one.
         let body_bytes = crate::api::client::utils::consume_stream_into_bytes(stream_body).await?;
@@ -162,6 +162,7 @@ struct InnerPushRequest {
     deleted_block_cids: Vec<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct PushResponse {
     id: ApiMetadataId,
@@ -171,8 +172,21 @@ pub struct PushResponse {
     storage_authorization: Option<String>,
 }
 
+#[allow(dead_code)]
 impl PushResponse {
-    pub fn id(&self) -> ApiMetadataId {
+    pub(crate) fn id(&self) -> ApiMetadataId {
         self.id.clone()
+    }
+
+    pub(crate) fn state(&self) -> &str {
+        &self.state
+    }
+
+    pub(crate) fn storage_authorization(&self) -> Option<&str> {
+        self.storage_authorization.as_deref()
+    }
+
+    pub(crate) fn storage_host(&self) -> Option<&str> {
+        self.storage_host.as_deref()
     }
 }

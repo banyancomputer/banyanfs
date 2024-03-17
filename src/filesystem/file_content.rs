@@ -1,7 +1,7 @@
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::number::streaming::{le_u64, le_u8};
 
-use crate::codec::crypto::{AccessKey, SymLockedAccessKey};
+use crate::codec::crypto::SymLockedAccessKey;
 use crate::codec::ParserResult;
 use crate::filesystem::ContentReference;
 
@@ -66,7 +66,7 @@ impl FileContent {
         matches!(self, Self::Encrypted { .. })
     }
 
-    pub fn parse<'a>(input: &'a [u8], access_key: Option<&AccessKey>) -> ParserResult<'a, Self> {
+    pub fn parse<'a>(input: &'a [u8]) -> ParserResult<'a, Self> {
         let (input, content_type) = le_u8(input)?;
 
         let parsed = match content_type {

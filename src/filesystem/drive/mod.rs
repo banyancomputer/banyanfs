@@ -104,7 +104,7 @@ impl Drive {
                 .ok_or(StdError::new(StdErrorKind::Other, "no filesystem key"))?
                 .clone();
 
-            written_bytes += inner_read.encode(rng, &mut *fs_buffer).await?;
+            written_bytes += inner_read.encode(&mut *fs_buffer).await?;
 
             // todo: use filesystem ID and encoded length bytes as AD
             let buffer_length = fs_buffer.encrypted_len() as u64;
