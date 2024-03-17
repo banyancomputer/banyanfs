@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use elliptic_curve::rand_core::CryptoRngCore;
 
 use crate::codec::filesystem::NodeKind;
-use crate::codec::meta::ActorId;
+use crate::codec::meta::{ActorId, VectorClock};
 use crate::filesystem::nodes::{
     CidCache, Node, NodeData, NodeId, NodeName, NodeNameError, PermanentId,
 };
@@ -37,6 +37,8 @@ impl NodeBuilder {
             _ => unimplemented!("haven't made it there yet"),
         };
 
+        let vector_clock = VectorClock::initialize();
+
         let new_node = Node {
             id,
             parent_id: self.parent_id,
@@ -44,6 +46,7 @@ impl NodeBuilder {
             owner_id,
 
             cid: CidCache::empty(),
+            vector_clock,
 
             name: self.name,
 

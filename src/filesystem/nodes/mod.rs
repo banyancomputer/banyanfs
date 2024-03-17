@@ -19,7 +19,7 @@ use nom::number::streaming::{le_i64, le_u32, le_u8};
 use crate::codec::crypto::AccessKey;
 use crate::codec::filesystem::NodeKind;
 use crate::codec::meta::{ActorId, Cid, PermanentId};
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, VectorClock};
 use crate::filesystem::drive::OperationError;
 
 pub(crate) type NodeId = usize;
@@ -31,6 +31,7 @@ pub struct Node {
     owner_id: ActorId,
 
     cid: CidCache,
+    vector_clock: VectorClock,
 
     created_at: i64,
     modified_at: i64,
@@ -94,6 +95,9 @@ impl Node {
     ) -> std::io::Result<usize> {
         let mut node_data = Vec::new();
 
+        self.permanent_id.encode(&mut node_data).await?;
+        self.vector_clock.encode(&mut node_data).await?;
+
         match self.parent_id {
             Some(pid) => {
                 node_data.write_all(&[0x01]).await?;
@@ -104,7 +108,6 @@ impl Node {
             }
         };
 
-        self.permanent_id.encode(&mut node_data).await?;
         self.owner_id.encode(&mut node_data).await?;
 
         let created_at_bytes = self.created_at.to_le_bytes();
@@ -252,6 +255,9 @@ impl Node {
 
         let (input, node_data_buf) = take(node_data_len)(input)?;
 
+        let (node_data_buf, permanent_id) = PermanentId::parse(node_data_buf)?;
+        let (node_data_buf, vector_clock) = VectorClock::parse(node_data_buf)?;
+
         let (node_data_buf, parent_present) = take(1u8)(node_data_buf)?;
         let (node_data_buf, parent_id) = match parent_present[0] {
             0x00 => (node_data_buf, None),
@@ -265,7 +271,6 @@ impl Node {
             }
         };
 
-        let (node_data_buf, permanent_id) = PermanentId::parse(node_data_buf)?;
         let (node_data_buf, owner_id) = ActorId::parse(node_data_buf)?;
         let (node_data_buf, created_at) = le_i64(node_data_buf)?;
         let (node_data_buf, modified_at) = le_i64(node_data_buf)?;
@@ -295,12 +300,12 @@ impl Node {
 
         let node = Self {
             id: allocated_id,
-
-            cid: CidCache::empty(),
             parent_id,
-
             permanent_id,
             owner_id,
+
+            cid: CidCache::empty(),
+            vector_clock,
 
             created_at,
             modified_at,
