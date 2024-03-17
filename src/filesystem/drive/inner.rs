@@ -110,59 +110,58 @@ impl InnerDrive {
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
 
-        // Walk the nodes starting from the root, encoding them one at a time, we want to make sure
-        // we only encode things once and do so in a consistent order to ensure our content is
-        // reproducible. This will silently discard any disconnected leaf nodes. Loops are
-        // tolerated.
-
+        // We want to walk the nodes in a consistent depth first order to provide a total ordering
+        // of the internal nodes. This is important as once we get to encoding we want to ensure
+        // that any node that has children is encoded after its children. We accomplish this by
+        // reversing the list from our walked tree and encoding in that order.
+        //
+        // This will silently discard any disconnected leaf nodes. Loops are tolerated.
+        let mut ordered_ids = Vec::new();
         let mut seen_ids = HashSet::new();
-        let mut outstanding_ids = vec![self.root_node_id];
-        let mut all_data_cids = Vec::new();
 
-        let mut node_buffer = Vec::new();
-        while let Some(node_id) = outstanding_ids.pop() {
-            let node = self.nodes.get(node_id).ok_or_else(|| {
-                StdError::new(StdErrorKind::Other, "node ID missing from internal nodes")
-            })?;
+        let root_perm_id = self
+            .root_node()
+            .map_err(|_| std_err("no root node"))?
+            .permanent_id();
 
-            // Deduplicate nodes as we go through them
-            let permanent_id = node.permanent_id();
-            if seen_ids.contains(&permanent_id) {
+        let mut outstanding_ids = vec![root_perm_id];
+
+        while let Some(node_pid) = outstanding_ids.pop() {
+            let node = self
+                .by_perm_id(&node_pid)
+                .map_err(|_| std_err("missing node PID"))?;
+
+            if seen_ids.contains(&node.permanent_id()) {
                 continue;
             }
-            seen_ids.insert(permanent_id);
 
-            let node_size = node.encode(&mut node_buffer).await?;
-
-            let ordered_child_pids = node.ordered_child_pids();
-            let ordered_data_cids = node.ordered_data_cids();
-
-            let child_count = ordered_child_pids.len();
-            let data_count = ordered_data_cids.len();
-
-            let mut added_children = 0;
-            for child_perm_id in ordered_child_pids.into_iter() {
-                if seen_ids.contains(&child_perm_id) {
-                    continue;
-                }
-
-                let child_node_id = self.permanent_id_map.get(&child_perm_id).ok_or_else(|| {
-                    StdError::new(
-                        StdErrorKind::Other,
-                        "referenced child's permanent ID missing from internal nodes",
-                    )
-                })?;
-
-                outstanding_ids.push(*child_node_id);
-                added_children += 1;
-            }
-
-            tracing::trace!(?permanent_id, node_kind = ?node.kind(), node_size, added_children, child_count, data_count, "node_encoding::complete");
-
-            all_data_cids.extend(ordered_data_cids);
+            seen_ids.insert(node.permanent_id());
+            ordered_ids.push(node.permanent_id());
+            outstanding_ids.extend(node.ordered_child_pids());
         }
 
-        // TODO: should scan the slab for any nodes that are not reachable from the root and track
+        // Flip our ordering to encode our leaf nodes first. This allows us to include CIDs from
+        // the leafs as part of the data encoding for any containing nodes.
+        ordered_ids.reverse();
+
+        let mut referenced_data_cids = HashSet::new();
+
+        let mut node_buffer = Vec::new();
+        while let Some(node_pid) = ordered_ids.pop() {
+            let node = self
+                .by_perm_id(&node_pid)
+                .map_err(|_| std_err("missing node PID"))?;
+
+            node.encode(&mut node_buffer).await?;
+
+            // todo(sstelfox): data cids don't need to be globally ordered, lets lexigraphically
+            // sort them.
+            for cid in node.ordered_data_cids() {
+                referenced_data_cids.insert(cid);
+            }
+        }
+
+        // todo(sstelfox): should scan the slab for any nodes that are not reachable from the root and track
         // them for removal in the journal and maintenance logs. It really shoudn't happen but be
         // defensive against errors...
 
@@ -354,4 +353,8 @@ impl InnerDrive {
     pub(crate) fn root_node_id(&self) -> NodeId {
         self.root_node_id
     }
+}
+
+fn std_err(msg: &'static str) -> StdError {
+    StdError::new(StdErrorKind::Other, msg)
 }
