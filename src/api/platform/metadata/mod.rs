@@ -12,7 +12,7 @@ use bytes::Bytes;
 use futures::Stream;
 
 use crate::api::client::{ApiClient, ApiError};
-use crate::api::platform::ApiMetadata;
+use crate::api::platform::{ApiMetadata, ApiMetadataId};
 use crate::codec::crypto::Fingerprint;
 use crate::codec::Cid;
 
@@ -44,13 +44,14 @@ pub async fn pull_stream(
     Ok(response.consume().bytes_stream())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn push_stream<S>(
     client: &ApiClient,
     drive_id: &str,
 
     expected_data_size: u64,
     merkle_root_cid: Cid,
-    previous_merkle_root_cid: Option<String>,
+    previous_version_id: Option<ApiMetadataId>,
 
     stream_body: std::pin::Pin<Box<S>>,
 
@@ -64,7 +65,7 @@ where
         drive_id.into(),
         expected_data_size,
         merkle_root_cid,
-        previous_merkle_root_cid,
+        previous_version_id,
         stream_body,
         valid_keys,
         deleted_block_cids,

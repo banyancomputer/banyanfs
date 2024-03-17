@@ -17,7 +17,7 @@ pub(crate) struct PushRequest {
 
     // formerly just root_cid, doubles up as metadata_cid now
     merkle_root_cid: Cid,
-    previous_merkle_root_cid: Option<String>,
+    previous_version_id: Option<ApiMetadataId>,
 
     stream_body: Option<Body>,
 
@@ -36,9 +36,7 @@ impl PushRequest {
         expected_data_size: u64,
         merkle_root_cid: Cid,
 
-        // note(sstelfox): this should also be a Cid but I'm delaying writing the string parser for the
-        // format. Should update this in the future.
-        previous_merkle_root_cid: Option<String>,
+        previous_version_id: Option<ApiMetadataId>,
 
         stream_body: S,
 
@@ -68,7 +66,7 @@ impl PushRequest {
 
             expected_data_size,
             merkle_root_cid,
-            previous_merkle_root_cid,
+            previous_version_id,
 
             stream_body: Some(stream_body),
 
@@ -89,7 +87,7 @@ impl ApiRequest for PushRequest {
         mut request: RequestBuilder,
     ) -> Result<RequestBuilder, ApiError> {
         let root_cid = self.merkle_root_cid.as_base64url_multicodec();
-        let mut previous_cid = None;
+        let mut previous_id = None;
 
         // We can drop the multipart uploads and have a simpler upload by leveraging the headers to
         // send the extra data we need.
@@ -97,10 +95,9 @@ impl ApiRequest for PushRequest {
             .header("x-expected-data-size", self.expected_data_size.to_string())
             .header("x-merkle-root-cid", root_cid.clone());
 
-        if let Some(prev_merkle_root_cid) = &self.previous_merkle_root_cid {
-            let cid_str = prev_merkle_root_cid.clone();
-            request = request.header("x-previous-merkle-root-cid", cid_str.clone());
-            previous_cid = Some(cid_str);
+        if let Some(prev_version_id) = &self.previous_version_id {
+            request = request.header("x-previous-version-id", prev_version_id.clone());
+            previous_id = Some(prev_version_id.clone())
         }
 
         let body = self.stream_body.take().ok_or(ApiError::RequestReused)?;
@@ -124,7 +121,7 @@ impl ApiRequest for PushRequest {
 
             root_cid,
             metadata_cid,
-            previous_cid,
+            previous_id,
 
             valid_keys,
             deleted_block_cids,
@@ -156,7 +153,8 @@ struct InnerPushRequest {
 
     root_cid: String,
     metadata_cid: String,
-    previous_cid: Option<String>,
+
+    previous_id: Option<String>,
 
     valid_keys: Vec<String>,
     deleted_block_cids: Vec<String>,
