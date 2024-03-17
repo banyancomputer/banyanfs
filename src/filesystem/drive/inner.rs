@@ -146,8 +146,10 @@ impl InnerDrive {
             }
             seen_ids.insert(permanent_id);
 
-            let (node_size, ordered_child_pids, ordered_data_cids) =
-                node.encode(rng, &mut node_buffer, Some(data_key)).await?;
+            let node_size = node.encode(&mut node_buffer).await?;
+
+            let ordered_child_pids = node.ordered_child_pids();
+            let ordered_data_cids = node.ordered_data_cids();
 
             let child_count = ordered_child_pids.len();
             let data_count = ordered_data_cids.len();
@@ -352,13 +354,8 @@ impl InnerDrive {
                     "missing node for removal",
                 ))?;
 
-            if let Some(data_cids) = node.data().data_cids() {
-                data_cids_removed.extend(data_cids);
-            }
-
-            if let Some(child_pids) = node.data().child_pids() {
-                nodes_to_remove.extend(child_pids);
-            }
+            data_cids_removed.extend(node.data().ordered_data_cids());
+            nodes_to_remove.extend(node.data().ordered_child_pids());
         }
 
         Ok(())

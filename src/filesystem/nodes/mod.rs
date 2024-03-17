@@ -12,7 +12,6 @@ pub use node_name::{NodeName, NodeNameError};
 use std::collections::HashMap;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
-use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
 use nom::number::streaming::{le_i64, le_u32, le_u8};
@@ -61,15 +60,18 @@ impl Node {
         self.cid.take_cached().await
     }
 
-    pub(crate) fn child_pids(&self) -> Option<Vec<PermanentId>> {
-        self.inner.child_pids()
-    }
-
     pub async fn cid(&self) -> Result<Cid, OperationError> {
-        // todo(sstelfox): this should always return a CID, if we can't get it
-        // from the cache we should encode ourselves, cache it and return the
-        // generated CID.
-        todo!()
+        if self.cid.is_dirty().await {
+            let mut node_data = Vec::new();
+
+            self.encode(&mut node_data).await.map_err(|_| {
+                OperationError::InternalCorruption(self.id, "failed to encode node for CID")
+            })?;
+
+            self.cid.set_cached(node_data).await;
+        }
+
+        Ok(self.cid.cid().await.expect("enforce cid generation above"))
     }
 
     pub fn created_at(&self) -> i64 {
@@ -91,10 +93,8 @@ impl Node {
 
     pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
-        rng: &mut impl CryptoRngCore,
         writer: &mut W,
-        data_key: Option<&AccessKey>,
-    ) -> std::io::Result<(usize, Vec<PermanentId>, Vec<Cid>)> {
+    ) -> std::io::Result<usize> {
         let mut node_data = Vec::new();
 
         match self.parent_id {
@@ -152,13 +152,7 @@ impl Node {
             node_data.write_all(val).await?;
         }
 
-        // todo(sstelfox): not sure if this is quite the right place, but I need to make sure that
-        // child CIDs are referenced alongside their permanent IDs in the child hierarchy so we can
-        // detect whole tree changes.
-        let (data_len, ordered_child_ids, ordered_data_cids) =
-            self.data().encode(rng, &mut node_data, data_key).await?;
-        tracing::trace!(node_data_len = data_len, "node_data::encoded");
-
+        self.data().encode(&mut node_data).await?;
         self.cid.set_with_ref(&node_data).await;
 
         let mut written_bytes = 0;
@@ -179,7 +173,7 @@ impl Node {
         writer.write_all(&node_data).await?;
         written_bytes += node_data.len();
 
-        Ok((written_bytes, ordered_child_ids, ordered_data_cids))
+        Ok(written_bytes)
     }
 
     pub fn id(&self) -> NodeId {
@@ -200,6 +194,14 @@ impl Node {
 
     pub fn name(&self) -> NodeName {
         self.name.clone()
+    }
+
+    pub(crate) fn ordered_child_pids(&self) -> Vec<PermanentId> {
+        self.inner.ordered_child_pids()
+    }
+
+    pub(crate) fn ordered_data_cids(&self) -> Vec<Cid> {
+        self.inner.ordered_data_cids()
     }
 
     pub fn owner_id(&self) -> ActorId {

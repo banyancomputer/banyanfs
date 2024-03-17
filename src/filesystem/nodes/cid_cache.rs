@@ -34,8 +34,13 @@ impl CidCache {
         inner.encoded = None;
     }
 
-    pub(crate) async fn set_for_cache(&self, data: Vec<u8>) {
-        self.set_with_ref(data.as_slice()).await;
+    // # Note
+    //
+    // This function intentionally is not calculating and setting the CID here. If the data
+    // provided is actually from this associated node, then when it was encoded it would have
+    // calculated its own CID with the [`set_with_ref`] function. This just allows us to use the
+    // CID generated encoding for when we come back through and are ready for the whole thing.
+    pub(crate) async fn set_cached(&self, data: Vec<u8>) {
         let mut inner = self.0.write().await;
         inner.encoded = Some(data);
     }

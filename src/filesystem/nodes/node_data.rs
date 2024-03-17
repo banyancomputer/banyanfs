@@ -1,7 +1,6 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
-use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::number::streaming::le_u16;
 
@@ -23,8 +22,6 @@ pub enum NodeData {
         children: HashMap<NodeName, PermanentId>,
     },
 }
-
-type EncodedAssociation = (usize, Vec<PermanentId>, Vec<Cid>);
 
 impl NodeData {
     pub(crate) fn add_child(
@@ -89,30 +86,27 @@ impl NodeData {
         Ok(())
     }
 
-    pub(crate) fn child_pids(&self) -> Option<Vec<PermanentId>> {
+    pub(crate) fn ordered_child_pids(&self) -> Vec<PermanentId> {
         let children = match self {
             NodeData::File {
                 associated_data, ..
             } => associated_data,
             NodeData::Directory { children, .. } => children,
-            _ => return None,
+            _ => return Vec::new(),
         };
 
-        Some(children.values().cloned().collect())
+        todo!("order children by permanent ID and return them")
     }
 
-    pub(crate) fn data_cids(&self) -> Option<Vec<Cid>> {
-        tracing::warn!("impl needed for returning data CIDs for file content");
-        None
+    pub(crate) fn ordered_data_cids(&self) -> Vec<Cid> {
+        todo!("get data cids, preserve offset order")
     }
 
-    #[tracing::instrument(skip(self, rng, writer))]
+    #[tracing::instrument(skip(self, writer))]
     pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
-        rng: &mut impl CryptoRngCore,
         writer: &mut W,
-        data_key: Option<&AccessKey>,
-    ) -> std::io::Result<EncodedAssociation> {
+    ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
 
         written_bytes += self.kind().encode(writer).await?;
@@ -125,26 +119,19 @@ impl NodeData {
                 content,
             } => {
                 written_bytes += permissions.encode(writer).await?;
+                written_bytes += encode_children(associated_data, writer).await?;
+                written_bytes += content.encode(writer).await?;
 
-                let (child_len, ordered_ids) = encode_children(associated_data, writer).await?;
-                written_bytes += child_len;
-
-                let (content_len, data_cids) = content.encode(rng, writer, data_key).await?;
-                written_bytes += content_len;
-
-                Ok((written_bytes, ordered_ids, data_cids))
+                Ok(written_bytes)
             }
             NodeData::Directory {
                 permissions,
                 children,
             } => {
-                let perm_len = permissions.encode(writer).await?;
-                written_bytes += perm_len;
+                written_bytes += permissions.encode(writer).await?;
+                written_bytes += encode_children(children, writer).await?;
 
-                let (child_len, ordered_ids) = encode_children(children, writer).await?;
-                written_bytes += child_len;
-
-                Ok((written_bytes, ordered_ids, Vec::new()))
+                Ok(written_bytes)
             }
             _ => unimplemented!(),
         }
@@ -219,7 +206,7 @@ impl NodeData {
 async fn encode_children<W: AsyncWrite + Unpin + Send>(
     children: &HashMap<NodeName, PermanentId>,
     writer: &mut W,
-) -> std::io::Result<(usize, Vec<PermanentId>)> {
+) -> std::io::Result<usize> {
     let child_count = children.len();
     if child_count > u16::MAX as usize {
         return Err(std::io::Error::new(
@@ -235,14 +222,12 @@ async fn encode_children<W: AsyncWrite + Unpin + Send>(
     let mut children = children.iter().collect::<Vec<_>>();
     children.sort_by(|(_, a), (_, b)| a.cmp(b));
 
-    let mut ordered_child_ids = Vec::with_capacity(child_count);
     for (name, id) in children {
         written_bytes += name.encode(writer).await?;
         written_bytes += id.encode(writer).await?;
-        ordered_child_ids.push(*id);
     }
 
-    Ok((written_bytes, ordered_child_ids))
+    Ok(written_bytes)
 }
 
 fn parse_children(input: &[u8]) -> ParserResult<HashMap<NodeName, PermanentId>> {
