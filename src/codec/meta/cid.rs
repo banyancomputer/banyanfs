@@ -18,11 +18,7 @@ impl Cid {
         let mut inner_bytes = Vec::with_capacity(CID_LENGTH + 1);
 
         // raw inner data: cid version 1, raw multicodec 0x55, blake3 multihash 0x1e, len of 32
-        //inner_bytes.extend_from_slice(&[0x01, 0x55, 0x1e, 0x20]);
-
-        // raw inner data: cid version 1, first entry in unreserved self-selected
-        // namespace, blake3 multihash 0x1e, len of 32
-        inner_bytes.extend_from_slice(&[0x01, 0xb5, 0x99, 0x11, 0x1e, 0x20]);
+        inner_bytes.extend_from_slice(&[0x01, 0x55, 0x1e, 0x20]);
 
         // the hash itself
         inner_bytes.extend_from_slice(&self.0);
