@@ -14,6 +14,8 @@ use crate::filesystem::drive::{DirectoryEntry, InnerDrive, OperationError, WalkS
 use crate::filesystem::nodes::{Node, NodeData, NodeId, NodeName};
 use crate::filesystem::NodeBuilder;
 
+use self::filesystem::FilePermissions;
+
 const MAX_PATH_DEPTH: usize = 32;
 
 #[derive(Clone)]
@@ -44,6 +46,18 @@ impl DirectoryHandle {
         };
 
         Ok(directory)
+    }
+
+    pub async fn chmod(
+        &self,
+        _path: &[&str],
+        _owner: FilePermissions,
+    ) -> Result<(), OperationError> {
+        unimplemented!()
+    }
+
+    pub async fn chown(&self, _path: &[&str], _owner: ActorId) -> Result<(), OperationError> {
+        unimplemented!()
     }
 
     #[instrument(level = Level::DEBUG, skip(self))]
@@ -118,7 +132,7 @@ impl DirectoryHandle {
         rng: &'a mut R,
         parent_permanent_id: PermanentId,
         build_node: F,
-    ) -> Result<(NodeId, PermanentId), OperationError>
+    ) -> Result<PermanentId, OperationError>
     where
         R: CryptoRngCore,
         F: FnOnce(&'a mut R, NodeId, PermanentId, ActorId) -> Fut,
@@ -126,51 +140,14 @@ impl DirectoryHandle {
     {
         trace!("directory::insert_node");
 
-        let inner_read = self.inner.read().await;
-        let parent_node = inner_read.by_perm_id(&parent_permanent_id)?;
-        if !parent_node.is_directory() {
-            return Err(OperationError::ParentMustBeDirectory);
-        }
-
-        drop(inner_read);
-
         let mut inner_write = self.inner.write().in_current_span().await;
-        let node_entry = inner_write.nodes.vacant_entry();
-        let node_id = node_entry.key();
 
         let owner_id = self.current_key.actor_id();
-        let node = build_node(rng, node_id, parent_permanent_id, owner_id)
-            .in_current_span()
+        let new_permanent_id = inner_write
+            .create_node(rng, owner_id, parent_permanent_id, build_node)
             .await?;
 
-        let name = node.name();
-        let permanent_id = node.permanent_id();
-
-        node_entry.insert(node);
-        inner_write.permanent_id_map.insert(permanent_id, node_id);
-
-        let parent_node = inner_write.by_perm_id_mut(&parent_permanent_id)?;
-
-        let parent_children = match parent_node.data_mut() {
-            NodeData::Directory { children, .. } => children,
-            _ => {
-                return Err(OperationError::InternalCorruption(
-                    parent_node.id(),
-                    "parent node must be a directory",
-                ));
-            }
-        };
-
-        if parent_children.insert(name, permanent_id).is_some() {
-            return Err(OperationError::InternalCorruption(
-                parent_node.id(),
-                "wrote new directory over existing entry",
-            ));
-        }
-
-        trace!(?node_id, ?permanent_id, "directory::insert_node::inserted");
-
-        Ok((node_id, permanent_id))
+        Ok(new_permanent_id)
     }
 
     #[instrument(skip(self, rng))]
@@ -298,10 +275,10 @@ impl DirectoryHandle {
             ))?;
         let src_name = src_node.name();
         let src_perm_id = src_node.permanent_id();
-        src_node.set_parent_id(src_perm_id);
+        src_node.set_parent_id(src_perm_id).await;
 
         let src_parent_node = inner_write.by_perm_id_mut(&src_parent_perm_id)?;
-        match src_parent_node.data_mut() {
+        match src_parent_node.data_mut().await {
             NodeData::Directory { children, .. } => children.remove(&src_name),
             _ => {
                 return Err(OperationError::InternalCorruption(
@@ -316,7 +293,7 @@ impl DirectoryHandle {
         let last_dst_element = dst_path.last().ok_or(OperationError::UnexpectedEmptyPath)?;
         let new_dst_name = NodeName::named(last_dst_element.to_string())?;
 
-        match dst_parent_node.data_mut() {
+        match dst_parent_node.data_mut().await {
             NodeData::Directory { children, .. } => {
                 if children.insert(new_dst_name.clone(), src_perm_id).is_some() {
                     return Err(OperationError::InternalCorruption(
@@ -336,8 +313,8 @@ impl DirectoryHandle {
         let dst_parent_perm_id = dst_parent_node.permanent_id();
         let tgt_node = inner_write.by_id_mut(src_node_id)?;
 
-        tgt_node.set_parent_id(dst_parent_perm_id);
-        tgt_node.set_name(new_dst_name);
+        tgt_node.set_parent_id(dst_parent_perm_id).await;
+        tgt_node.set_name(new_dst_name).await;
 
         Ok(())
     }
@@ -362,7 +339,7 @@ impl DirectoryHandle {
         let target_node = inner_write.by_id(target_node_id)?;
         let target_node_perm_id = target_node.permanent_id();
 
-        inner_write.remove_node(target_node_perm_id);
+        inner_write.remove_node(target_node_perm_id).await?;
 
         Ok(())
     }

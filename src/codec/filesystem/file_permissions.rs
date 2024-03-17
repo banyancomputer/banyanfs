@@ -11,6 +11,8 @@ const FILE_PERMISSIONS_IMMUTABLE: u8 = 0b0000_0010;
 
 const FILE_PERMISSIONS_OWNER_WRITE_ONLY: u8 = 0b0000_0001;
 
+// todo(sstelfox): We only need one type of permission, they can be shared to simplify the
+// protocol.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct FilePermissions {
     executable: bool,

@@ -36,7 +36,7 @@ impl FileContent {
         rng: &mut impl CryptoRngCore,
         writer: &mut W,
         data_key: Option<&AccessKey>,
-    ) -> std::io::Result<(usize, Option<Vec<Cid>>)> {
+    ) -> std::io::Result<(usize, Vec<Cid>)> {
         let mut written_bytes = 0;
 
         let data_references = match self {
@@ -48,7 +48,7 @@ impl FileContent {
                 writer.write_all(&size_bytes).await?;
                 written_bytes += size_bytes.len();
 
-                None
+                Vec::new()
             }
             Self::Public { content } => {
                 writer.write_all(&[FILE_CONTENT_TYPE_PUBLIC]).await?;
@@ -57,7 +57,7 @@ impl FileContent {
                 let (n, cid_list) = encode_content_list(writer, content).await?;
                 written_bytes += n;
 
-                Some(cid_list)
+                cid_list
             }
             Self::Locked {
                 locked_access_key,
@@ -70,7 +70,7 @@ impl FileContent {
                 let (n, cid_list) = encode_content_list(writer, content).await?;
                 written_bytes += n;
 
-                Some(cid_list)
+                cid_list
             }
             Self::Decrypted {
                 access_key,
@@ -98,7 +98,7 @@ impl FileContent {
                 let (n, cid_list) = encode_content_list(writer, content).await?;
                 written_bytes += n;
 
-                Some(cid_list)
+                cid_list
             }
         };
 

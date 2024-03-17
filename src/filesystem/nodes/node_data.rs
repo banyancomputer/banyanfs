@@ -1,8 +1,9 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::number::streaming::{le_u16, le_u64, le_u8};
+use nom::number::streaming::le_u16;
 
 use crate::codec::crypto::AccessKey;
 use crate::codec::filesystem::{DirectoryPermissions, FilePermissions};
@@ -13,28 +14,96 @@ use crate::filesystem::FileContent;
 pub enum NodeData {
     File {
         permissions: FilePermissions,
+        associated_data: HashMap<NodeName, PermanentId>,
         content: FileContent,
-        associated_data: HashMap<u16, PermanentId>,
     },
     AssoicatedData,
     Directory {
         permissions: DirectoryPermissions,
         children: HashMap<NodeName, PermanentId>,
-        children_size: u64,
     },
 }
 
-type EncodedAssociation = (usize, Option<Vec<PermanentId>>, Option<Vec<Cid>>);
+type EncodedAssociation = (usize, Vec<PermanentId>, Vec<Cid>);
 
 impl NodeData {
-    pub(crate) fn children(&self) -> Vec<PermanentId> {
-        match self {
+    pub(crate) fn add_child(
+        &mut self,
+        name: NodeName,
+        id: PermanentId,
+    ) -> Result<(), NodeDataError> {
+        let child_map = match self {
+            NodeData::Directory { children, .. } => children,
             NodeData::File {
                 associated_data, ..
-            } => associated_data.values().cloned().collect(),
-            NodeData::Directory { children, .. } => children.values().cloned().collect(),
-            _ => Vec::new(),
+            } => associated_data,
+            _ => return Err(NodeDataError::NotAParent),
+        };
+
+        match child_map.entry(name) {
+            Entry::Occupied(_) => return Err(NodeDataError::NameExists),
+            Entry::Vacant(entry) => {
+                entry.insert(id);
+            }
         }
+
+        Ok(())
+    }
+
+    pub(crate) fn remove_child(&mut self, name: &NodeName) -> Result<PermanentId, NodeDataError> {
+        let child_map = match self {
+            NodeData::Directory { children, .. } => children,
+            NodeData::File {
+                associated_data, ..
+            } => associated_data,
+            _ => return Err(NodeDataError::NotAParent),
+        };
+
+        match child_map.remove(name) {
+            Some(id) => Ok(id),
+            None => Err(NodeDataError::NameMissing),
+        }
+    }
+
+    /// This function should be used with care, multiple entries may potentially be pointing to the
+    /// same the same permanent ID and this will remove all of them. This is also signficantly less
+    /// performant than removing a child by name as it requires visiting every possible entry in
+    /// the allocated map under the hood.
+    ///
+    /// This function will not fail like others if there are no children matching the permanent ID.
+    /// It will just complete successfully and quietly.
+    pub(crate) fn remove_permanent_id(
+        &mut self,
+        permanent_id: &PermanentId,
+    ) -> Result<(), NodeDataError> {
+        let child_map = match self {
+            NodeData::Directory { children, .. } => children,
+            NodeData::File {
+                associated_data, ..
+            } => associated_data,
+            _ => return Err(NodeDataError::NotAParent),
+        };
+
+        child_map.retain(|_, id| id != permanent_id);
+
+        Ok(())
+    }
+
+    pub(crate) fn child_pids(&self) -> Option<Vec<PermanentId>> {
+        let children = match self {
+            NodeData::File {
+                associated_data, ..
+            } => associated_data,
+            NodeData::Directory { children, .. } => children,
+            _ => return None,
+        };
+
+        Some(children.values().cloned().collect())
+    }
+
+    pub(crate) fn data_cids(&self) -> Option<Vec<Cid>> {
+        tracing::warn!("impl needed for returning data CIDs for file content");
+        None
     }
 
     #[tracing::instrument(skip(self, rng, writer))]
@@ -52,95 +121,30 @@ impl NodeData {
         match &self {
             NodeData::File {
                 permissions,
-                content,
                 associated_data,
+                content,
             } => {
-                let perm_len = permissions.encode(writer).await?;
-                tracing::trace!(encoded_len = perm_len, "permissions");
+                written_bytes += permissions.encode(writer).await?;
+
+                let (child_len, ordered_ids) = encode_children(associated_data, writer).await?;
+                written_bytes += child_len;
 
                 let (content_len, data_cids) = content.encode(rng, writer, data_key).await?;
-                tracing::trace!(
-                    encoded_len = content_len,
-                    data_cid_count = ?data_cids.as_ref().map(|c| c.len()).ok_or(0),
-                    "data_cids"
-                );
+                written_bytes += content_len;
 
-                written_bytes += content_len + perm_len;
-
-                let ad_length = associated_data.len();
-                if ad_length > u8::MAX as usize {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "too many associated data items with a single file entry",
-                    ));
-                }
-                writer.write_all(&[ad_length as u8]).await?;
-                written_bytes += 1;
-
-                if associated_data.is_empty() {
-                    return Ok((written_bytes, None, data_cids));
-                }
-
-                let mut child_ids = Vec::new();
-
-                let mut ad_list = associated_data.iter().collect::<Vec<_>>();
-                ad_list.sort();
-                let mut highest_seen_ad_kind = 0;
-
-                for (ad_kind, ad_perm_id) in ad_list.into_iter() {
-                    if *ad_kind <= highest_seen_ad_kind {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::InvalidData,
-                            "associated data kinds may only appear once a piece",
-                        ));
-                    }
-
-                    highest_seen_ad_kind = *ad_kind;
-                    writer.write_all(&ad_kind.to_le_bytes()).await?;
-                    written_bytes += 2;
-                    written_bytes += ad_perm_id.encode(writer).await?;
-
-                    child_ids.push(*ad_perm_id);
-                }
-
-                Ok((written_bytes, Some(child_ids), data_cids))
+                Ok((written_bytes, ordered_ids, data_cids))
             }
             NodeData::Directory {
                 permissions,
-                children_size,
                 children,
             } => {
                 let perm_len = permissions.encode(writer).await?;
                 written_bytes += perm_len;
 
-                let children_size_bytes = children_size.to_le_bytes();
-                writer.write_all(&children_size_bytes).await?;
-                written_bytes += children_size_bytes.len();
+                let (child_len, ordered_ids) = encode_children(children, writer).await?;
+                written_bytes += child_len;
 
-                let child_count = children.len();
-                if child_count > u16::MAX as usize {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "too many children in a single directory entry",
-                    ));
-                }
-
-                let child_count_bytes = (child_count as u16).to_le_bytes();
-                writer.write_all(&child_count_bytes).await?;
-                written_bytes += child_count_bytes.len();
-
-                let mut children = children.iter().collect::<Vec<_>>();
-                children.sort_by(|(_, a), (_, b)| a.cmp(b));
-
-                let mut children_ids = Vec::new();
-                for (name, id) in children {
-                    written_bytes += name.encode(writer).await?;
-                    written_bytes += id.encode(writer).await?;
-
-                    children_ids.push(*id);
-                }
-
-                Ok((written_bytes, Some(children_ids), None))
+                Ok((written_bytes, ordered_ids, Vec::new()))
             }
             _ => unimplemented!(),
         }
@@ -158,7 +162,6 @@ impl NodeData {
         Self::Directory {
             permissions: DirectoryPermissions::default(),
             children: HashMap::new(),
-            children_size: 0,
         }
     }
 
@@ -171,76 +174,32 @@ impl NodeData {
         let (input, node_data) = match kind {
             NodeKind::File => {
                 let (data_buf, permissions) = FilePermissions::parse(input)?;
+                let (data_buf, associated_data) = parse_children(data_buf)?;
                 let (data_buf, content) = FileContent::parse(data_buf, data_key)?;
 
-                let (data_buf, associated_data) = {
-                    let (mut data_buf, ad_length) = le_u8(data_buf)?;
-                    let mut associated_data = HashMap::new();
-
-                    for _ in 0..ad_length {
-                        let (ad_buf, ad_kind) = le_u16(data_buf)?;
-                        let (ad_buf, ad_perm_id) = PermanentId::parse(ad_buf)?;
-                        associated_data.insert(ad_kind, ad_perm_id);
-                        data_buf = ad_buf;
-                    }
-
-                    (data_buf, associated_data)
-                };
+                let desired_node_ids = associated_data.values().cloned().collect::<Vec<_>>();
 
                 let data = NodeData::File {
                     permissions,
-                    content,
                     associated_data,
+                    content,
                 };
 
-                (data_buf, (data, Vec::new()))
+                (data_buf, (data, desired_node_ids))
             }
             //NodeKind::AssociatedData => {}
             NodeKind::Directory => {
                 let (data_buf, permissions) = DirectoryPermissions::parse(input)?;
-                let perm_len = input.len() - data_buf.len();
-                tracing::trace!(bytes_read = ?perm_len, "directory_permissions");
+                let (data_buf, children) = parse_children(data_buf)?;
 
-                let (data_buf, children_size) = le_u64(data_buf)?;
-                let children_size_len = input.len() - data_buf.len() - perm_len;
-                tracing::trace!(bytes_read = ?children_size_len, "children_size");
+                let desired_node_ids = children.values().cloned().collect::<Vec<_>>();
 
-                let (data_buf, children_count) = le_u16(data_buf)?;
-                let children_count_len =
-                    input.len() - data_buf.len() - perm_len - children_size_len;
-                tracing::trace!(bytes_read = ?children_count_len, children_count, "children_count");
-
-                let mut desired_nodes = HashSet::new();
-
-                let mut children = HashMap::new();
-                let mut child_buf = data_buf;
-                for idx in 0..children_count {
-                    let _guard = tracing::trace_span!("child", child_idx = idx, remaining_buf = ?child_buf.len()).entered();
-
-                    let (remaining, child_name) = NodeName::parse(child_buf)?;
-                    let name_len = child_buf.len() - remaining.len();
-                    tracing::trace!(?child_name, bytes_read = name_len, "child_name");
-
-                    let (remaining, child_id) = PermanentId::parse(remaining)?;
-                    let id_len = child_buf.len() - remaining.len() - name_len;
-                    tracing::trace!(child_perm_id = ?child_id, bytes_read = id_len, "child_perm_id");
-
-                    children.insert(child_name, child_id);
-                    desired_nodes.insert(child_id);
-
-                    let bytes_read = child_buf.len() - remaining.len();
-                    tracing::trace!(bytes_read, "complete");
-                    child_buf = remaining;
-                }
-
-                let desired_node_ids = desired_nodes.into_iter().collect::<Vec<_>>();
                 let data = NodeData::Directory {
                     permissions,
-                    children_size,
                     children,
                 };
 
-                (child_buf, (data, desired_node_ids))
+                (data_buf, (data, desired_node_ids))
             }
             _ => unimplemented!(),
         };
@@ -251,8 +210,67 @@ impl NodeData {
     pub fn stub_file(size: u64) -> Self {
         Self::File {
             permissions: FilePermissions::default(),
-            content: FileContent::Stub { size },
             associated_data: HashMap::new(),
+            content: FileContent::Stub { size },
         }
     }
+}
+
+async fn encode_children<W: AsyncWrite + Unpin + Send>(
+    children: &HashMap<NodeName, PermanentId>,
+    writer: &mut W,
+) -> std::io::Result<(usize, Vec<PermanentId>)> {
+    let child_count = children.len();
+    if child_count > u16::MAX as usize {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "too many children in a single directory entry",
+        ));
+    }
+
+    let child_count_bytes = (child_count as u16).to_le_bytes();
+    writer.write_all(&child_count_bytes).await?;
+    let mut written_bytes = child_count_bytes.len();
+
+    let mut children = children.iter().collect::<Vec<_>>();
+    children.sort_by(|(_, a), (_, b)| a.cmp(b));
+
+    let mut ordered_child_ids = Vec::with_capacity(child_count);
+    for (name, id) in children {
+        written_bytes += name.encode(writer).await?;
+        written_bytes += id.encode(writer).await?;
+        ordered_child_ids.push(*id);
+    }
+
+    Ok((written_bytes, ordered_child_ids))
+}
+
+fn parse_children(input: &[u8]) -> ParserResult<HashMap<NodeName, PermanentId>> {
+    let (data_buf, children_count) = le_u16(input)?;
+
+    let mut children = HashMap::new();
+    let mut child_buf = data_buf;
+
+    for _ in 0..children_count {
+        let (remaining, child_name) = NodeName::parse(child_buf)?;
+        let (remaining, child_id) = PermanentId::parse(remaining)?;
+
+        children.insert(child_name, child_id);
+
+        child_buf = remaining;
+    }
+
+    Ok((child_buf, children))
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum NodeDataError {
+    #[error("attempted to add child with a name that was already present")]
+    NameExists,
+
+    #[error("attempted to remove a child that was not present")]
+    NameMissing,
+
+    #[error("non-parent node cannot have or interact with children")]
+    NotAParent,
 }

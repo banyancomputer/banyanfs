@@ -104,8 +104,7 @@ impl WasmMount {
         let root_cid = unlocked_drive
             .root_cid()
             .await
-            .map_err(|e| format!("error while getting root cid for sync: {}", e))?
-            .ok_or("missing root cid")?;
+            .map_err(|e| format!("error while getting root cid for sync: {}", e))?;
 
         let valid_keys = vec![];
         let deleted_block_cids = vec![];

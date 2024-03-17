@@ -5,6 +5,7 @@ use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
 use nom::number::streaming::le_u64;
 use slab::Slab;
+use tracing::instrument;
 
 use crate::codec::crypto::AccessKey;
 use crate::codec::*;
@@ -67,6 +68,42 @@ impl InnerDrive {
         self.by_id_mut(*node_id)
     }
 
+    #[instrument(level = tracing::Level::TRACE, skip(self, rng, build_node))]
+    pub(crate) async fn create_node<'a, R, F, Fut>(
+        &mut self,
+        rng: &'a mut R,
+        owner_id: ActorId,
+        parent_permanent_id: PermanentId,
+        build_node: F,
+    ) -> Result<PermanentId, OperationError>
+    where
+        R: CryptoRngCore,
+        F: FnOnce(&'a mut R, NodeId, PermanentId, ActorId) -> Fut,
+        Fut: std::future::Future<Output = Result<Node, OperationError>>,
+    {
+        let parent_node = self.by_perm_id(&parent_permanent_id)?;
+        if !parent_node.supports_children() {
+            return Err(OperationError::ParentMustBeDirectory);
+        }
+
+        let node_entry = self.nodes.vacant_entry();
+        let node_id = node_entry.key();
+
+        let node = build_node(rng, node_id, parent_permanent_id, owner_id).await?;
+
+        let name = node.name();
+        let permanent_id = node.permanent_id();
+
+        node_entry.insert(node);
+
+        self.permanent_id_map.insert(permanent_id, node_id);
+
+        let parent_node = self.by_perm_id_mut(&parent_permanent_id)?;
+        parent_node.add_child(name, permanent_id).await?;
+
+        Ok(permanent_id)
+    }
+
     pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         rng: &mut impl CryptoRngCore,
@@ -109,37 +146,32 @@ impl InnerDrive {
             }
             seen_ids.insert(permanent_id);
 
-            let (node_size, child_pids, data_cids) =
+            let (node_size, ordered_child_pids, ordered_data_cids) =
                 node.encode(rng, &mut node_buffer, Some(data_key)).await?;
 
-            let child_count = child_pids.as_ref().map_or(0, |p| p.len());
-            let data_count = data_cids.as_ref().map_or(0, |d| d.len());
+            let child_count = ordered_child_pids.len();
+            let data_count = ordered_data_cids.len();
 
             let mut added_children = 0;
-            if let Some(pid_list) = child_pids {
-                for child_perm_id in pid_list.into_iter() {
-                    if seen_ids.contains(&child_perm_id) {
-                        continue;
-                    }
-
-                    let child_node_id =
-                        self.permanent_id_map.get(&child_perm_id).ok_or_else(|| {
-                            StdError::new(
-                                StdErrorKind::Other,
-                                "referenced child's permanent ID missing from internal nodes",
-                            )
-                        })?;
-
-                    outstanding_ids.push(*child_node_id);
-                    added_children += 1;
+            for child_perm_id in ordered_child_pids.into_iter() {
+                if seen_ids.contains(&child_perm_id) {
+                    continue;
                 }
+
+                let child_node_id = self.permanent_id_map.get(&child_perm_id).ok_or_else(|| {
+                    StdError::new(
+                        StdErrorKind::Other,
+                        "referenced child's permanent ID missing from internal nodes",
+                    )
+                })?;
+
+                outstanding_ids.push(*child_node_id);
+                added_children += 1;
             }
 
             tracing::trace!(?permanent_id, node_kind = ?node.kind(), node_size, added_children, child_count, data_count, "node_encoding::complete");
 
-            if let Some(data) = data_cids {
-                all_data_cids.extend(data);
-            }
+            all_data_cids.extend(ordered_data_cids);
         }
 
         // TODO: should scan the slab for any nodes that are not reachable from the root and track
@@ -202,7 +234,7 @@ impl InnerDrive {
     }
 
     pub(crate) fn journal_start(&self) -> JournalCheckpoint {
-        self.journal_start
+        self.journal_start.clone()
     }
 
     pub(crate) fn parse<'a>(
@@ -292,7 +324,7 @@ impl InnerDrive {
         Ok((node_input, inner_drive))
     }
 
-    pub(crate) fn remove_node(&mut self, perm_id: PermanentId) -> Result<(), OperationError> {
+    pub(crate) async fn remove_node(&mut self, perm_id: PermanentId) -> Result<(), OperationError> {
         // We need to first make this node an orphan by removing it from its parent and marking the
         // parent as dirty.
         let target_node = self.by_perm_id(&perm_id)?;
@@ -301,9 +333,10 @@ impl InnerDrive {
             .ok_or(OperationError::OrphanNode(perm_id))?;
 
         let parent_node = self.by_perm_id_mut(&parent_perm_id)?;
-        parent_node.remove_child(perm_id)?;
+        parent_node.remove_permanent_id(&perm_id).await?;
 
         let mut nodes_to_remove = vec![perm_id];
+        let mut data_cids_removed = Vec::new();
 
         while let Some(next_node_perm_id) = nodes_to_remove.pop() {
             let node_id = self
@@ -319,10 +352,13 @@ impl InnerDrive {
                     "missing node for removal",
                 ))?;
 
-            todo!("need to identify any child nodes and add them to the node to remove");
+            if let Some(data_cids) = node.data().data_cids() {
+                data_cids_removed.extend(data_cids);
+            }
 
-            // todo(sstelfox): I'll need to track any remotely deleted data nodes here for the next
-            // sync...
+            if let Some(child_pids) = node.data().child_pids() {
+                nodes_to_remove.extend(child_pids);
+            }
         }
 
         Ok(())
