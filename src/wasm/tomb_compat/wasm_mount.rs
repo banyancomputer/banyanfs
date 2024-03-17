@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use async_std::sync::RwLock;
 use futures::io::Cursor;
 use futures::StreamExt;
 use uuid::Uuid;
@@ -11,6 +14,7 @@ use crate::utils::crypto_rng;
 use crate::wasm::tomb_compat::{
     TombCompat, WasmBucket, WasmBucketMetadata, WasmFsMetadataEntry, WasmSnapshot,
 };
+use crate::wasm::DataStorage;
 
 #[derive(Clone)]
 #[wasm_bindgen]
@@ -18,8 +22,12 @@ pub struct WasmMount {
     wasm_client: TombCompat,
 
     bucket: WasmBucket,
+
+    data_cache: Arc<RwLock<DataStorage>>,
     drive: Option<Drive>,
 
+    // Dirty should be a derived attribute based on the state of the drive and knowledge of the
+    // state of the data cache.
     dirty: bool,
     last_saved_metadata: Option<WasmBucketMetadata>,
 }
@@ -40,11 +48,15 @@ impl WasmMount {
         let drive = Drive::initialize_private_with_id(&mut rng, signing_key, filesystem_id)
             .map_err(|e| BanyanFsError::from(e.to_string()))?;
 
+        let data_cache = Arc::new(RwLock::new(DataStorage::default()));
+
         let mut mount = Self {
             wasm_client,
 
             bucket,
             drive: Some(drive),
+            data_cache,
+
             dirty: true,
 
             last_saved_metadata: None,
@@ -69,11 +81,15 @@ impl WasmMount {
         let drive = try_load_drive(client, &drive_id, &metadata_id).await;
         let dirty = drive.is_none();
 
+        let data_cache = Arc::new(RwLock::new(DataStorage::default()));
+
         let mount = Self {
             wasm_client,
 
             bucket,
             drive,
+            data_cache,
+
             dirty,
 
             last_saved_metadata: Some(WasmBucketMetadata::new(drive_id, current_metadata)),
@@ -98,8 +114,8 @@ impl WasmMount {
             .await
             .map_err(|e| format!("error while encoding drive for sync: {}", e))?;
 
-        tracing::warn!("impl needed not reporting true pending data size");
-        let expected_data_size = 0;
+        let cache_read = self.data_cache.read().await;
+        let expected_data_size = cache_read.unsynced_data_size();
 
         let root_cid = unlocked_drive
             .root_cid()

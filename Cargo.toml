@@ -93,7 +93,10 @@ tracing-wasm = "^0.2"
 wasm-bindgen = { version = "^0.2" }
 wasm-bindgen-futures = "^0.4"
 web-sys = { version = "^0.3", default-features = false, features = [
+  "FileSystemDirectoryHandle",
+  "Navigator",
   "Storage",
+  "StorageManager",
   "Window",
 ] }
 
