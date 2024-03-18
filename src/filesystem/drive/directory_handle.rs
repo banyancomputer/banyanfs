@@ -358,10 +358,9 @@ impl DirectoryHandle {
 
     pub async fn read(
         &self,
-        _store: impl DataStore,
+        _store: &impl DataStore,
         path: &[&str],
-        _data: &[u8],
-    ) -> Result<(), OperationError> {
+    ) -> Result<Vec<u8>, OperationError> {
         if path.is_empty() {
             return Err(OperationError::UnexpectedEmptyPath);
         }

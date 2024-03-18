@@ -322,16 +322,24 @@ impl WasmMount {
         _version: Option<String>,
     ) -> BanyanFsResult<Uint8Array> {
         let path_segments = parse_js_path(path_segments)?;
-        let _path_refs = path_segments.iter().map(|x| x.as_str()).collect::<Vec<_>>();
+        let path_refs = path_segments.iter().map(|x| x.as_str()).collect::<Vec<_>>();
 
         let unlocked_drive = match &self.drive {
             Some(drive) => drive,
             None => return Err("unable to delete content of a locked bucket".into()),
         };
 
-        let _drive_root = unlocked_drive.root().await;
+        let drive_root = unlocked_drive
+            .root()
+            .await
+            .map_err(|_| "root unavailable")?;
 
-        todo!()
+        let data = drive_root
+            .read(&self.data_cache, &path_refs)
+            .await
+            .map_err(|err| format!("failed to read data: {err:?}"))?;
+
+        Ok(Uint8Array::from(data.as_slice()))
     }
 
     // checked
