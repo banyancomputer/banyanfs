@@ -345,12 +345,12 @@ impl Node {
         self.notify_of_change().await;
     }
 
+    pub fn size(&self) -> u64 {
+        self.outer_size_estimate() + self.inner.size()
+    }
+
     pub(crate) fn supports_children(&self) -> bool {
-        match self.inner.kind() {
-            NodeKind::Directory => true,
-            NodeKind::File => true,
-            _ => false,
-        }
+        matches!(self.inner.kind(), NodeKind::Directory | NodeKind::File)
     }
 
     pub fn permanent_id(&self) -> PermanentId {

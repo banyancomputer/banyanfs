@@ -32,6 +32,7 @@ impl NodeBuilder {
 
         let current_ts = crate::utils::current_time_ms();
 
+        tracing::info!("building node with size hint: {:?}", self.size_hint);
         let inner = match self.kind {
             NodeKind::File => NodeData::stub_file(self.size_hint.unwrap_or(0)),
             NodeKind::Directory => NodeData::new_directory(),

@@ -45,11 +45,11 @@ impl ContentReference {
     }
 
     pub fn parse(input: &[u8]) -> ParserResult<Self> {
-        let (remaining, data_block_cid) = Cid::parse(input)?;
-        let (remaining, block_size) = BlockSize::parse(input)?;
+        let (input, data_block_cid) = Cid::parse(input)?;
+        let (input, block_size) = BlockSize::parse(input)?;
 
-        let (remaining, chunk_count) = le_u16(remaining)?;
-        let (remaining, chunks) = ContentLocation::parse_many(remaining, chunk_count)?;
+        let (input, chunk_count) = le_u16(input)?;
+        let (input, chunks) = ContentLocation::parse_many(input, chunk_count)?;
 
         let content_ref = Self {
             data_block_cid,
@@ -57,7 +57,7 @@ impl ContentReference {
             chunks,
         };
 
-        Ok((remaining, content_ref))
+        Ok((input, content_ref))
     }
 
     pub fn parse_many(input: &[u8], ref_count: u8) -> ParserResult<Vec<Self>> {

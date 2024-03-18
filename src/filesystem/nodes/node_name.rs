@@ -107,6 +107,13 @@ impl NodeName {
     pub(crate) fn root() -> Self {
         Self::Root
     }
+
+    pub(crate) fn size(&self) -> usize {
+        match self {
+            Self::Root => 1,
+            Self::Named(name) => 2 + name.len(),
+        }
+    }
 }
 
 impl std::convert::TryFrom<&str> for NodeName {

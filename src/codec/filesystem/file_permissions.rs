@@ -76,4 +76,8 @@ impl FilePermissions {
 
         Ok((input, permissions))
     }
+
+    pub const fn size() -> usize {
+        1
+    }
 }

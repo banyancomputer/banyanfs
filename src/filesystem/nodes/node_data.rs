@@ -20,7 +20,7 @@ pub enum NodeData {
     },
     Directory {
         permissions: DirectoryPermissions,
-        size: u64,
+        children_size: u64,
         children: HashMap<NodeName, PermanentId>,
     },
 }
@@ -47,6 +47,119 @@ impl NodeData {
         }
 
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self, writer))]
+    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let mut written_bytes = 0;
+
+        written_bytes += self.kind().encode(writer).await?;
+        tracing::trace!(kind = ?self.kind(), encode_len = written_bytes, "kind");
+
+        match &self {
+            NodeData::Directory {
+                permissions,
+                children_size,
+                children,
+            } => {
+                written_bytes += permissions.encode(writer).await?;
+
+                let size_bytes = children_size.to_le_bytes();
+                writer.write_all(&size_bytes).await?;
+                written_bytes += size_bytes.len();
+
+                written_bytes += encode_children(children, writer).await?;
+
+                Ok(written_bytes)
+            }
+            NodeData::File {
+                permissions,
+                associated_data,
+                content,
+            } => {
+                written_bytes += permissions.encode(writer).await?;
+                written_bytes += encode_children(associated_data, writer).await?;
+                written_bytes += content.encode(writer).await?;
+
+                Ok(written_bytes)
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    pub(crate) fn kind(&self) -> NodeKind {
+        match self {
+            NodeData::File { .. } => NodeKind::File,
+            NodeData::AssociatedData { .. } => NodeKind::AssociatedData,
+            NodeData::Directory { .. } => NodeKind::Directory,
+        }
+    }
+
+    pub(crate) fn new_directory() -> Self {
+        Self::Directory {
+            permissions: DirectoryPermissions::default(),
+            children_size: 0,
+            children: HashMap::new(),
+        }
+    }
+
+    pub(crate) fn ordered_child_pids(&self) -> Vec<PermanentId> {
+        let children = match self {
+            NodeData::File {
+                associated_data, ..
+            } => associated_data,
+            NodeData::Directory { children, .. } => children,
+            _ => return Vec::new(),
+        };
+
+        let mut child_pairs = children.iter().collect::<Vec<_>>();
+        child_pairs.sort_by(|(_, a), (_, b)| a.cmp(b));
+        child_pairs.into_iter().map(|(_, id)| *id).collect()
+    }
+
+    pub(crate) fn ordered_data_cids(&self) -> Vec<Cid> {
+        match self {
+            NodeData::File { content, .. } => content.ordered_data_cids(),
+            _ => Vec::new(),
+        }
+    }
+
+    pub(crate) fn parse(input: &[u8]) -> ParserResult<Self> {
+        let (input, kind) = NodeKind::parse(input)?;
+
+        match kind {
+            NodeKind::File => {
+                let (data_buf, permissions) = FilePermissions::parse(input)?;
+                let (data_buf, associated_data) = parse_children(data_buf)?;
+                let (data_buf, content) = FileContent::parse(data_buf)?;
+
+                let data = NodeData::File {
+                    permissions,
+                    associated_data,
+                    content,
+                };
+
+                Ok((data_buf, data))
+            }
+            //NodeKind::AssociatedData => {}
+            NodeKind::Directory => {
+                let (data_buf, permissions) = DirectoryPermissions::parse(input)?;
+                let (data_buf, children_size) = le_u64(data_buf)?;
+                let (data_buf, children) = parse_children(data_buf)?;
+
+                let data = NodeData::Directory {
+                    permissions,
+                    children_size,
+                    children,
+                };
+
+                Ok((data_buf, data))
+            }
+            _ => unimplemented!(),
+        }
     }
 
     pub(crate) fn remove_child(&mut self, name: &NodeName) -> Result<PermanentId, NodeDataError> {
@@ -88,120 +201,41 @@ impl NodeData {
         Ok(())
     }
 
-    pub(crate) fn ordered_child_pids(&self) -> Vec<PermanentId> {
-        let children = match self {
-            NodeData::File {
-                associated_data, ..
-            } => associated_data,
-            NodeData::Directory { children, .. } => children,
-            _ => return Vec::new(),
-        };
+    pub(crate) fn size(&self) -> u64 {
+        tracing::warn!("size of child entries are not yet included in parents");
 
-        let mut child_pairs = children.iter().collect::<Vec<_>>();
-        child_pairs.sort_by(|(_, a), (_, b)| a.cmp(b));
-        child_pairs.into_iter().map(|(_, id)| *id).collect()
-    }
-
-    pub(crate) fn ordered_data_cids(&self) -> Vec<Cid> {
         match self {
-            NodeData::File { content, .. } => content.ordered_data_cids(),
-            _ => Vec::new(),
-        }
-    }
-
-    #[tracing::instrument(skip(self, writer))]
-    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-    ) -> std::io::Result<usize> {
-        let mut written_bytes = 0;
-
-        written_bytes += self.kind().encode(writer).await?;
-        tracing::trace!(kind = ?self.kind(), encode_len = written_bytes, "kind");
-
-        match &self {
+            NodeData::AssociatedData { content } => content.size(),
             NodeData::Directory {
-                permissions,
-                size,
                 children,
+                children_size,
+                ..
             } => {
-                written_bytes += permissions.encode(writer).await?;
+                let base_size = DirectoryPermissions::size() + 8;
 
-                let size_bytes = size.to_le_bytes();
-                writer.write_all(&size_bytes).await?;
-                written_bytes += size_bytes.len();
+                let child_map_size = children
+                    .iter()
+                    .fold(0, |acc, (name, _)| acc + name.size() + PermanentId::size());
 
-                written_bytes += encode_children(children, writer).await?;
-
-                Ok(written_bytes)
+                (base_size + child_map_size) as u64 + children_size
             }
             NodeData::File {
-                permissions,
                 associated_data,
                 content,
+                ..
             } => {
-                written_bytes += permissions.encode(writer).await?;
-                written_bytes += encode_children(associated_data, writer).await?;
-                written_bytes += content.encode(writer).await?;
+                let base_size = FilePermissions::size();
 
-                Ok(written_bytes)
+                let associated_data_size = associated_data
+                    .iter()
+                    .fold(0, |acc, (name, _)| acc + name.size() + PermanentId::size());
+
+                (base_size + associated_data_size) as u64 + content.size()
             }
-            _ => unimplemented!(),
         }
     }
 
-    pub(crate) fn kind(&self) -> NodeKind {
-        match self {
-            NodeData::File { .. } => NodeKind::File,
-            NodeData::AssociatedData { .. } => NodeKind::AssociatedData,
-            NodeData::Directory { .. } => NodeKind::Directory,
-        }
-    }
-
-    pub fn new_directory() -> Self {
-        Self::Directory {
-            permissions: DirectoryPermissions::default(),
-            size: 0,
-            children: HashMap::new(),
-        }
-    }
-
-    pub(crate) fn parse(input: &[u8]) -> ParserResult<Self> {
-        let (input, kind) = NodeKind::parse(input)?;
-
-        match kind {
-            NodeKind::File => {
-                let (data_buf, permissions) = FilePermissions::parse(input)?;
-                let (data_buf, associated_data) = parse_children(data_buf)?;
-                let (data_buf, content) = FileContent::parse(data_buf)?;
-
-                let data = NodeData::File {
-                    permissions,
-                    associated_data,
-                    content,
-                };
-
-                Ok((data_buf, data))
-            }
-            //NodeKind::AssociatedData => {}
-            NodeKind::Directory => {
-                let (data_buf, permissions) = DirectoryPermissions::parse(input)?;
-                let (data_buf, size) = le_u64(data_buf)?;
-                let (data_buf, children) = parse_children(data_buf)?;
-
-                let data = NodeData::Directory {
-                    permissions,
-                    size,
-                    children,
-                };
-
-                Ok((data_buf, data))
-            }
-            _ => unimplemented!(),
-        }
-    }
-
-    pub fn stub_file(size: u64) -> Self {
+    pub(crate) fn stub_file(size: u64) -> Self {
         Self::File {
             permissions: FilePermissions::default(),
             associated_data: HashMap::new(),

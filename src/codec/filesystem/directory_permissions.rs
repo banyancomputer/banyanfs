@@ -60,4 +60,8 @@ impl DirectoryPermissions {
 
         Ok((input, permissions))
     }
+
+    pub const fn size() -> usize {
+        1
+    }
 }

@@ -46,10 +46,6 @@ impl TryFrom<&Node> for DirectoryEntry {
     type Error = OperationError;
 
     fn try_from(node: &Node) -> Result<Self, Self::Error> {
-        let size = 0;
-
-        tracing::warn!("directory entry size not being properly calculated");
-
         Ok(Self {
             permanent_id: node.permanent_id(),
 
@@ -59,7 +55,7 @@ impl TryFrom<&Node> for DirectoryEntry {
             name: node.name().clone(),
             kind: node.kind().clone(),
 
-            size,
+            size: node.size(),
         })
     }
 }
