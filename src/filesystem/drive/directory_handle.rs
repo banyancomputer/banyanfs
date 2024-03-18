@@ -35,7 +35,7 @@ impl DirectoryHandle {
         } else {
             match walk_path(&self.inner, self.cwd_id, path, 0).await {
                 Ok(WalkState::FoundNode { node_id }) => node_id,
-                _ => return Err(OperationError::NotADirectory),
+                _ => return Err(OperationError::NotTraversable),
             }
         };
 
@@ -83,7 +83,7 @@ impl DirectoryHandle {
         } else {
             let node_id = match walk_path(&self.inner, self.cwd_id, path, 0).await {
                 Ok(WalkState::FoundNode { node_id }) => node_id,
-                _ => return Err(OperationError::NotADirectory),
+                _ => return Err(OperationError::NotTraversable),
             };
 
             let listed_node = inner_read.by_id(node_id)?;
@@ -218,7 +218,7 @@ impl DirectoryHandle {
                     blocking_name,
                 } => {
                     trace!(cwd_id = working_directory_id, name = ?blocking_name, "drive::mkdir::not_traversable");
-                    return Err(OperationError::NotADirectory);
+                    return Err(OperationError::NotTraversable);
                 }
             }
         }
@@ -235,7 +235,7 @@ impl DirectoryHandle {
     ) -> Result<(), OperationError> {
         let src_node_id = match walk_path(&self.inner, self.cwd_id, src_path, 0).await? {
             WalkState::FoundNode { node_id } => node_id,
-            WalkState::NotTraversable { .. } => return Err(OperationError::NotADirectory),
+            WalkState::NotTraversable { .. } => return Err(OperationError::NotTraversable),
             WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
         };
 
@@ -251,7 +251,7 @@ impl DirectoryHandle {
 
                 node_id
             }
-            WalkState::NotTraversable { .. } => return Err(OperationError::NotADirectory),
+            WalkState::NotTraversable { .. } => return Err(OperationError::NotTraversable),
             WalkState::MissingComponent {
                 working_directory_id,
                 remaining_path,
@@ -334,7 +334,7 @@ impl DirectoryHandle {
 
         let target_node_id = match walk_path(&self.inner, self.cwd_id, path, 0).await? {
             WalkState::FoundNode { node_id } => node_id,
-            WalkState::NotTraversable { .. } => return Err(OperationError::NotADirectory),
+            WalkState::NotTraversable { .. } => return Err(OperationError::NotTraversable),
             WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
         };
 
@@ -370,7 +370,7 @@ impl DirectoryHandle {
 
         let target_node_id = match walk_path(&self.inner, self.cwd_id, path, 0).await? {
             WalkState::FoundNode { node_id } => node_id,
-            WalkState::NotTraversable { .. } => return Err(OperationError::NotADirectory),
+            WalkState::NotTraversable { .. } => return Err(OperationError::NotTraversable),
             WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
         };
 
@@ -381,7 +381,11 @@ impl DirectoryHandle {
             _ => return Err(OperationError::NotReadable),
         };
 
-        unimplemented!()
+        let file_data = Vec::new();
+
+        tracing::warn!("impl needed, have addresses need to reassemble files");
+
+        Ok(file_data)
     }
 
     pub async fn write(
@@ -395,21 +399,18 @@ impl DirectoryHandle {
             return Err(OperationError::UnexpectedEmptyPath);
         }
 
-        let (name, parent_id) = match walk_path(&self.inner, self.cwd_id, path, 0).await? {
-            WalkState::FoundNode { node_id } => return Err(OperationError::Exists(node_id)),
-            WalkState::NotTraversable { .. } => return Err(OperationError::NotADirectory),
-            WalkState::MissingComponent {
-                working_directory_id,
-                missing_name,
-                remaining_path,
-            } => {
-                if !remaining_path.is_empty() {
-                    return Err(OperationError::PathNotFound);
-                }
+        let (parent_path, name) = path.split_at(path.len() - 1);
+        let file_name = NodeName::try_from(name[0]).map_err(OperationError::InvalidName)?;
 
-                (missing_name, working_directory_id)
-            }
+        tracing::info!(?path, ?file_name, "drive::write");
+
+        let parent_id = match walk_path(&self.inner, self.cwd_id, parent_path, 0).await? {
+            WalkState::FoundNode { node_id } => node_id,
+            WalkState::NotTraversable { .. } => return Err(OperationError::NotTraversable),
+            WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
         };
+
+        tracing::info!(?parent_id, "drive::write::parent_id");
 
         let inner_read = self.inner.read().await;
         let parent_node = inner_read.by_id(parent_id)?;
@@ -417,8 +418,8 @@ impl DirectoryHandle {
         drop(inner_read);
 
         let data_size = data.len() as u64;
-        let node_name = name.clone();
-        let new_permanent_id = self
+        let node_name = file_name.clone();
+        let _new_permanent_id = self
             .insert_node(
                 rng,
                 parent_perm_id,
@@ -434,11 +435,17 @@ impl DirectoryHandle {
             )
             .await?;
 
-        let mut inner_write = self.inner.write().await;
-        let parent_node = inner_write.by_perm_id_mut(&parent_perm_id)?;
-        parent_node.add_child(name, new_permanent_id).await?;
+        // break data into blocks, persisting each one to the data store, the resulting addresses
+        // may need to be aggregated into a redirect block if they're too numerous, not going to
+        // handle that for now...
+        //
+        // this does not ensure the data store is fully synced, that is the responsibility of the
+        // caller. Once we've registered all the data in the store we need to update our file's
+        // stub node with the new addresses.
 
-        unimplemented!()
+        tracing::warn!("impl needed, break content into blocks, persist to data store");
+
+        Ok(())
     }
 }
 
@@ -455,30 +462,28 @@ fn walk_path<'a>(
 
     async move {
         let inner_read = inner.read().await;
-        let current_node = inner_read.by_id(working_directory_id)?;
 
-        let children = match current_node.data() {
-            NodeData::Directory { children, .. } => children,
-            _ => {
-                return Err(OperationError::InternalCorruption(
-                    working_directory_id,
-                    "current working directory not directory",
-                ))
-            }
-        };
-
-        let (current_entry, remaining_path) = match path.split_first() {
-            Some((name, path)) => (NodeName::try_from(*name)?, path),
-            // Nothing left in the path, we've found our target just validate the node actually
+        let (raw_child_name, remaining_path) = match path.split_first() {
+            Some(pair) => pair,
+            // We've reached the end of the path, our current node is the target
             None => return Ok(WalkState::found(working_directory_id)),
         };
 
-        let perm_id = match children.get(&current_entry) {
+        let child_name = NodeName::try_from(*raw_child_name)?;
+        let current_node = inner_read.by_id(working_directory_id)?;
+
+        let child_map = match current_node.data() {
+            NodeData::Directory { children, .. } => children,
+            NodeData::File { associated_data, .. } => associated_data,
+            _ => return Err(OperationError::NotTraversable),
+        };
+
+        let perm_id = match child_map.get(&child_name) {
             Some(pid) => pid,
             None => {
                 return Ok(WalkState::MissingComponent {
                     working_directory_id,
-                    missing_name: current_entry,
+                    missing_name: child_name,
                     remaining_path,
                 });
             }
@@ -488,12 +493,10 @@ fn walk_path<'a>(
         let next_node_id = next_node.id();
         trace!(node_id = ?next_node_id, next_node_kind = ?next_node.kind(), "drive::walk_directory::next_node");
 
-        if !matches!(next_node.kind(), NodeKind::Directory) {
-            return Ok(WalkState::NotTraversable {
-                working_directory_id,
-                blocking_name: current_entry,
-            });
+        if !next_node.supports_children() {
+            return Err(OperationError::NotTraversable);
         }
+
         drop(inner_read);
 
         if depth >= MAX_PATH_DEPTH {

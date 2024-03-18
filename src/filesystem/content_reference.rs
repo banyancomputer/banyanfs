@@ -2,6 +2,7 @@ use futures::{AsyncWrite, AsyncWriteExt};
 use nom::multi::count;
 use nom::number::streaming::{le_u16, le_u64};
 
+use crate::codec::filesystem::BlockKind;
 use crate::codec::{BlockSize, Cid, ParserResult};
 
 #[derive(Clone, Debug)]
@@ -65,13 +66,14 @@ impl ContentReference {
 
     pub fn size(&self) -> usize {
         let base_size = Cid::size() + BlockSize::size() + 2;
-        let chunk_size = self.chunks.len() * ContentLocation::size();
+        let chunk_size = self.chunks.iter().map(ContentLocation::size).sum::<usize>();
         base_size + chunk_size
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct ContentLocation {
+    block_kind: BlockKind,
     content_cid: Cid,
     block_index: u64,
 }
@@ -81,7 +83,8 @@ impl ContentLocation {
         &self,
         writer: &mut W,
     ) -> std::io::Result<usize> {
-        let mut written_bytes = self.content_cid.encode(writer).await?;
+        let mut written_bytes = self.block_kind.encode(writer).await?;
+        written_bytes += self.content_cid.encode(writer).await?;
 
         let block_index_bytes = self.block_index.to_le_bytes();
         writer.write_all(&block_index_bytes).await?;
@@ -91,22 +94,24 @@ impl ContentLocation {
     }
 
     pub fn parse(input: &[u8]) -> ParserResult<Self> {
-        let (remaining, content_cid) = Cid::parse(input)?;
-        let (remaining, block_index) = le_u64(input)?;
+        let (input, block_kind) = BlockKind::parse(input)?;
+        let (input, content_cid) = Cid::parse(input)?;
+        let (input, block_index) = le_u64(input)?;
 
         let location = Self {
+            block_kind,
             content_cid,
             block_index,
         };
 
-        Ok((remaining, location))
+        Ok((input, location))
     }
 
     pub fn parse_many(input: &[u8], ref_count: u16) -> ParserResult<Vec<Self>> {
         count(Self::parse, ref_count as usize)(input)
     }
 
-    pub const fn size() -> usize {
-        Cid::size() + 8
+    pub fn size(&self) -> usize {
+        Cid::size() + 8 + self.block_kind.size()
     }
 }

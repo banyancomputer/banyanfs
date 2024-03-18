@@ -91,7 +91,7 @@ async fn main() -> BanyanFsResult<()> {
             Err(err) => error!("failed to list directory: {}", err),
         }
 
-        let fh = match root
+        if let Err(err) = root
             .write(
                 &mut rng,
                 &mut memory_store,
@@ -100,11 +100,8 @@ async fn main() -> BanyanFsResult<()> {
             )
             .await
         {
-            Ok(fh) => fh,
-            Err(err) => {
-                error!("failed to write file to drive: {err:?}");
-                return Ok(());
-            }
+            error!("failed to write file to drive: {err:?}");
+            return Ok(());
         };
 
         let file_data = match root.read(&memory_store, &["testing", "poem.txt"]).await {

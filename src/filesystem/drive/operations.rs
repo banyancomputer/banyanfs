@@ -22,8 +22,8 @@ pub enum OperationError {
     #[error("node operation failed: {0}")]
     NodeFailure(#[from] NodeError),
 
-    #[error("path attempted to traverse a non-directory node")]
-    NotADirectory,
+    #[error("path attempted to traverse a leaf node")]
+    NotTraversable,
 
     #[error("attempted to read from a node that contains no data")]
     NotReadable,
