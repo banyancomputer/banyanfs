@@ -385,15 +385,58 @@ impl DirectoryHandle {
     }
 
     pub async fn write(
-        &self,
-        _rng: &mut impl CryptoRngCore,
+        &mut self,
+        rng: &mut impl CryptoRngCore,
         _store: &mut impl DataStore,
         path: &[&str],
-        _data: &[u8],
+        data: &[u8],
     ) -> Result<(), OperationError> {
         if path.is_empty() {
             return Err(OperationError::UnexpectedEmptyPath);
         }
+
+        let (name, parent_id) = match walk_path(&self.inner, self.cwd_id, path, 0).await? {
+            WalkState::FoundNode { node_id } => return Err(OperationError::Exists(node_id)),
+            WalkState::NotTraversable { .. } => return Err(OperationError::NotADirectory),
+            WalkState::MissingComponent {
+                working_directory_id,
+                missing_name,
+                remaining_path,
+            } => {
+                if !remaining_path.is_empty() {
+                    return Err(OperationError::PathNotFound);
+                }
+
+                (missing_name, working_directory_id)
+            }
+        };
+
+        let inner_read = self.inner.read().await;
+        let parent_node = inner_read.by_id(parent_id)?;
+        let parent_perm_id = parent_node.permanent_id();
+        drop(inner_read);
+
+        let data_size = data.len() as u64;
+        let node_name = name.clone();
+        let new_permanent_id = self
+            .insert_node(
+                rng,
+                parent_perm_id,
+                |rng, new_node_id, parent_id, actor_id| async move {
+                    NodeBuilder::file(node_name)
+                        .with_parent(parent_id)
+                        .with_id(new_node_id)
+                        .with_owner(actor_id)
+                        .with_size_hint(data_size)
+                        .build(rng)
+                        .map_err(OperationError::CreationFailed)
+                },
+            )
+            .await?;
+
+        let mut inner_write = self.inner.write().await;
+        let parent_node = inner_write.by_perm_id_mut(&parent_perm_id)?;
+        parent_node.add_child(name, new_permanent_id).await?;
 
         unimplemented!()
     }

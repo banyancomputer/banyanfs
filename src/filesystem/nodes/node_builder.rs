@@ -14,6 +14,7 @@ pub(crate) struct NodeBuilder {
 
     name: NodeName,
     owner_id: Option<ActorId>,
+    size_hint: Option<u64>,
 
     kind: NodeKind,
     metadata: HashMap<String, Vec<u8>>,
@@ -32,7 +33,7 @@ impl NodeBuilder {
         let current_ts = crate::utils::current_time_ms();
 
         let inner = match self.kind {
-            NodeKind::File => NodeData::stub_file(0),
+            NodeKind::File => NodeData::stub_file(self.size_hint.unwrap_or(0)),
             NodeKind::Directory => NodeData::new_directory(),
             _ => unimplemented!("haven't made it there yet"),
         };
@@ -67,6 +68,7 @@ impl NodeBuilder {
 
             name,
             owner_id: None,
+            size_hint: None,
 
             kind: NodeKind::Directory,
             metadata: HashMap::new(),
@@ -88,15 +90,25 @@ impl NodeBuilder {
         self
     }
 
+    pub fn with_size_hint(mut self, size_hint: u64) -> Self {
+        self.size_hint = Some(size_hint);
+        self
+    }
+
     pub(crate) fn root() -> Self {
+        Self::directory(NodeName::root())
+    }
+
+    pub(crate) fn file(name: NodeName) -> Self {
         Self {
             id: None,
             parent_id: None,
 
-            name: NodeName::root(),
+            name,
             owner_id: None,
+            size_hint: None,
 
-            kind: NodeKind::Directory,
+            kind: NodeKind::File,
             metadata: HashMap::new(),
         }
     }

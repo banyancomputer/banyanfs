@@ -436,7 +436,7 @@ impl WasmMount {
         };
 
         let mut rng = crypto_rng();
-        let drive_root = unlocked_drive
+        let mut drive_root = unlocked_drive
             .root()
             .await
             .map_err(|_| "root unavailable")?;
