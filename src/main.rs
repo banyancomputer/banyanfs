@@ -42,7 +42,7 @@ async fn main() -> BanyanFsResult<()> {
     }
 
     if drive.has_write_access(actor_id).await {
-        let mut root = drive.root().await;
+        let mut root = drive.root().await.map_err(|_| "root unavailable")?;
 
         if let Err(err) = root
             .mkdir(&mut rng, &["testing", "paths", "deeply", "@#($%*%)"], true)
@@ -83,7 +83,7 @@ async fn main() -> BanyanFsResult<()> {
         }
 
         // get a fresh handle on the root directory
-        let root = drive.root().await;
+        let root = drive.root().await.map_err(|_| "root unavailable")?;
         match root.ls(&["testing", "paths", "deeply"]).await {
             Ok(contents) => info!(?contents, "contents"),
             Err(err) => error!("failed to list directory: {}", err),
@@ -147,7 +147,7 @@ async fn main() -> BanyanFsResult<()> {
         }
     };
 
-    let mut root_dir = loaded_drive.root().await;
+    let mut root_dir = loaded_drive.root().await.map_err(|_| "root unavailable")?;
 
     // todo: should add convenient methods on the drive itself for the directory operations
     match root_dir.ls(&["testing", "paths", "deeply"]).await {

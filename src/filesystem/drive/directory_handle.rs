@@ -337,9 +337,9 @@ impl DirectoryHandle {
 
         let mut inner_write = self.inner.write().await;
         let target_node = inner_write.by_id(target_node_id)?;
-        let target_node_perm_id = target_node.permanent_id();
+        let target_perm_id = target_node.permanent_id();
 
-        inner_write.remove_node(target_node_perm_id).await?;
+        inner_write.remove_node(target_perm_id).await?;
 
         Ok(())
     }

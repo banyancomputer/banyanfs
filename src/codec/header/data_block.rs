@@ -6,13 +6,17 @@ use crate::codec::crypto::{AccessKey, SigningKey, VerifyingKey};
 use crate::codec::header::BANYAN_DATA_MAGIC;
 use crate::codec::{Cid, ParserResult};
 
+const ENCRYPTED_BIT: u8 = 0b1000_0000;
+
 const ECC_PRESENT_BIT: u8 = 0b0100_0000;
 
 pub struct DataBlock {
     data_options: DataOptions,
     cid: Option<Cid>,
+
     consumed_chunks: usize,
     finalized: bool,
+
     contents: Vec<Content>,
 }
 
@@ -22,24 +26,23 @@ impl DataBlock {
             return Err(DataBlockError::AlreadyFinalized);
         }
 
-        let chunk_capacity = self.data_options.block_size().chunk_capacity();
-
-        let mut data_len = data.len() as u64;
-        if self.contents.is_empty() {
-            // The protocol overhead for the block consumes part of the first chunk, we represent
-            // that by including those bytes in the initial data chunk.
-            data_len += Self::storage_overhead() as u64;
+        let mut data_len = data.len();
+        if data_len > self.remaining_space() as usize {
+            return Err(DataBlockError::Full);
         }
 
+        // When allocating chunks we need to account for the data block's metadata overhead to
+        // ensure we don't over-allocate chunks.
+        if self.contents.is_empty() {
+            data_len += Self::storage_overhead();
+        }
+
+        let chunk_capacity = self.data_options.block_size().chunk_capacity() as usize;
         let mut needed_chunks = data_len / chunk_capacity;
         if (data_len % chunk_capacity) > 0 {
             needed_chunks += 1;
         }
-
-        let total_chunks = self.data_options.block_size().chunk_count();
-        if (total_chunks - self.consumed_chunks as u64) < needed_chunks {
-            return Err(DataBlockError::Full);
-        }
+        self.consumed_chunks += needed_chunks;
 
         let chunk = Content::create_data(data);
         self.contents.push(chunk);
@@ -92,7 +95,7 @@ impl DataBlock {
             return Err(nom::Err::Failure(err));
         }
 
-        let (input, data_options) = DataOptions::parse(input)?;
+        let (input, _data_options) = DataOptions::parse(input)?;
 
         todo!()
     }
@@ -107,22 +110,35 @@ impl DataBlock {
     }
 
     pub fn remaining_space(&self) -> u64 {
-        todo!("need to count based on available chunks, first chunk will have less space due to header")
+        if self.contents.is_empty() {
+            let empty_storage = self.data_options.block_size().storage_capacity();
+
+            // The protocol overhead for the block consumes part of the first chunk, we represent
+            // that by including those bytes in the initial data chunk.
+            empty_storage - Self::storage_overhead() as u64
+        } else {
+            let total_chunks = self.data_options.block_size().chunk_count();
+            let remaining_chunks = total_chunks - self.consumed_chunks as u64;
+            let chunk_capacity = self.data_options.block_size().chunk_capacity();
+
+            remaining_chunks * chunk_capacity
+        }
     }
 
     pub fn small() -> Result<Self, DataBlockError> {
         let data_options = DataOptions {
             ecc_present: false,
+            encrypted: true,
             block_size: BlockSize::small()?,
         };
 
         Ok(Self {
             data_options,
+            cid: None,
 
             consumed_chunks: 0,
             finalized: false,
 
-            cid: None,
             contents: Vec::new(),
         })
     }
@@ -130,21 +146,24 @@ impl DataBlock {
     pub fn standard() -> Result<Self, DataBlockError> {
         let data_options = DataOptions {
             ecc_present: false,
+            encrypted: true,
             block_size: BlockSize::small()?,
         };
 
         Ok(Self {
             data_options,
+            cid: None,
 
             consumed_chunks: 0,
             finalized: false,
 
-            cid: None,
             contents: Vec::new(),
         })
     }
 
     const fn storage_overhead() -> usize {
+        // todo: this is missing a few things, need to walk through the protocol and properly
+        // account for things. Bugs from this will be annoying but fairly obvious.
         1 + Cid::size() + DataOptions::size() + 1
     }
 }
@@ -167,6 +186,7 @@ pub enum DataBlockError {
 #[derive(Clone, Copy)]
 pub struct DataOptions {
     ecc_present: bool,
+    encrypted: bool,
     block_size: BlockSize,
 }
 
@@ -179,15 +199,21 @@ impl DataOptions {
         self.ecc_present
     }
 
+    pub fn encrypted(&self) -> bool {
+        self.encrypted
+    }
+
     pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, version_byte) = take(1u8)(input)?;
         let option_byte = version_byte[0];
 
         let ecc_present = (option_byte & ECC_PRESENT_BIT) == ECC_PRESENT_BIT;
+        let encrypted = (option_byte & ENCRYPTED_BIT) == ENCRYPTED_BIT;
         let (input, block_size) = BlockSize::parse(input)?;
 
         let data_options = DataOptions {
             ecc_present,
+            encrypted,
             block_size,
         };
 
@@ -274,14 +300,12 @@ pub enum BlockSizeError {
 
 pub(crate) enum Content {
     Data(Vec<u8>),
-    Link,
 }
 
 impl Content {
     pub(crate) fn as_bytes(&self) -> &[u8] {
         match self {
             Self::Data(data) => data.as_slice(),
-            Self::Link => unimplemented!(),
         }
     }
 
@@ -309,7 +333,6 @@ impl Content {
 
                 Ok(written_bytes + data.len())
             }
-            Self::Link => unimplemented!(),
         }
     }
 

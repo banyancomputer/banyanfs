@@ -212,7 +212,10 @@ impl WasmMount {
             None => return Err("unable to list directory contents of a locked bucket".into()),
         };
 
-        let drive_root = unlocked_drive.root().await;
+        let drive_root = unlocked_drive
+            .root()
+            .await
+            .map_err(|_| "root unavailable")?;
 
         let path_refs = path_segments.iter().map(|x| x.as_str()).collect::<Vec<_>>();
         let entries = drive_root.ls(&path_refs).await.map_err(|err| {
@@ -255,7 +258,10 @@ impl WasmMount {
         };
 
         let mut rng = crypto_rng();
-        let mut drive_root = unlocked_drive.root().await;
+        let mut drive_root = unlocked_drive
+            .root()
+            .await
+            .map_err(|_| "root unavailable")?;
 
         drive_root
             .mkdir(&mut rng, path_refs.as_slice(), true)
@@ -294,7 +300,10 @@ impl WasmMount {
         };
 
         let mut rng = crypto_rng();
-        let mut drive_root = unlocked_drive.root().await;
+        let mut drive_root = unlocked_drive
+            .root()
+            .await
+            .map_err(|_| "root unavailable")?;
 
         drive_root
             .mv(&mut rng, src_path_refs.as_slice(), dst_path_refs.as_slice())
@@ -372,7 +381,10 @@ impl WasmMount {
         };
 
         let mut rng = crypto_rng();
-        let mut drive_root = unlocked_drive.root().await;
+        let mut drive_root = unlocked_drive
+            .root()
+            .await
+            .map_err(|_| "root unavailable")?;
 
         drive_root
             .rm(&mut rng, path_refs.as_slice())

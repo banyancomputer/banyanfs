@@ -18,7 +18,7 @@ pub(crate) struct InnerDrive {
     access: DriveAccess,
 
     journal_start: JournalCheckpoint,
-    root_node_id: NodeId,
+    root_pid: PermanentId,
 
     nodes: Slab<Node>,
     permanent_id_map: HashMap<PermanentId, NodeId>,
@@ -48,24 +48,16 @@ impl InnerDrive {
     }
 
     pub(crate) fn by_perm_id(&self, permanent_id: &PermanentId) -> Result<&Node, OperationError> {
-        let node_id = self
-            .permanent_id_map
-            .get(permanent_id)
-            .ok_or(OperationError::MissingPermanentId(*permanent_id))?;
-
-        self.by_id(*node_id)
+        let node_id = self.lookup_internal_id(permanent_id)?;
+        self.by_id(node_id)
     }
 
     pub(crate) fn by_perm_id_mut(
         &mut self,
         permanent_id: &PermanentId,
     ) -> Result<&mut Node, OperationError> {
-        let node_id = self
-            .permanent_id_map
-            .get(permanent_id)
-            .ok_or(OperationError::MissingPermanentId(*permanent_id))?;
-
-        self.by_id_mut(*node_id)
+        let node_id = self.lookup_internal_id(permanent_id)?;
+        self.by_id_mut(node_id)
     }
 
     #[instrument(level = tracing::Level::TRACE, skip(self, rng, build_node))]
@@ -119,12 +111,12 @@ impl InnerDrive {
         let mut ordered_ids = Vec::new();
         let mut seen_ids = HashSet::new();
 
-        let root_perm_id = self
+        let root_pid = self
             .root_node()
             .map_err(|_| std_err("no root node"))?
             .permanent_id();
 
-        let mut outstanding_ids = vec![root_perm_id];
+        let mut outstanding_ids = vec![root_pid];
 
         while let Some(node_pid) = outstanding_ids.pop() {
             let node = self
@@ -145,8 +137,8 @@ impl InnerDrive {
         ordered_ids.reverse();
 
         let mut referenced_data_cids = HashSet::new();
-
         let mut node_buffer = Vec::new();
+
         while let Some(node_pid) = ordered_ids.pop() {
             let node = self
                 .by_perm_id(&node_pid)
@@ -165,21 +157,13 @@ impl InnerDrive {
         // them for removal in the journal and maintenance logs. It really shoudn't happen but be
         // defensive against errors...
 
-        let root_node = &self.nodes[self.root_node_id];
-        let root_perm_id = root_node.permanent_id();
-        let encoded_len = root_perm_id.encode(writer).await?;
+        let encoded_len = self.root_pid.encode(writer).await?;
         written_bytes += encoded_len;
-        tracing::trace!(?root_perm_id, encoded_len, "node_encoding::root_perm_id");
 
         let node_count = seen_ids.len() as u64;
         let node_count_bytes = node_count.to_le_bytes();
         writer.write_all(&node_count_bytes).await?;
         written_bytes += node_count_bytes.len();
-        tracing::trace!(
-            ?node_count,
-            encode_len = node_count_bytes.len(),
-            "node_encoding::node_count"
-        );
 
         writer.write_all(&node_buffer).await?;
         written_bytes += node_buffer.len();
@@ -200,20 +184,21 @@ impl InnerDrive {
         let node_entry = nodes.vacant_entry();
         let root_node_id = node_entry.key();
 
-        let directory = NodeBuilder::root()
+        let root_node = NodeBuilder::root()
             .with_id(root_node_id)
             .with_owner(actor_id)
             .build(rng)?;
 
-        permanent_id_map.insert(directory.permanent_id(), root_node_id);
-        node_entry.insert(directory);
+        let root_pid = root_node.permanent_id();
+        permanent_id_map.insert(root_pid.clone(), root_node_id);
+        node_entry.insert(root_node);
 
         let inner = Self {
             access,
             journal_start,
 
             nodes,
-            root_node_id,
+            root_pid,
             permanent_id_map,
         };
 
@@ -224,6 +209,16 @@ impl InnerDrive {
         self.journal_start.clone()
     }
 
+    pub(crate) fn lookup_internal_id(
+        &self,
+        perm_id: &PermanentId,
+    ) -> Result<NodeId, OperationError> {
+        self.permanent_id_map
+            .get(perm_id)
+            .copied()
+            .ok_or(OperationError::MissingPermanentId(*perm_id))
+    }
+
     pub(crate) fn parse<'a>(
         input: &'a [u8],
         drive_access: DriveAccess,
@@ -232,14 +227,8 @@ impl InnerDrive {
     ) -> ParserResult<'a, Self> {
         tracing::trace!(available_data = ?input.len(), "inner_drive::parse");
 
-        let (remaining, root_perm_id) = PermanentId::parse(input)?;
+        let (remaining, root_pid) = PermanentId::parse(input)?;
         let bytes_read = input.len() - remaining.len();
-        tracing::trace!(
-            ?root_perm_id,
-            bytes_read,
-            remaining_len = ?remaining.len(),
-            "inner_drive::parse::root_perm_id"
-        );
 
         let (remaining, node_count) = le_u64(remaining)?;
         let bytes_read = input.len() - remaining.len() - bytes_read;
@@ -249,7 +238,7 @@ impl InnerDrive {
 
         let mut nodes = Slab::new();
         let mut permanent_id_map = HashMap::new();
-        let mut expected_permanent_ids = HashSet::from([root_perm_id]);
+        let mut expected_permanent_ids = HashSet::from([root_pid]);
 
         let mut node_input = remaining;
         for _ in 0..node_count {
@@ -291,7 +280,7 @@ impl InnerDrive {
             );
         }
 
-        let root_node_id = *permanent_id_map.get(&root_perm_id).ok_or_else(|| {
+        let root_node_id = *permanent_id_map.get(&root_pid).ok_or_else(|| {
             nom::Err::Failure(nom::error::make_error(
                 node_input,
                 nom::error::ErrorKind::Verify,
@@ -303,7 +292,7 @@ impl InnerDrive {
         let inner_drive = InnerDrive {
             access: drive_access,
             journal_start,
-            root_node_id,
+            root_pid,
             nodes,
             permanent_id_map,
         };
@@ -347,11 +336,11 @@ impl InnerDrive {
     }
 
     pub(crate) fn root_node(&self) -> Result<&Node, OperationError> {
-        self.by_id(self.root_node_id)
+        self.by_perm_id(&self.root_pid)
     }
 
-    pub(crate) fn root_node_id(&self) -> NodeId {
-        self.root_node_id
+    pub(crate) fn root_pid(&self) -> PermanentId {
+        self.root_pid
     }
 }
 

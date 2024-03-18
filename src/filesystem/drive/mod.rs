@@ -35,14 +35,10 @@ use crate::filesystem::nodes::NodeBuilderError;
 
 #[derive(Clone)]
 pub struct Drive {
-    current_key: Arc<SigningKey>,
     filesystem_id: FilesystemId,
-
     private: bool,
 
-    // todo: need to switch to a mutex, can't have state being modified during an encoding session
-    // and the cooperative multitasking model of async/await means we can't guarantee that some
-    // other task isn't going to tweak it
+    current_key: Arc<SigningKey>,
     inner: Arc<RwLock<InnerDrive>>,
 }
 
@@ -175,10 +171,16 @@ impl Drive {
         Ok(drive)
     }
 
-    pub async fn root(&self) -> DirectoryHandle {
+    pub async fn root(&self) -> Result<DirectoryHandle, OperationError> {
         let inner_read = self.inner.read().await;
-        let root_node_id = inner_read.root_node_id();
-        DirectoryHandle::new(self.current_key.clone(), root_node_id, self.inner.clone()).await
+
+        let root_perm_id = inner_read.root_pid();
+        let root_node_id = inner_read.lookup_internal_id(&root_perm_id)?;
+
+        let current_key = self.current_key.clone();
+        let dir_handle = DirectoryHandle::new(current_key, root_node_id, self.inner.clone()).await;
+
+        Ok(dir_handle)
     }
 
     pub async fn root_cid(&self) -> Result<Cid, DriveError> {
