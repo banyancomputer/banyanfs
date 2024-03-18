@@ -1,4 +1,5 @@
 mod access;
+mod data_store;
 mod directory_entry;
 mod directory_handle;
 mod file_handle;
@@ -8,6 +9,7 @@ mod operations;
 mod walk_state;
 
 pub use access::DriveAccess;
+pub use data_store::{DataStore, DataStoreError};
 pub use directory_entry::DirectoryEntry;
 pub use directory_handle::DirectoryHandle;
 pub use file_handle::FileHandle;

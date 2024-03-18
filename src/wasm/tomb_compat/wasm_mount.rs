@@ -152,6 +152,9 @@ impl WasmMount {
         .await
         .map_err(|e| format!("error while fetching new metadata: {}", e))?;
 
+        // todo(sstelfox): need to register the storage host details with the client
+        // todo(sstelfox): need to sync the data storage using the api client
+
         tracing::info!(metadata_id = &new_metadata_id, "drive synced");
         self.last_saved_metadata = Some(WasmBucketMetadata::new(self.bucket.id(), new_metadata));
 

@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use async_trait::async_trait;
 use js_sys::Uint8Array;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
@@ -7,8 +8,10 @@ use web_sys::{
     FileSystemWritableFileStream, StorageManager,
 };
 
+use crate::api::storage_host;
 use crate::codec::Cid;
 use crate::error::BanyanFsError;
+use crate::filesystem::{DataStore, DataStoreError};
 
 #[derive(Default)]
 pub struct DataStorage {
@@ -20,24 +23,24 @@ pub struct DataStorage {
 }
 
 impl DataStorage {
-    pub async fn mark_synced(&mut self, cid: Cid) -> Result<(), BanyanFsError> {
-        if self.unsynced_cids.contains(&cid) {
-            self.unsynced_cids.remove(&cid);
-            self.unsynced_data_size -= size_of_cid_file(&cid).await?;
+    pub async fn mark_synced(&mut self, cid: &Cid) -> Result<(), BanyanFsError> {
+        if self.unsynced_cids.contains(cid) {
+            self.unsynced_cids.remove(cid);
+            self.unsynced_data_size -= size_of_cid_file(cid).await?;
 
             // For now we're just going to remove the local storage as well once we've synced it,
             // this is a place where we can get some easy in browser performance wins by re-using
             // this as a block cache but that involves manual memory management beyond the scope of
             // this MVP.
-            remove_cid_file(&cid).await?;
-            self.stored_cids.remove(&cid);
+            remove_cid_file(cid).await?;
+            self.stored_cids.remove(cid);
         }
 
         Ok(())
     }
 
-    pub async fn retrieve(&self, cid: Cid) -> Result<Option<Vec<u8>>, BanyanFsError> {
-        let file = match get_cid_file(&cid).await? {
+    pub async fn retrieve(&self, cid: &Cid) -> Result<Option<Vec<u8>>, BanyanFsError> {
+        let file = match get_cid_file(cid).await? {
             Some(file) => file,
             None => return Ok(None),
         };
@@ -89,6 +92,72 @@ impl DataStorage {
 
     pub fn unsynced_data_size(&self) -> u64 {
         self.unsynced_data_size
+    }
+}
+
+#[async_trait(?Send)]
+impl DataStore for DataStorage {
+    type Client = crate::api::ApiClient;
+
+    async fn retrieve(
+        &self,
+        _client: &Self::Client,
+        cid: Cid,
+    ) -> Result<Option<Vec<u8>>, DataStoreError> {
+        // todo(sstelfox): should attempt to retrieve from the storag network using the api client
+        // if not found locally
+        self.retrieve(&cid)
+            .await
+            .map_err(|_| DataStoreError::LookupFailure)
+    }
+
+    async fn store(
+        &mut self,
+        _client: &Self::Client,
+        cid: Cid,
+        data: Vec<u8>,
+    ) -> Result<(), DataStoreError> {
+        DataStorage::store(self, cid, data)
+            .await
+            .map_err(|_| DataStoreError::StoreFailure)
+    }
+
+    async fn sync(&mut self, client: &Self::Client) -> Result<(), DataStoreError> {
+        let to_sync: Vec<_> = self.unsynced_cids.iter().cloned().collect();
+
+        for cid in to_sync.iter() {
+            let data = match self
+                .retrieve(cid)
+                .await
+                .map_err(|_| DataStoreError::LookupFailure)?
+            {
+                Some(data) => data,
+                None => {
+                    tracing::warn!("didn't have copy of block requiring sync: {cid:?}, unsynced data size may be out of sync");
+
+                    self.unsynced_cids.remove(cid);
+                    self.stored_cids.remove(cid);
+
+                    continue;
+                }
+            };
+
+            storage_host::blocks::store(client, cid, &data)
+                .await
+                .map_err(|_| DataStoreError::StoreFailure)?;
+
+            self.mark_synced(cid)
+                .await
+                .map_err(|_| DataStoreError::StoreFailure)?;
+        }
+
+        self.unsynced_data_size = 0;
+
+        Ok(())
+    }
+
+    async fn unsynced_data_size(&self) -> u64 {
+        DataStorage::unsynced_data_size(self)
     }
 }
 

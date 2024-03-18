@@ -12,5 +12,6 @@ pub(crate) use nodes::NodeBuilder;
 pub use nodes::{Node, NodeName};
 
 pub use drive::{
-    DirectoryEntry, DirectoryHandle, Drive, DriveAccess, DriveLoader, DriveLoaderError, FileHandle,
+    DataStore, DataStoreError, DirectoryEntry, DirectoryHandle, Drive, DriveAccess, DriveLoader,
+    DriveLoaderError, FileHandle,
 };

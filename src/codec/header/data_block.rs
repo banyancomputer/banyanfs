@@ -47,6 +47,13 @@ impl DataBlock {
         Ok(())
     }
 
+    pub fn cid(&self) -> Result<Cid, DataBlockError> {
+        match &self.cid {
+            Some(cid) => Ok(cid.clone()),
+            None => Err(DataBlockError::NotFinalized),
+        }
+    }
+
     pub fn data_options(&self) -> DataOptions {
         self.data_options
     }
@@ -63,6 +70,8 @@ impl DataBlock {
                 "block must be finalized before encoding",
             ));
         }
+
+        // todo: need to set CID
 
         todo!()
     }
@@ -144,6 +153,9 @@ impl DataBlock {
 pub enum DataBlockError {
     #[error("can't add more data once the block has been finalized")]
     AlreadyFinalized,
+
+    #[error("block must be finalized and encoded before a CID is available")]
+    NotFinalized,
 
     #[error("no space left in block")]
     Full,
