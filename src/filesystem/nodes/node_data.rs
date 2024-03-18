@@ -120,10 +120,12 @@ impl NodeData {
         child_pairs.into_iter().map(|(_, id)| *id).collect()
     }
 
-    pub(crate) fn ordered_data_cids(&self) -> Vec<Cid> {
+    pub(crate) fn data_cids(&self) -> Option<Vec<Cid>> {
         match self {
-            NodeData::File { content, .. } => content.ordered_data_cids(),
-            _ => Vec::new(),
+            NodeData::File { content, .. } | NodeData::AssociatedData { content } => {
+                content.data_cids()
+            }
+            _ => None,
         }
     }
 

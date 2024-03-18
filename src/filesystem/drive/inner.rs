@@ -158,7 +158,7 @@ impl InnerDrive {
 
             // todo(sstelfox): data cids don't need to be globally ordered, lets lexigraphically
             // sort them.
-            for cid in node.ordered_data_cids() {
+            for cid in node.data_cids() {
                 referenced_data_cids.insert(cid);
             }
         }
@@ -227,6 +227,10 @@ impl InnerDrive {
             .get(perm_id)
             .copied()
             .ok_or(OperationError::MissingPermanentId(*perm_id))
+    }
+
+    pub(crate) fn node_iter(&self) -> impl Iterator<Item = &Node> {
+        self.nodes.iter().map(|(_, node)| node)
     }
 
     pub(crate) fn parse<'a>(
@@ -322,7 +326,7 @@ impl InnerDrive {
                     "missing node for removal",
                 ))?;
 
-            data_cids_removed.extend(node.data().ordered_data_cids());
+            data_cids_removed.extend(node.data().data_cids());
             nodes_to_remove.extend(node.data().ordered_child_pids());
         }
 

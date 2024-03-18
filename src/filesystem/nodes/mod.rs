@@ -205,8 +205,8 @@ impl Node {
         self.inner.ordered_child_pids()
     }
 
-    pub(crate) fn ordered_data_cids(&self) -> Vec<Cid> {
-        self.inner.ordered_data_cids()
+    pub(crate) fn data_cids(&self) -> Option<Vec<Cid>> {
+        self.inner.data_cids()
     }
 
     /// This returns the esimated amount of storage that is taken up by attributes at this level of

@@ -80,12 +80,12 @@ impl FileContent {
         matches!(self, Self::Encrypted { .. })
     }
 
-    pub fn ordered_data_cids(&self) -> Vec<Cid> {
+    pub fn data_cids(&self) -> Option<Vec<Cid>> {
         match self {
             Self::Encrypted { content, .. } | Self::Public { content, .. } => {
-                content.iter().map(|c| c.data_block_cid()).collect()
+                Some(content.iter().map(|c| c.data_block_cid()).collect())
             }
-            Self::Stub { .. } => Vec::new(),
+            Self::Stub { .. } => None,
         }
     }
 

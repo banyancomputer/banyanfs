@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use futures::io::Cursor;
 use futures::StreamExt;
 use uuid::Uuid;
@@ -7,6 +9,8 @@ use crate::prelude::*;
 use js_sys::{Array, ArrayBuffer, Uint8Array};
 use wasm_bindgen::prelude::*;
 
+use crate::codec::Cid;
+use crate::filesystem::OperationError;
 use crate::utils::crypto_rng;
 use crate::wasm::tomb_compat::{
     TombCompat, WasmBucket, WasmBucketMetadata, WasmFsMetadataEntry, WasmSnapshot,
@@ -418,7 +422,47 @@ impl WasmMount {
     // checked
     #[wasm_bindgen(js_name = snapshot)]
     pub async fn snapshot(&mut self) -> BanyanFsResult<String> {
-        todo!()
+        let current_metadata_id = match &self.last_saved_metadata {
+            Some(metadata) => metadata.id(),
+            None => return Err("unable to snapshot unsaved mount".into()),
+        };
+
+        let unlocked_drive = match &self.drive {
+            Some(drive) => drive,
+            None => return Err("unable to delete content of a locked bucket".into()),
+        };
+
+        // We need to get a list of all the data blocks involved in the current iteration of the
+        // drive. We don't care about the order, and we want it deduplicated so we'll use a
+        // HashSet.
+        let mut data_block_cids = HashSet::new();
+
+        fn get_node_data_cids(node: &Node) -> Result<Option<Vec<Cid>>, OperationError> {
+            todo!()
+        }
+
+        let cid_groups = unlocked_drive
+            .for_each_node(get_node_data_cids)
+            .await
+            .map_err(|e| format!("unable to extract data cids from drive: {e}"))?;
+
+        for cid_group in cid_groups.into_iter() {
+            for cid in cid_group.into_iter() {
+                data_block_cids.insert(cid);
+            }
+        }
+
+        let unique_block_cids = data_block_cids.into_iter().collect::<Vec<_>>();
+
+        let snapshot_id = platform::snapshots::create(
+            self.wasm_client.client(),
+            &self.bucket.id(),
+            &current_metadata_id,
+            unique_block_cids.as_slice(),
+        )
+        .await?;
+
+        Ok(snapshot_id)
     }
 
     // checked

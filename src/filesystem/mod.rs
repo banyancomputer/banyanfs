@@ -13,5 +13,5 @@ pub use nodes::{Node, NodeName};
 
 pub use drive::{
     DataStore, DataStoreError, DirectoryEntry, DirectoryHandle, Drive, DriveAccess, DriveLoader,
-    DriveLoaderError, FileHandle,
+    DriveLoaderError, FileHandle, OperationError,
 };

@@ -14,9 +14,9 @@ pub use directory_entry::DirectoryEntry;
 pub use directory_handle::DirectoryHandle;
 pub use file_handle::FileHandle;
 pub use loader::{DriveLoader, DriveLoaderError};
+pub use operations::OperationError;
 
 pub(crate) use inner::InnerDrive;
-pub(crate) use operations::OperationError;
 pub(crate) use walk_state::WalkState;
 
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
@@ -31,7 +31,8 @@ use tracing::trace;
 use crate::codec::crypto::*;
 use crate::codec::header::*;
 use crate::codec::*;
-use crate::filesystem::nodes::NodeBuilderError;
+
+use crate::filesystem::nodes::{Node, NodeBuilderError};
 
 #[derive(Clone)]
 pub struct Drive {
@@ -169,6 +170,22 @@ impl Drive {
         };
 
         Ok(drive)
+    }
+
+    pub async fn for_each_node<F, R>(&self, operation: F) -> Result<Vec<R>, OperationError>
+    where
+        F: Fn(&Node) -> Result<Option<R>, OperationError> + Send + Sync,
+    {
+        let inner_read = self.inner.read().await;
+
+        let mut responses = Vec::new();
+        for node in inner_read.node_iter() {
+            if let Some(resp) = operation(node)? {
+                responses.push(resp);
+            }
+        }
+
+        Ok(responses)
     }
 
     pub async fn root(&self) -> Result<DirectoryHandle, OperationError> {

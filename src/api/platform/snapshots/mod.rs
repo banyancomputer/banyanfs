@@ -5,7 +5,17 @@ use get_all_request::GetAllRequest;
 use restore_request::RestoreRequest;
 
 use crate::api::client::{ApiClient, ApiError};
-use crate::api::platform::ApiSnapshot;
+use crate::api::platform::{ApiSnapshot, ApiSnapshotId};
+use crate::codec::Cid;
+
+pub async fn create(
+    _client: &ApiClient,
+    _bucket_id: &str,
+    _metadata_id: &str,
+    _cids: &[Cid],
+) -> Result<ApiSnapshotId, ApiError> {
+    todo!()
+}
 
 pub async fn get_all(client: &ApiClient, bucket_id: &str) -> Result<Vec<ApiSnapshot>, ApiError> {
     client
