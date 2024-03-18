@@ -306,13 +306,23 @@ impl WasmMount {
         Ok(())
     }
 
-    // checked
+    // checked, version doesn't do anything
     #[wasm_bindgen(js_name = readBytes)]
     pub async fn read_bytes(
         &mut self,
-        _path_segments: js_sys::Array,
+        path_segments: js_sys::Array,
         _version: Option<String>,
     ) -> BanyanFsResult<Uint8Array> {
+        let path_segments = parse_js_path(path_segments)?;
+        let _path_refs = path_segments.iter().map(|x| x.as_str()).collect::<Vec<_>>();
+
+        let unlocked_drive = match &self.drive {
+            Some(drive) => drive,
+            None => return Err("unable to delete content of a locked bucket".into()),
+        };
+
+        let _drive_root = unlocked_drive.root().await;
+
         todo!()
     }
 
@@ -338,8 +348,14 @@ impl WasmMount {
     }
 
     // checked
-    pub async fn restore(&mut self, _wasm_snapshot: WasmSnapshot) -> BanyanFsResult<()> {
-        todo!()
+    pub async fn restore(&mut self, wasm_snapshot: WasmSnapshot) -> BanyanFsResult<()> {
+        let client = self.wasm_client.client();
+        let drive_id = self.bucket.id();
+        let snapshot_id = wasm_snapshot.id();
+
+        platform::snapshots::restore(client, &drive_id, &snapshot_id).await?;
+
+        Ok(())
     }
 
     // checked
@@ -389,9 +405,22 @@ impl WasmMount {
     // checked
     pub async fn write(
         &mut self,
-        _path_segments: Array,
-        _content_buffer: ArrayBuffer,
+        path_segments: Array,
+        content_buffer: ArrayBuffer,
     ) -> BanyanFsResult<()> {
+        let path_segments = parse_js_path(path_segments)?;
+        let _path_refs = path_segments.iter().map(|x| x.as_str()).collect::<Vec<_>>();
+
+        let unlocked_drive = match &self.drive {
+            Some(drive) => drive,
+            None => return Err("unable to delete content of a locked bucket".into()),
+        };
+
+        let _rng = crypto_rng();
+        let _drive_root = unlocked_drive.root().await;
+
+        let _file_data = Uint8Array::new(&content_buffer).to_vec();
+
         todo!()
     }
 }
