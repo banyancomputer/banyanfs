@@ -1,6 +1,3 @@
-use std::sync::Arc;
-
-use async_std::sync::RwLock;
 use futures::io::Cursor;
 use futures::StreamExt;
 use uuid::Uuid;
@@ -23,7 +20,7 @@ pub struct WasmMount {
 
     bucket: WasmBucket,
 
-    data_cache: Arc<RwLock<DataStorage>>,
+    data_cache: DataStorage,
     drive: Option<Drive>,
 
     // Dirty should be a derived attribute based on the state of the drive and knowledge of the
@@ -48,7 +45,7 @@ impl WasmMount {
         let drive = Drive::initialize_private_with_id(&mut rng, signing_key, filesystem_id)
             .map_err(|e| BanyanFsError::from(e.to_string()))?;
 
-        let data_cache = Arc::new(RwLock::new(DataStorage::default()));
+        let data_cache = DataStorage::default();
 
         let mut mount = Self {
             wasm_client,
@@ -81,7 +78,7 @@ impl WasmMount {
         let drive = try_load_drive(client, &drive_id, &metadata_id).await;
         let dirty = drive.is_none();
 
-        let data_cache = Arc::new(RwLock::new(DataStorage::default()));
+        let data_cache = DataStorage::default();
 
         let mount = Self {
             wasm_client,
@@ -114,8 +111,7 @@ impl WasmMount {
             .await
             .map_err(|e| format!("error while encoding drive for sync: {}", e))?;
 
-        let cache_read = self.data_cache.read().await;
-        let expected_data_size = cache_read.unsynced_data_size();
+        let expected_data_size = self.data_cache.unsynced_data_size().await;
 
         let root_cid = unlocked_drive
             .root_cid()
@@ -424,19 +420,27 @@ impl WasmMount {
         content_buffer: ArrayBuffer,
     ) -> BanyanFsResult<()> {
         let path_segments = parse_js_path(path_segments)?;
-        let _path_refs = path_segments.iter().map(|x| x.as_str()).collect::<Vec<_>>();
+        let path_refs = path_segments.iter().map(|x| x.as_str()).collect::<Vec<_>>();
 
         let unlocked_drive = match &self.drive {
             Some(drive) => drive,
             None => return Err("unable to delete content of a locked bucket".into()),
         };
 
-        let _rng = crypto_rng();
-        let _drive_root = unlocked_drive.root().await;
+        let mut rng = crypto_rng();
+        let drive_root = unlocked_drive
+            .root()
+            .await
+            .map_err(|_| "root unavailable")?;
 
-        let _file_data = Uint8Array::new(&content_buffer).to_vec();
+        let file_data = Uint8Array::new(&content_buffer).to_vec();
 
-        todo!()
+        drive_root
+            .write(&mut rng, &mut self.data_cache, &path_refs, &file_data)
+            .await
+            .map_err(|err| format!("error writing to {}: {}", path_refs.join("/"), err))?;
+
+        Ok(())
     }
 }
 

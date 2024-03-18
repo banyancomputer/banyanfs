@@ -10,7 +10,7 @@ use crate::codec::filesystem::NodeKind;
 use crate::codec::*;
 
 use crate::codec::crypto::SigningKey;
-use crate::filesystem::drive::{DirectoryEntry, InnerDrive, OperationError, WalkState};
+use crate::filesystem::drive::{DataStore, DirectoryEntry, InnerDrive, OperationError, WalkState};
 use crate::filesystem::nodes::{Node, NodeData, NodeId, NodeName};
 use crate::filesystem::NodeBuilder;
 
@@ -266,6 +266,9 @@ impl DirectoryHandle {
         };
 
         let mut inner_write = self.inner.write().await;
+
+        //todo(sstelfox): update this to use the new node manipulation API, might allow us to
+        //remove the data() data_mut() functions entirely...
         let src_node = inner_write.by_id_mut(src_node_id)?;
         let src_parent_perm_id = src_node
             .parent_id()
@@ -351,6 +354,33 @@ impl DirectoryHandle {
         tracing::warn!("impl generic dir entry size / not yet implemented");
 
         Ok(0)
+    }
+
+    pub async fn read(
+        &self,
+        _store: impl DataStore,
+        path: &[&str],
+        _data: &[u8],
+    ) -> Result<(), OperationError> {
+        if path.is_empty() {
+            return Err(OperationError::UnexpectedEmptyPath);
+        }
+
+        unimplemented!()
+    }
+
+    pub async fn write(
+        &self,
+        _rng: &mut impl CryptoRngCore,
+        _store: &mut impl DataStore,
+        path: &[&str],
+        _data: &[u8],
+    ) -> Result<(), OperationError> {
+        if path.is_empty() {
+            return Err(OperationError::UnexpectedEmptyPath);
+        }
+
+        unimplemented!()
     }
 }
 

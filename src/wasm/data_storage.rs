@@ -1,5 +1,7 @@
 use std::collections::HashSet;
+use std::sync::Arc;
 
+use async_std::sync::RwLock;
 use async_trait::async_trait;
 use js_sys::Uint8Array;
 use wasm_bindgen_futures::JsFuture;
@@ -13,16 +15,48 @@ use crate::codec::Cid;
 use crate::error::BanyanFsError;
 use crate::filesystem::{DataStore, DataStoreError};
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct DataStorage {
     // note(sstelfox): these values should live in indexdb so multiple browser windows can access
     // the same information...
+    inner: Arc<RwLock<DataStorageInner>>,
+}
+
+impl DataStorage {
+    pub async fn mark_synced(&self, cid: &Cid) -> Result<(), BanyanFsError> {
+        let mut inner = self.inner.write().await;
+        inner.mark_synced(cid).await
+    }
+
+    pub async fn retrieve(&self, cid: &Cid) -> Result<Option<Vec<u8>>, BanyanFsError> {
+        let inner = self.inner.read().await;
+        inner.retrieve(cid).await
+    }
+
+    pub async fn store(&self, cid: Cid, data: Vec<u8>) -> Result<(), BanyanFsError> {
+        let mut inner = self.inner.write().await;
+        inner.store(cid, data).await
+    }
+
+    pub async fn unsynced_cids(&self) -> Vec<Cid> {
+        let inner = self.inner.read().await;
+        inner.unsynced_cids()
+    }
+
+    pub async fn unsynced_data_size(&self) -> u64 {
+        let inner = self.inner.read().await;
+        inner.unsynced_data_size()
+    }
+}
+
+#[derive(Default)]
+struct DataStorageInner {
     stored_cids: HashSet<Cid>,
     unsynced_cids: HashSet<Cid>,
     unsynced_data_size: u64,
 }
 
-impl DataStorage {
+impl DataStorageInner {
     pub async fn mark_synced(&mut self, cid: &Cid) -> Result<(), BanyanFsError> {
         if self.unsynced_cids.contains(cid) {
             self.unsynced_cids.remove(cid);
@@ -32,8 +66,11 @@ impl DataStorage {
             // this is a place where we can get some easy in browser performance wins by re-using
             // this as a block cache but that involves manual memory management beyond the scope of
             // this MVP.
-            remove_cid_file(cid).await?;
-            self.stored_cids.remove(cid);
+            //
+            // We're not going to do this until we're actually writing the synced data remotely
+            //
+            //remove_cid_file(cid).await?;
+            //self.stored_cids.remove(cid);
         }
 
         Ok(())
@@ -86,8 +123,8 @@ impl DataStorage {
         Ok(())
     }
 
-    pub fn unsynced_cid_iter(&self) -> impl Iterator<Item = &Cid> {
-        self.unsynced_cids.iter()
+    pub fn unsynced_cids(&self) -> Vec<Cid> {
+        self.unsynced_cids.iter().cloned().collect()
     }
 
     pub fn unsynced_data_size(&self) -> u64 {
@@ -123,10 +160,11 @@ impl DataStore for DataStorage {
     }
 
     async fn sync(&mut self, client: &Self::Client) -> Result<(), DataStoreError> {
-        let to_sync: Vec<_> = self.unsynced_cids.iter().cloned().collect();
+        let to_sync = self.unsynced_cids().await;
+        let mut inner_write = self.inner.write().await;
 
         for cid in to_sync.iter() {
-            let data = match self
+            let data = match inner_write
                 .retrieve(cid)
                 .await
                 .map_err(|_| DataStoreError::LookupFailure)?
@@ -135,8 +173,8 @@ impl DataStore for DataStorage {
                 None => {
                     tracing::warn!("didn't have copy of block requiring sync: {cid:?}, unsynced data size may be out of sync");
 
-                    self.unsynced_cids.remove(cid);
-                    self.stored_cids.remove(cid);
+                    inner_write.unsynced_cids.remove(cid);
+                    inner_write.stored_cids.remove(cid);
 
                     continue;
                 }
@@ -146,18 +184,20 @@ impl DataStore for DataStorage {
                 .await
                 .map_err(|_| DataStoreError::StoreFailure)?;
 
-            self.mark_synced(cid)
+            inner_write
+                .mark_synced(cid)
                 .await
                 .map_err(|_| DataStoreError::StoreFailure)?;
         }
 
-        self.unsynced_data_size = 0;
+        inner_write.unsynced_data_size = 0;
 
         Ok(())
     }
 
     async fn unsynced_data_size(&self) -> u64 {
-        DataStorage::unsynced_data_size(self)
+        let inner = self.inner.read().await;
+        inner.unsynced_data_size()
     }
 }
 
