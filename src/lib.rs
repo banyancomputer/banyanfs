@@ -7,6 +7,7 @@ pub mod api;
 pub mod codec;
 pub mod error;
 pub mod filesystem;
+pub mod stores;
 pub mod utils;
 pub mod version;
 
@@ -22,6 +23,7 @@ pub mod prelude {
 
     pub use crate::error::*;
     pub use crate::filesystem::*;
+    pub use crate::stores::*;
     pub use crate::version::*;
 
     pub use crate::codec::crypto::{SigningKey, VerifyingKey};

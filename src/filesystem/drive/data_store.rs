@@ -2,6 +2,7 @@ use async_trait::async_trait;
 
 use crate::codec::Cid;
 
+// todo: move this under src/stores
 #[async_trait(?Send)]
 pub trait DataStore {
     type Client;

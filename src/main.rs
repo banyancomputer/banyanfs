@@ -35,6 +35,8 @@ async fn main() -> BanyanFsResult<()> {
 
     let _ = signing_key.to_bytes();
 
+    let mut memory_store = MemoryStore::default();
+
     let drive = Drive::initialize_private(&mut rng, signing_key.clone()).unwrap();
     if !drive.has_read_access(actor_id).await {
         error!("key doesn't have access to the drive");
@@ -83,29 +85,37 @@ async fn main() -> BanyanFsResult<()> {
         }
 
         // get a fresh handle on the root directory
-        let root = drive.root().await.map_err(|_| "root unavailable")?;
+        let mut root = drive.root().await.map_err(|_| "root unavailable")?;
         match root.ls(&["testing", "paths", "deeply"]).await {
             Ok(contents) => info!(?contents, "contents"),
             Err(err) => error!("failed to list directory: {}", err),
         }
 
-        //let fh = drive.open("/root/testing/deep/paths/file.txt")?;
-        //fh.write(b"hello world")?;
-        //fh.close()?;
+        let fh = match root
+            .write(
+                &mut rng,
+                &mut memory_store,
+                &["testing", "poem.txt"],
+                b"a filesystem was born",
+            )
+            .await
+        {
+            Ok(fh) => fh,
+            Err(err) => {
+                error!("failed to write file to drive: {err:?}");
+                return Ok(());
+            }
+        };
 
-        //let fh = drive.open("/root/testing/deep/paths/file.txt")?;
-        //fh.seek(std::io::SeekFrom::Start(6))?;
-        //let mut buf = [0u8; 5];
-        //fh.read(&mut buf)?;
-        //assert_eq!(&buf, b"world");
+        let file_data = match root.read(&memory_store, &["testing", "poem.txt"]).await {
+            Ok(data) => data,
+            Err(err) => {
+                error!("failed to read file from drive: {err:?}");
+                return Ok(());
+            }
+        };
 
-        //drive.rm("/root/testing/deep/paths/file.txt")?;
-
-        //let new_key = SigningKey::generate(&mut rng);
-        //let new_pub_key = new_key.verifying_key();
-        //drive.authorize_key(new_pub_key, Permission::StructureRead | Permission::DataRead)?;
-
-        //drive.sync()?;
+        assert_eq!(file_data, b"a filesystem was born");
     }
 
     let mut file_opts = tokio::fs::OpenOptions::new();
