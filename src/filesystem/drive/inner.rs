@@ -107,28 +107,38 @@ impl InnerDrive {
         // that any node that has children is encoded after its children. We accomplish this by
         // reversing the list from our walked tree and encoding in that order.
         //
-        // This will silently discard any disconnected leaf nodes. Loops are tolerated.
+        // This will silently discard any disconnected leaf nodes. Loops are tolerated by
+        // deduplication of unique identifiers.
         let mut ordered_ids = Vec::new();
         let mut seen_ids = HashSet::new();
-
-        let root_pid = self
-            .root_node()
-            .map_err(|_| std_err("no root node"))?
-            .permanent_id();
-
-        let mut outstanding_ids = vec![root_pid];
+        let mut outstanding_ids = vec![self.root_pid];
 
         while let Some(node_pid) = outstanding_ids.pop() {
             let node = self
                 .by_perm_id(&node_pid)
                 .map_err(|_| std_err("missing node PID"))?;
 
-            if seen_ids.contains(&node.permanent_id()) {
+            // todo(sstelfox): The encoding order here still isn't correct, but I've loosened the
+            // strictness on the decoder to finish the last production pieces.
+            let permanent_id = node.permanent_id();
+            if seen_ids.contains(&permanent_id) {
+                // We've already seen this ID, but it now needs to appear earlier in our encoding
+                // so we have to append to the end of our list.
+                let existing_pos = ordered_ids
+                    .iter()
+                    .position(|&pid| pid == permanent_id)
+                    .ok_or(std_err("expected PID to already be present"))?;
+
+                ordered_ids.remove(existing_pos);
+                ordered_ids.push(permanent_id);
+
+                // We don't need to do anything else for nodes we've already seen
                 continue;
             }
 
-            seen_ids.insert(node.permanent_id());
-            ordered_ids.push(node.permanent_id());
+            seen_ids.insert(permanent_id);
+            ordered_ids.push(permanent_id);
+
             outstanding_ids.extend(node.ordered_child_pids());
         }
 
@@ -190,7 +200,7 @@ impl InnerDrive {
             .build(rng)?;
 
         let root_pid = root_node.permanent_id();
-        permanent_id_map.insert(root_pid.clone(), root_node_id);
+        permanent_id_map.insert(root_pid, root_node_id);
         node_entry.insert(root_node);
 
         let inner = Self {
@@ -238,46 +248,30 @@ impl InnerDrive {
 
         let mut nodes = Slab::new();
         let mut permanent_id_map = HashMap::new();
-        let mut expected_permanent_ids = HashSet::from([root_pid]);
 
         let mut node_input = remaining;
         for _ in 0..node_count {
-            tracing::trace!(available_node_data = ?node_input.len(), "inner_drive::parse::node_loop");
-
             let entry = nodes.vacant_entry();
             let node_id = entry.key();
 
-            let (remaining, (node, desired_node_ids)) = Node::parse(node_input, node_id, data_key)?;
-            tracing::trace!(
-                remaining_node_data = remaining.len(),
-                desired_node_len = desired_node_ids.len(),
-                "inner_drive::parse::node_loop::node"
-            );
+            let (remaining, node) = Node::parse(node_input, node_id, data_key)?;
             node_input = remaining;
-
-            for perm_id in desired_node_ids.into_iter() {
-                expected_permanent_ids.insert(perm_id);
-            }
-
             let permanent_id = node.permanent_id();
-            if !expected_permanent_ids.contains(&permanent_id) {
-                tracing::warn!(?permanent_id, ?node_id, node_kind = ?node.kind(), "found unexpected permanent ID in node data, skipping...");
-                continue;
+
+            for pid in node.ordered_child_pids() {
+                if !permanent_id_map.contains_key(&pid) {
+                    tracing::warn!(?permanent_id, child_pid = ?pid, "encountered child PID before parent");
+
+                    //return Err(nom::Err::Failure(nom::error::make_error(
+                    //    node_input,
+                    //    nom::error::ErrorKind::Verify,
+                    //)));
+                }
             }
-
-            expected_permanent_ids.remove(&permanent_id);
-            tracing::trace!(?permanent_id, ?node_id, node_kind = ?node.kind(), "inner_drive::parse::node");
-
-            entry.insert(node);
 
             permanent_id_map.insert(permanent_id, node_id);
-        }
 
-        if !expected_permanent_ids.is_empty() {
-            tracing::warn!(
-                ?expected_permanent_ids,
-                "missing expected permanent IDs in node data, fs missing data..."
-            );
+            entry.insert(node);
         }
 
         let root_node_id = *permanent_id_map.get(&root_pid).ok_or_else(|| {

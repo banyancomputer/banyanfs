@@ -246,7 +246,7 @@ impl Node {
         input: &'a [u8],
         allocated_id: NodeId,
         data_key: Option<&AccessKey>,
-    ) -> ParserResult<'a, (Self, Vec<PermanentId>)> {
+    ) -> ParserResult<'a, Self> {
         tracing::trace!(allocated_id, "begin");
 
         let (input, cid) = Cid::parse(input)?;
@@ -294,9 +294,7 @@ impl Node {
         }
 
         let (remaining, inner) = NodeData::parse(node_data_buf)?;
-        let desired_node_ids = inner.ordered_child_pids();
-
-        debug_assert!(remaining.is_empty());
+        debug_assert!(remaining.is_empty(), "did not consume all input");
 
         let node = Self {
             id: allocated_id,
@@ -316,7 +314,7 @@ impl Node {
             inner,
         };
 
-        Ok((input, (node, desired_node_ids)))
+        Ok((input, node))
     }
 
     #[allow(dead_code)]
