@@ -448,6 +448,11 @@ impl WasmMount {
             .await
             .map_err(|err| format!("error writing to {}: {}", path_refs.join("/"), err))?;
 
+        // note(sstelfox): ideally we don't need to sync after every change, but it doesn't seem
+        // like there are any external checks currently to ensure changes are being written.
+        self.dirty = true;
+        self.sync().await?;
+
         Ok(())
     }
 }
