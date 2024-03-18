@@ -15,7 +15,9 @@ pub enum NodeData {
         associated_data: HashMap<NodeName, PermanentId>,
         content: FileContent,
     },
-    AssoicatedData,
+    AssociatedData {
+        content: FileContent,
+    },
     Directory {
         permissions: DirectoryPermissions,
         size: u64,
@@ -151,7 +153,7 @@ impl NodeData {
     pub(crate) fn kind(&self) -> NodeKind {
         match self {
             NodeData::File { .. } => NodeKind::File,
-            NodeData::AssoicatedData => NodeKind::AssociatedData,
+            NodeData::AssociatedData { .. } => NodeKind::AssociatedData,
             NodeData::Directory { .. } => NodeKind::Directory,
         }
     }

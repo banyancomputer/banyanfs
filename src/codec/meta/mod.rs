@@ -1,5 +1,6 @@
 mod actor_id;
 mod actor_settings;
+mod block_size;
 mod cid;
 mod filesystem_id;
 mod journal_checkpoint;
@@ -9,6 +10,7 @@ mod vector_clock;
 
 pub use actor_id::ActorId;
 pub use actor_settings::ActorSettings;
+pub use block_size::{BlockSize, BlockSizeError};
 pub use cid::Cid;
 pub use filesystem_id::FilesystemId;
 pub use journal_checkpoint::JournalCheckpoint;

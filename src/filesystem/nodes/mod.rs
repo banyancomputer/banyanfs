@@ -375,7 +375,7 @@ impl std::fmt::Debug for Node {
                 .field(&self.owner_id)
                 .field(&self.name)
                 .finish(),
-            NodeData::AssoicatedData => unimplemented!(),
+            NodeData::AssociatedData { .. } => unimplemented!(),
             NodeData::Directory { .. } => f
                 .debug_tuple("NodeDirectory")
                 .field(&self.id)

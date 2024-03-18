@@ -356,6 +356,9 @@ impl DirectoryHandle {
         Ok(0)
     }
 
+    // todo(sstelfox): this really needs to return a stream which will be a breaking change to the
+    // API. If anyone finds this know that's coming, though it shouldn't be that much of a change
+    // on the consumer side.
     pub async fn read(
         &self,
         _store: &impl DataStore,
@@ -364,6 +367,19 @@ impl DirectoryHandle {
         if path.is_empty() {
             return Err(OperationError::UnexpectedEmptyPath);
         }
+
+        let target_node_id = match walk_path(&self.inner, self.cwd_id, path, 0).await? {
+            WalkState::FoundNode { node_id } => node_id,
+            WalkState::NotTraversable { .. } => return Err(OperationError::NotADirectory),
+            WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
+        };
+
+        let inner_read = self.inner.read().await;
+        let node_content = match inner_read.by_id(target_node_id)?.data() {
+            NodeData::File { content, .. } => content,
+            NodeData::AssociatedData { content, .. } => content,
+            _ => return Err(OperationError::NotReadable),
+        };
 
         unimplemented!()
     }

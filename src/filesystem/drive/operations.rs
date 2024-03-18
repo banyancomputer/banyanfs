@@ -25,6 +25,9 @@ pub enum OperationError {
     #[error("path attempted to traverse a non-directory node")]
     NotADirectory,
 
+    #[error("attempted to read from a node that contains no data")]
+    NotReadable,
+
     #[error("Node({0:?}) was orphaned in filesystem and is unsafe to remove")]
     OrphanNode(PermanentId),
 

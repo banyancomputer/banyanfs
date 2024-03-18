@@ -131,8 +131,8 @@ impl FileContent {
 
     pub fn size(&self) -> u64 {
         match self {
-            FileContent::Encrypted { content, .. } => content.iter().map(|c| c.size()).sum(),
-            FileContent::Public { content, .. } => content.iter().map(|c| c.size()).sum(),
+            FileContent::Encrypted { content, .. } => content.iter().map(|c| c.size() as u64).sum(),
+            FileContent::Public { content, .. } => content.iter().map(|c| c.size() as u64).sum(),
             FileContent::Stub { size } => *size,
         }
     }
