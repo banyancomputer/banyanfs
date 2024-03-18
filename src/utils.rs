@@ -1,5 +1,14 @@
+use crate::codec::Cid;
+
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
+
+const CID_HASH_SIZE: usize = 32;
+
+pub fn calculate_cid(data: &[u8]) -> Cid {
+    let hash: [u8; CID_HASH_SIZE] = blake3::hash(data).into();
+    Cid::from(hash)
+}
 
 #[cfg(not(taget_arch = "wasm32"))]
 pub fn crypto_rng() -> ChaCha20Rng {

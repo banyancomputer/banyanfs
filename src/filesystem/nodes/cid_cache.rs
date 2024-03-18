@@ -46,9 +46,7 @@ impl CidCache {
     }
 
     pub(crate) async fn set_with_ref(&self, data: &[u8]) {
-        let hash: [u8; 32] = blake3::hash(&data).into();
-        let cid = Cid::from(hash);
-
+        let cid = crate::utils::calculate_cid(data);
         let mut inner = self.0.write().await;
         inner.cid = Some(cid);
     }

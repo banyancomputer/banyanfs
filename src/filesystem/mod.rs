@@ -1,15 +1,14 @@
 mod content_reference;
-mod data_block;
 mod drive;
 mod file_content;
 
 pub mod nodes;
 
 pub(crate) use content_reference::ContentReference;
-pub(crate) use data_block::DataBlock;
 pub(crate) use drive::InnerDrive;
 pub(crate) use file_content::FileContent;
 pub(crate) use nodes::NodeBuilder;
+
 pub use nodes::{Node, NodeName};
 
 pub use drive::{
