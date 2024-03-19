@@ -13,10 +13,6 @@ pub struct ContentReference {
 }
 
 impl ContentReference {
-    pub(crate) fn block_size(&self) -> &BlockSize {
-        &self.block_size
-    }
-
     pub(crate) fn chunks(&self) -> &[ContentLocation] {
         &self.chunks
     }

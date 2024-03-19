@@ -45,8 +45,12 @@ impl DataBlock {
         Ok(())
     }
 
+    pub fn base_chunk_size(&self) -> usize {
+        self.data_options().block_size().chunk_capacity() as usize
+    }
+
     pub fn chunk_size(&self) -> usize {
-        let mut base_chunk_size = self.data_options().block_size().chunk_capacity() as usize;
+        let mut base_chunk_size = self.base_chunk_size();
 
         if self.data_options().encrypted() {
             base_chunk_size -= Nonce::size();
@@ -72,7 +76,7 @@ impl DataBlock {
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         rng: &mut impl CryptoRngCore,
-        _access_key: &AccessKey,
+        access_key: &AccessKey,
         signing_key: &SigningKey,
         writer: &mut W,
     ) -> std::io::Result<usize> {
@@ -81,7 +85,11 @@ impl DataBlock {
         }
 
         if self.data_options.ecc_present() {
-            todo!("generate & append parity blocks for chunks");
+            unimplemented!("parity blocks are not yet supported");
+        }
+
+        if !self.data_options.encrypted() {
+            unimplemented!("unencrypted data blocks are not yet supported");
         }
 
         let mut signed_data = Vec::new();
@@ -89,12 +97,44 @@ impl DataBlock {
         signed_data.write_all(BANYAN_DATA_MAGIC).await?;
         signed_data.write_all(&[0x01]).await?;
 
+        // todo(sstelfox): I should move all the chunk encoding, encrypting, decrypting, and
+        // decoding into its own type to encapsulate that information but also to switch this in an
+        // enum over encrypted and decrypted types. I want to be able to decode a single chunk
+        // without all of them.
         let mut data_buffer = Vec::new();
+        let mut chunk_cids = Vec::new();
 
-        // todo: for each chunk
-        //  - encrypt the contents, include nonce and tag if encrypted
-        //  - append chunk to data buffer
+        for chunk in self.contents.iter() {
+            if chunk.len() != self.chunk_size() {
+                return Err(std_io_err("chunk size mismatch"));
+            }
 
+            let mut payload = chunk.clone();
+            let (nonce, tag) = access_key
+                .encrypt_buffer(rng, &[], &mut payload)
+                .map_err(|_| std_io_err("failed to encrypt chunk"))?;
+
+            let mut chunk_data = Vec::with_capacity(self.base_chunk_size());
+
+            nonce.encode(&mut chunk_data).await?;
+            chunk_data.write_all(&payload).await?;
+            tag.encode(&mut chunk_data).await?;
+
+            let cid = crate::utils::calculate_cid(&chunk_data);
+
+            data_buffer.extend(chunk_data);
+            chunk_cids.push(cid);
+        }
+
+        // We include a map of the chunks and their CIDs in a trailer at the end of the block. This
+        // gets captured by the data block CID. We know how many entries there are, and the
+        // index of each chunk matches its respective block so we can just write them straight out.
+        for cid in chunk_cids {
+            cid.encode(&mut signed_data).await?;
+        }
+
+        // The data block CID is only over the data payload, the rest of the
+        // data is signed.
         let cid = crate::utils::calculate_cid(&data_buffer);
         cid.encode(&mut signed_data).await?;
         self.data_options.encode(&mut signed_data).await?;
@@ -112,7 +152,10 @@ impl DataBlock {
         let signature = signing_key.sign(rng, &signed_data);
         written_bytes += signature.encode(writer).await?;
 
-        todo!()
+        writer.write(&data_buffer).await?;
+        written_bytes += data_buffer.len();
+
+        Ok(written_bytes)
     }
 
     pub fn get_chunk_data(&self, index: usize) -> Result<&[u8], DataBlockError> {
@@ -270,49 +313,6 @@ impl DataOptions {
 
     pub const fn size() -> usize {
         2
-    }
-}
-
-pub(crate) enum Content {
-    Data(Vec<u8>),
-}
-
-impl Content {
-    pub(crate) fn as_bytes(&self) -> &[u8] {
-        match self {
-            Self::Data(data) => data.as_slice(),
-        }
-    }
-
-    pub(crate) fn cid(&self) -> Cid {
-        crate::utils::calculate_cid(self.as_bytes())
-    }
-
-    pub(crate) fn create_data(data: Vec<u8>) -> Self {
-        Self::Data(data)
-    }
-
-    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-    ) -> std::io::Result<usize> {
-        match self {
-            Self::Data(data) => {
-                let mut written_bytes = self.cid().encode(writer).await?;
-
-                let length_bytes = data.len().to_le_bytes();
-                writer.write_all(&length_bytes).await?;
-                written_bytes += length_bytes.len();
-
-                writer.write_all(data).await?;
-
-                Ok(written_bytes + data.len())
-            }
-        }
-    }
-
-    pub(crate) fn parse(_input: &[u8]) -> ParserResult<Self> {
-        todo!()
     }
 }
 

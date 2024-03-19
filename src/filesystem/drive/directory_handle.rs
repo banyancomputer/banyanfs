@@ -412,22 +412,26 @@ impl DirectoryHandle {
                     })?;
 
                 let (remaining, block) =
-                    DataBlock::parse(&data_chunk, &unlocked_key, &verifying_key).map_err(|_| {
-                        OperationError::BlockCorrupted(content_ref.data_block_cid())
-                    })?;
+                    DataBlock::parse_with_magic(&data_chunk, &unlocked_key, &verifying_key)
+                        .map_err(|_| {
+                            OperationError::BlockCorrupted(content_ref.data_block_cid())
+                        })?;
                 debug_assert!(remaining.is_empty(), "no extra data should be present");
 
                 for location in content_ref.chunks() {
                     if !matches!(location.block_kind(), BlockKind::Data) {
                         unimplemented!("indirect reference loading");
                     }
+
+                    let data = block
+                        .get_chunk_data(location.block_index() as usize)
+                        .map_err(|_| {
+                            OperationError::BlockCorrupted(content_ref.data_block_cid())
+                        })?;
+
+                    file_data.extend_from_slice(data);
                 }
             }
-
-            //for reference in content {
-            //    let block = store.retrieve(reference).await?;
-            //    file_data.extend_from_slice(&block);
-            //}
 
             return Ok(file_data);
         } else {
