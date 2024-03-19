@@ -28,8 +28,8 @@ impl DataBlock {
             return Err(DataBlockError::Full);
         }
 
-        let expected_chunk_size = self.data_options().block_size().chunk_capacity() as usize;
-        if data.len() != self.chunk_size() {
+        let expected_chunk_size = self.chunk_size();
+        if data.len() != expected_chunk_size {
             return Err(DataBlockError::Size(BlockSizeError::ChunkSizeMismatch(
                 data.len(),
                 expected_chunk_size,
@@ -46,7 +46,7 @@ impl DataBlock {
     }
 
     pub fn base_chunk_size(&self) -> usize {
-        self.data_options().block_size().chunk_capacity() as usize
+        self.data_options().block_size().chunk_size() as usize
     }
 
     pub fn chunk_size(&self) -> usize {
@@ -130,7 +130,7 @@ impl DataBlock {
         // gets captured by the data block CID. We know how many entries there are, and the
         // index of each chunk matches its respective block so we can just write them straight out.
         for cid in chunk_cids {
-            cid.encode(&mut signed_data).await?;
+            cid.encode(&mut data_buffer).await?;
         }
 
         // The data block CID is only over the data payload, the rest of the
@@ -171,7 +171,7 @@ impl DataBlock {
 
     pub fn parse<'a>(
         input: &'a [u8],
-        _access_key: &AccessKey,
+        access_key: &AccessKey,
         _verifying_key: &VerifyingKey,
     ) -> ParserResult<'a, Self> {
         let (input, version) = le_u8(input)?;
@@ -181,9 +181,50 @@ impl DataBlock {
             return Err(nom::Err::Failure(err));
         }
 
-        let (input, _data_options) = DataOptions::parse(input)?;
+        let (input, cid) = Cid::parse(input)?;
+        let (input, data_options) = DataOptions::parse(input)?;
 
-        todo!()
+        if !data_options.ecc_present() {
+            unimplemented!("ecc encoding is not yet supported");
+        }
+
+        if !data_options.encrypted() {
+            unimplemented!("unencrypted data blocks are not yet supported");
+        }
+
+        let chunks = data_options.block_size().chunk_count() as usize;
+        let chunk_size = data_options.block_size().chunk_size() as usize;
+        let overhead = AuthenticationTag::size() + Nonce::size();
+
+        // todo(sstelfox): I'm not yet verifying the data block's signature here yet, I'll have to
+        // do a buffer indirection to make that work and its too late for those games.
+
+        let mut contents = Vec::with_capacity(chunks);
+        for _ in 0..chunks {
+            let (input, chunk_data) = take(chunk_size)(input)?;
+
+            let (chunk_data, nonce) = Nonce::parse(chunk_data)?;
+            let (chunk_data, data) = take(chunk_size - overhead)(chunk_data)?;
+            let (chunk_data, tag) = AuthenticationTag::parse(chunk_data)?;
+            debug_assert!(chunk_data.is_empty(), "chunk should be fully read");
+
+            let mut plaintext_data = data.to_vec();
+            if let Err(err) = access_key.decrypt_buffer(nonce, &[], &mut plaintext_data, tag) {
+                tracing::error!("failed to decrypt chunk: {err}");
+                let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
+                return Err(nom::Err::Failure(err));
+            }
+
+            contents.push(plaintext_data);
+        }
+
+        let block = Self {
+            data_options,
+            cid: Arc::new(RwLock::new(Some(cid))),
+            contents,
+        };
+
+        Ok((input, block))
     }
 
     pub fn parse_with_magic<'a>(
@@ -201,9 +242,7 @@ impl DataBlock {
         let total_chunks = block_size.chunk_count();
         let remaining_chunks = total_chunks - self.contents.len() as u64;
 
-        let chunk_capacity = block_size.chunk_capacity();
-
-        remaining_chunks * chunk_capacity
+        remaining_chunks * self.chunk_size() as u64
     }
 
     pub fn small() -> Result<Self, DataBlockError> {

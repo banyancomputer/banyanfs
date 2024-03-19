@@ -1,6 +1,6 @@
 use nom::number::streaming::le_u8;
 
-use crate::codec::{Cid, ParserResult};
+use crate::codec::ParserResult;
 use futures::{AsyncWrite, AsyncWriteExt};
 
 #[derive(Debug, Clone, Copy)]
@@ -15,11 +15,8 @@ pub struct BlockSize {
 }
 
 impl BlockSize {
-    pub fn chunk_capacity(&self) -> u64 {
-        use crate::codec::crypto::{AuthenticationTag, Nonce};
-        let per_chunk_overhead =
-            Nonce::size() + Cid::size() + 4 /* length */ + AuthenticationTag::size();
-        2u64.pow(self.chunk_size as u32) - per_chunk_overhead as u64
+    pub fn chunk_size(&self) -> u64 {
+        2u64.pow(self.chunk_size as u32)
     }
 
     pub fn chunk_count(&self) -> u64 {
@@ -71,12 +68,6 @@ impl BlockSize {
 
     pub fn standard() -> Result<Self, BlockSizeError> {
         Self::new(26, 20)
-    }
-
-    /// Takes into account the overhead of encryption, does not account for format overhead or
-    /// overhead of error blocks.
-    pub fn storage_capacity(&self) -> u64 {
-        self.chunk_capacity() * self.chunk_count()
     }
 }
 

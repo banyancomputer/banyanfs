@@ -16,10 +16,11 @@ pub struct DriveAccess {
 }
 
 impl DriveAccess {
-    pub fn actor_key(&self, actor_id: &ActorId) -> Option<&VerifyingKey> {
+    pub fn actor_key(&self, actor_id: &ActorId) -> Option<VerifyingKey> {
         self.actor_settings
             .get(actor_id)
-            .map(|settings| &settings.verifying_key())
+            .map(|settings| settings.verifying_key())
+            .clone()
     }
 
     pub fn actor_settings(&self, actor_id: ActorId) -> Option<KeyAccessSettings> {
