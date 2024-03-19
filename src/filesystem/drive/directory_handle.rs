@@ -567,7 +567,10 @@ impl DirectoryHandle {
                 let (_, cids) = active_block
                     .encode(rng, &node_data_key, &self.current_key, &mut sealed_block)
                     .await
-                    .map_err(|_| OperationError::Other("failed to encode block"))?;
+                    .map_err(|err| {
+                        tracing::error!("failed to encode block: {:?}", err);
+                        OperationError::Other("failed to encode block")
+                    })?;
 
                 let block_size = *active_block.data_options().block_size();
                 let cid = active_block
@@ -590,13 +593,18 @@ impl DirectoryHandle {
         }
 
         if !active_block.is_empty() {
+            tracing::info!("writing trailing block");
+
             // todo(sstelfox): this is duplicated, need to extract it
             let mut sealed_block = Vec::new();
 
             let (_, cids) = active_block
                 .encode(rng, &node_data_key, &self.current_key, &mut sealed_block)
                 .await
-                .map_err(|_| OperationError::Other("failed to encode block"))?;
+                .map_err(|err| {
+                    tracing::error!("failed to encode block: {:?}", err);
+                    OperationError::Other("failed to encode block")
+                })?;
 
             let block_size = *active_block.data_options().block_size();
             let cid = active_block

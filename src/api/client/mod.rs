@@ -1,13 +1,12 @@
-#![allow(dead_code)]
-
-mod auth;
 mod direct_response;
 mod error;
 mod traits;
+
+pub use error::ApiClientError;
+
 pub(crate) mod utils;
 
 pub(crate) use direct_response::DirectResponse;
-pub use error::ApiClientError;
 pub(crate) use traits::{ApiRequest, FromReqwestResponse, PlatformApiRequest};
 
 use std::collections::BTreeMap;
@@ -138,15 +137,10 @@ impl ApiClient {
             None => Err(ApiError::UnexpectedResponse("response should not be empty")),
         }
     }
-
-    pub(crate) fn signing_key(&self) -> Option<Arc<SigningKey>> {
-        self.auth.as_ref().map(|auth| auth.key.clone())
-    }
 }
 
 fn default_reqwest_client() -> Result<reqwest::Client, ApiClientError> {
     let user_agent = format!("banyanfs/{}", crate::version::minimal_version());
-
     let client = reqwest::Client::builder().user_agent(user_agent).build()?;
 
     Ok(client)

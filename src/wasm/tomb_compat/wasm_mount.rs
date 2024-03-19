@@ -346,8 +346,6 @@ impl WasmMount {
             .await
             .map_err(|err| format!("failed to read data: {err:?}"))?;
 
-        tracing::info!(len = data.len(), "we have the file data");
-
         Ok(Uint8Array::from(data.as_slice()))
     }
 
