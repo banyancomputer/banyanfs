@@ -483,7 +483,6 @@ impl WasmMount {
             Some(drive) => drive,
             None => return Err("unable to delete content of a locked bucket".into()),
         };
-        tracing::info!("unlocked_drive");
 
         let mut rng = crypto_rng();
         let mut drive_root = unlocked_drive
@@ -492,7 +491,6 @@ impl WasmMount {
             .map_err(|_| "root unavailable")?;
 
         let file_data = Uint8Array::new(&content_buffer).to_vec();
-        tracing::info!("prepared data");
 
         {
             let store_writer = &mut self.store.write().await;
@@ -501,6 +499,7 @@ impl WasmMount {
                 .await
             {
                 let err_msg = format!("error writing to {}: {}", path_refs.join("/"), err);
+                tracing::error!("{}", err_msg);
                 return Err(err_msg.into());
             }
         }
