@@ -400,7 +400,7 @@ impl DirectoryHandle {
             };
 
             let unlocked_key = locked_key
-                .unlock(&data_key)
+                .unlock(data_key)
                 .map_err(|_| OperationError::AccessDenied)?;
 
             let author_id = read_node.owner_id();
@@ -421,10 +421,12 @@ impl DirectoryHandle {
 
                 let (remaining, block) =
                     DataBlock::parse_with_magic(&data_chunk, &unlocked_key, &verifying_key)
-                        .map_err(|_| {
+                        .map_err(|err| {
+                            tracing::error!("parsing of data block failed: {err:?}");
                             OperationError::BlockCorrupted(content_ref.data_block_cid())
                         })?;
-                debug_assert!(remaining.is_empty(), "no extra data should be present");
+                tracing::info!(?remaining, "drive::read::remaining");
+                //debug_assert!(remaining.is_empty(), "no extra data should be present");
 
                 for location in content_ref.chunks() {
                     if !matches!(location.block_kind(), BlockKind::Data) {
@@ -433,7 +435,8 @@ impl DirectoryHandle {
 
                     let data = block
                         .get_chunk_data(location.block_index() as usize)
-                        .map_err(|_| {
+                        .map_err(|err| {
+                            tracing::error!("failed to retrieve block chunk: {err:?}");
                             OperationError::BlockCorrupted(content_ref.data_block_cid())
                         })?;
 
@@ -550,7 +553,10 @@ impl DirectoryHandle {
 
             active_block
                 .push_chunk(chunk_data.to_vec())
-                .map_err(|_| OperationError::Other("expected remaining capacity"))?;
+                .map_err(|err| {
+                    tracing::error!("failed to push chunk: {:?}", err);
+                    OperationError::Other("expected remaining capacity")
+                })?;
 
             if active_block.is_full() {
                 let mut sealed_block = Vec::new();

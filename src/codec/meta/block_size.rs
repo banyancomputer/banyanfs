@@ -63,7 +63,9 @@ impl BlockSize {
     }
 
     pub fn small() -> Result<Self, BlockSizeError> {
-        Self::new(18, 18)
+        tracing::warn!("small block is rediculously small");
+        //Self::new(18, 18)
+        Self::new(7, 7)
     }
 
     pub fn standard() -> Result<Self, BlockSizeError> {
@@ -73,9 +75,9 @@ impl BlockSize {
 
 #[derive(Debug, thiserror::Error)]
 pub enum BlockSizeError {
-    #[error("received chunk with {0} bytes expected one with {1} bytes")]
-    ChunkSizeMismatch(usize, usize),
-
     #[error("chunk size {0} is larger than total space {1}")]
     ChunkSizeTooLarge(u8, u8),
+
+    #[error("attempted to add a chunk of size {0} to a block with max size of {1}")]
+    ChunkTooLarge(usize, usize),
 }

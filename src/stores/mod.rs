@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
+use tracing::instrument;
 
 use crate::codec::Cid;
 use crate::filesystem::{DataStore, DataStoreError};
@@ -13,7 +14,8 @@ pub struct MemoryStore {
 #[async_trait(?Send)]
 impl DataStore for MemoryStore {
     async fn retrieve(&self, cid: Cid) -> Result<Option<Vec<u8>>, DataStoreError> {
-        Ok(self.data.get(&cid).cloned())
+        let data = self.data.get(&cid).cloned();
+        Ok(data)
     }
 
     async fn store(&mut self, cid: Cid, data: Vec<u8>) -> Result<(), DataStoreError> {

@@ -1,10 +1,12 @@
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::{tag, take};
-use nom::number::streaming::le_u8;
+use nom::number::streaming::{le_u64, le_u8};
+use rand::Rng;
 
-use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce, SigningKey, VerifyingKey};
-
+use crate::codec::crypto::{
+    AccessKey, AuthenticationTag, Nonce, Signature, SigningKey, VerifyingKey,
+};
 use crate::codec::header::BANYAN_DATA_MAGIC;
 use crate::codec::meta::{BlockSize, BlockSizeError};
 use crate::codec::{Cid, ParserResult};
@@ -24,6 +26,7 @@ pub struct DataBlock {
 
 impl DataBlock {
     /// The amount of payload a small encrypted block can hold.
+    #[allow(clippy::identity_op)]
     pub const SMALL_ENCRYPTED_SIZE: usize =
         262_144 - (1 * Nonce::size() + AuthenticationTag::size());
 
@@ -37,6 +40,9 @@ impl DataBlock {
 
     pub fn chunk_size(&self) -> usize {
         let mut base_chunk_size = self.base_chunk_size();
+
+        // length bytes
+        base_chunk_size -= 8;
 
         if self.data_options().encrypted() {
             base_chunk_size -= Nonce::size();
@@ -66,6 +72,7 @@ impl DataBlock {
         signing_key: &SigningKey,
         writer: &mut W,
     ) -> std::io::Result<(usize, Vec<Cid>)> {
+        // Pad our data block
         let mut extra_chunks = Vec::new();
         let needed_chunks = self.max_chunk_count() - self.contents.len();
 
@@ -96,14 +103,31 @@ impl DataBlock {
         let mut chunk_cids = Vec::new();
 
         for chunk in self.contents.iter().chain(&extra_chunks) {
-            if chunk.len() != self.chunk_size() {
+            if chunk.len() >= self.chunk_size() {
                 return Err(std_io_err("chunk size mismatch"));
             }
 
-            let mut payload = chunk.clone();
+            // write out the true data length
+            let chunk_length = chunk.len() as u64;
+            let chunk_length_bytes = chunk_length.to_le_bytes();
+
+            // We need to prepend the length of the data, the pad the remaining space with random
+            // data.
+            let full_size = self.chunk_size() + 8;
+            let mut payload = Vec::with_capacity(full_size);
+            payload.extend_from_slice(&chunk_length_bytes);
+            payload.extend_from_slice(chunk);
+            //payload.resize_with(full_size, || rng.gen());
+            payload.resize_with(full_size, || 0);
+
             let (nonce, tag) = access_key
                 .encrypt_buffer(rng, &[], &mut payload)
                 .map_err(|_| std_io_err("failed to encrypt chunk"))?;
+
+            tracing::info!(len = ?payload.len(), data = ?payload, "full encrypted chunk (encode)");
+
+            let encrypted_data_hash = crate::utils::calculate_cid(&payload);
+            tracing::info!(?encrypted_data_hash, len = ?payload.len(), data = ?payload, "encrypted data hash encode");
 
             let mut chunk_data = Vec::with_capacity(self.base_chunk_size());
 
@@ -185,7 +209,7 @@ impl DataBlock {
         let (input, cid) = Cid::parse(input)?;
         let (input, data_options) = DataOptions::parse(input)?;
 
-        if !data_options.ecc_present() {
+        if data_options.ecc_present() {
             unimplemented!("ecc encoding is not yet supported");
         }
 
@@ -193,21 +217,28 @@ impl DataBlock {
             unimplemented!("unencrypted data blocks are not yet supported");
         }
 
-        let chunks = data_options.block_size().chunk_count() as usize;
-        let chunk_size = data_options.block_size().chunk_size() as usize;
-        let overhead = AuthenticationTag::size() + Nonce::size();
+        // todo(sstelfox): I'm not yet verifying the data block's signature here yet
+        let (input, _signature) = Signature::parse(input)?;
 
-        // todo(sstelfox): I'm not yet verifying the data block's signature here yet, I'll have to
-        // do a buffer indirection to make that work and its too late for those games.
+        let chunk_count = data_options.block_size().chunk_count() as usize;
 
-        let mut contents = Vec::with_capacity(chunks);
-        for _ in 0..chunks {
-            let (input, chunk_data) = take(chunk_size)(input)?;
+        let base_chunk_size = data_options.block_size().chunk_size() as usize;
+        let encrypted_chunk_size = base_chunk_size - (Nonce::size() + AuthenticationTag::size());
 
+        let mut contents = Vec::with_capacity(chunk_count);
+        for _ in 0..chunk_count {
+            let (input, chunk_data) = take(base_chunk_size)(input)?;
+            tracing::info!(len = ?chunk_data.len(), data = ?chunk_data, "full encrypted chunk (decode)");
+
+            tracing::info!(size = ?chunk_data.len(), "chunk data");
             let (chunk_data, nonce) = Nonce::parse(chunk_data)?;
-            let (chunk_data, data) = take(chunk_size - overhead)(chunk_data)?;
+            let (chunk_data, data) = take(encrypted_chunk_size)(chunk_data)?;
+
             let (chunk_data, tag) = AuthenticationTag::parse(chunk_data)?;
             debug_assert!(chunk_data.is_empty(), "chunk should be fully read");
+
+            let encrypted_data_hash = crate::utils::calculate_cid(data);
+            tracing::info!(?encrypted_data_hash, len = ?data.len(), ?data, "encrypted data hash decode");
 
             let mut plaintext_data = data.to_vec();
             if let Err(err) = access_key.decrypt_buffer(nonce, &[], &mut plaintext_data, tag) {
@@ -216,8 +247,42 @@ impl DataBlock {
                 return Err(nom::Err::Failure(err));
             }
 
+            let data_length =
+                match le_u64::<&[u8], nom::error::VerboseError<_>>(plaintext_data.as_slice()) {
+                    Ok((_, length)) => length,
+                    Err(err) => {
+                        tracing::error!("failed to read inner length: {err:?}");
+
+                        let empty_static: &'static [u8] = &[];
+                        return Err(nom::Err::Failure(nom::error::make_error(
+                            empty_static,
+                            nom::error::ErrorKind::Verify,
+                        )));
+                    }
+                };
+            tracing::info!(size = data_length, "data length");
+            let plaintext_data: Vec<u8> = plaintext_data
+                .drain(8..(data_length as usize + 8))
+                .collect();
+
+            tracing::info!(
+                len = ?plaintext_data.len(),
+                ?plaintext_data,
+                "plaintext data"
+            );
+
             contents.push(plaintext_data);
         }
+
+        let mut chunk_cids = Vec::with_capacity(chunk_count);
+        let mut input = input;
+        for _ in 0..chunk_count {
+            let (remaining, cid) = Cid::parse(input)?;
+            input = remaining;
+            chunk_cids.push(cid);
+        }
+
+        // todo(sstelfox): not doing anything with the cids...
 
         let block = Self {
             data_options,
@@ -242,11 +307,11 @@ impl DataBlock {
             return Err(DataBlockError::Full);
         }
 
-        let expected_chunk_size = self.chunk_size();
-        if data.len() != expected_chunk_size {
-            return Err(DataBlockError::Size(BlockSizeError::ChunkSizeMismatch(
+        let max_chunk_size = self.chunk_size();
+        if data.len() > max_chunk_size {
+            return Err(DataBlockError::Size(BlockSizeError::ChunkTooLarge(
                 data.len(),
-                expected_chunk_size,
+                max_chunk_size,
             )));
         }
 
@@ -316,7 +381,7 @@ pub enum DataBlockError {
     Size(#[from] BlockSizeError),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct DataOptions {
     ecc_present: bool,
     encrypted: bool,
