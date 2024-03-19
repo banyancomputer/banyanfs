@@ -29,6 +29,8 @@ use crate::prelude::BanyanFsError;
 
 pub(crate) const PLATFORM_AUDIENCE: &str = "banyan-platform";
 
+pub(crate) const STORAGE_HOST_AUDIENCE: &str = "banyan-storage";
+
 #[derive(Clone)]
 pub struct ApiClient {
     auth: Option<ApiAuth>,
@@ -189,7 +191,12 @@ impl ApiClient {
                     auth.clear_storage_grant(storage_host_url).await;
                 }
 
-                Some(auth.platform_token().await?)
+                // todo(sstelfox): there is another side to the auth sequence I haven't done yet,
+                // if the storage host doesn't know about this client we need to request a fresh
+                // storage grant from the platform before continuing. This whole process is
+                // probably worth extracting from this location...
+
+                Some(auth.storage_host_token(storage_host_url).await?)
             }
             None => None,
         };
@@ -249,11 +256,40 @@ impl StorageHost {
     }
 
     pub(crate) fn get_token(
-        &self,
-        _id: &str,
-        _key: &Arc<SigningKey>,
+        &mut self,
+        account_id: &str,
+        key: &Arc<SigningKey>,
     ) -> Result<String, StorageTokenError> {
-        todo!()
+        if let Some(token) = &self.token {
+            if !token.is_expired() {
+                return Ok(token.value());
+            }
+        }
+
+        let token_kid = format!("{account_id}@{}", key.fingerprint().to_hex());
+        let expiration = OffsetDateTime::now_utc() + std::time::Duration::from_secs(300);
+
+        // todo(sstelfox): this jwt library is definitely an integration pain point, we have all
+        // the primives already in this crate, we should just use them and correctly construct the
+        // JWTs ourselves.
+        let current_ts = Clock::now_since_epoch();
+        let mut claims = Claims::create(Duration::from_secs(330))
+            .with_audience(STORAGE_HOST_AUDIENCE)
+            // note(sstelfox): I don't believe we're using the subject...
+            .with_subject(account_id)
+            .invalid_before(current_ts - Duration::from_secs(30));
+
+        claims.create_nonce();
+        claims.issued_at = Some(current_ts);
+
+        let mut jwt_key = ES384KeyPair::from_bytes(&key.to_bytes())?;
+        jwt_key = jwt_key.with_key_id(&token_kid);
+        let token = jwt_key.sign(claims)?;
+
+        tracing::debug!("generated new storage host token");
+        self.token = Some(ExpiringToken::new(token.clone(), expiration));
+
+        Ok(token)
     }
 
     pub(crate) fn record_storage_grant(&mut self, grant_token: &str) {
@@ -373,23 +409,33 @@ pub enum PlatformTokenError {
 
 #[derive(Default)]
 struct StorageHostsAuth {
+    active_storage_host: Option<Url>,
     storage_hosts: HashMap<Url, StorageHost>,
 }
 
 impl StorageHostsAuth {
-    fn clear_storage_grant(&mut self, storage_host_url: &Url) {
+    pub(crate) fn active_storage_host(&self) -> Option<Url> {
+        // todo(sstelfox): could fallback by randomly selecting from the known storage hosts
+        self.active_storage_host.clone()
+    }
+
+    pub(crate) fn clear_storage_grant(&mut self, storage_host_url: &Url) {
         if let Some(shu) = self.storage_hosts.get_mut(storage_host_url) {
             shu.clear_storage_grant();
         }
     }
 
-    fn get_storage_grant(&mut self, storage_host_url: &Url) -> Option<String> {
+    pub(crate) fn get_storage_grant(&mut self, storage_host_url: &Url) -> Option<String> {
         let host = self
             .storage_hosts
             .entry(storage_host_url.clone())
             .or_default();
 
         host.get_storage_grant()
+    }
+
+    pub(crate) fn set_active_storage_host(&mut self, storage_host_url: &Url) {
+        self.active_storage_host = Some(storage_host_url.clone());
     }
 
     pub(crate) fn get_token(
@@ -417,7 +463,10 @@ impl StorageHostsAuth {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum StorageTokenError {}
+pub(crate) enum StorageTokenError {
+    #[error("failed to generate token for a storage host: {0}")]
+    JwtSimpleError(#[from] jwt_simple::Error),
+}
 
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub(crate) struct ExpiringToken {
@@ -469,6 +518,9 @@ pub enum ApiError {
 
     #[error("failed to during json (de)serialization: {0}")]
     Serde(#[from] serde_json::Error),
+
+    #[error("failed to generate token for storage host: {0}")]
+    StorageTokenError(#[from] StorageTokenError),
 
     #[error("unexpected I/O error in API client: {0}")]
     StreamingIo(#[from] std::io::Error),

@@ -5,6 +5,7 @@ pub use traits::{DataStore, DataStoreError, SyncTracker, SyncableDataStore};
 use std::collections::HashMap;
 
 use async_trait::async_trait;
+use reqwest::Url;
 
 use crate::api::ApiClient;
 use crate::codec::Cid;
@@ -77,6 +78,9 @@ pub struct ApiSyncableStore<MS: DataStore, ST: SyncTracker> {
 
     cached_store: MS,
     sync_tracker: ST,
+
+    // todo(sstelfox): need to expire this information
+    cid_map: HashMap<Cid, Vec<Url>>,
 }
 
 impl<MS: DataStore, ST: SyncTracker> ApiSyncableStore<MS, ST> {
@@ -86,6 +90,8 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStore<MS, ST> {
 
             cached_store,
             sync_tracker,
+
+            cid_map: HashMap::new(),
         }
     }
 }
@@ -96,6 +102,17 @@ impl<MS: DataStore, ST: SyncTracker> DataStore for ApiSyncableStore<MS, ST> {
         if self.cached_store.contains_cid(cid.clone()).await? {
             return Ok(true);
         }
+
+        // todo(sstelfox): check cid map, do the dumb thing for now
+        let location = crate::api::platform::blocks::locate(&self.client, &[cid.clone()])
+            .await
+            .map_err(|err| {
+                tracing::error!("failed to locate block: {err}");
+                DataStoreError::UnknownBlock(cid)
+            })?;
+
+        // todo: update cid map
+        // todo: return determination
 
         todo!("check blocks existence and location on the network")
     }
