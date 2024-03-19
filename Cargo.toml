@@ -3,7 +3,7 @@ name = "banyanfs"
 description = "A first pass implmentation of a BanyanFS format and platform client all-in-one. Spec reference implementation."
 repository = "https://github.com/banyancomputer"
 version = "0.1.0"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 readme = "README.md"
 edition = "2021"
 
