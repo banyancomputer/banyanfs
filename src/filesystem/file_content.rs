@@ -27,6 +27,15 @@ pub enum FileContent {
     },
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum FileContentError {
+    #[error("node type does not contain any content")]
+    NoContent,
+
+    #[error("key requested on unencrypted data")]
+    NotEncrypted,
+}
+
 impl FileContent {
     /// Return the CID over the plaintext content of the file. Be careful not to confuse these with
     /// the data CIDs which are the CIDs of the stored data blocks.
@@ -34,6 +43,31 @@ impl FileContent {
         match self {
             Self::Encrypted { cid, .. } | Self::Public { cid, .. } => Some(cid.clone()),
             Self::Stub { .. } => None,
+        }
+    }
+
+    pub fn content_references(&self) -> Result<&[ContentReference], FileContentError> {
+        match self {
+            Self::Encrypted { content, .. } | Self::Public { content, .. } => Ok(content),
+            Self::Stub { .. } => Err(FileContentError::NoContent),
+        }
+    }
+
+    pub fn data_cids(&self) -> Option<Vec<Cid>> {
+        match self {
+            Self::Encrypted { content, .. } | Self::Public { content, .. } => {
+                Some(content.iter().map(|c| c.data_block_cid()).collect())
+            }
+            Self::Stub { .. } => None,
+        }
+    }
+
+    pub fn data_key(&self) -> Result<&SymLockedAccessKey, FileContentError> {
+        match self {
+            Self::Encrypted {
+                locked_access_key, ..
+            } => Ok(locked_access_key),
+            _ => Err(FileContentError::NotEncrypted),
         }
     }
 
@@ -78,15 +112,6 @@ impl FileContent {
 
     pub fn is_encrypted(&self) -> bool {
         matches!(self, Self::Encrypted { .. })
-    }
-
-    pub fn data_cids(&self) -> Option<Vec<Cid>> {
-        match self {
-            Self::Encrypted { content, .. } | Self::Public { content, .. } => {
-                Some(content.iter().map(|c| c.data_block_cid()).collect())
-            }
-            Self::Stub { .. } => None,
-        }
     }
 
     pub fn parse(input: &[u8]) -> ParserResult<Self> {

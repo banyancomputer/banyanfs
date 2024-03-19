@@ -156,16 +156,24 @@ impl InnerDrive {
 
             node.encode(&mut node_buffer).await?;
 
-            // todo(sstelfox): data cids don't need to be globally ordered, lets lexigraphically
-            // sort them.
-            for cid in node.data_cids() {
-                referenced_data_cids.insert(cid);
+            if let Some(data_cids) = node.data_cids() {
+                for cid in data_cids {
+                    referenced_data_cids.insert(cid);
+                }
             }
         }
 
         // todo(sstelfox): should scan the slab for any nodes that are not reachable from the root and track
         // them for removal in the journal and maintenance logs. It really shoudn't happen but be
-        // defensive against errors...
+        // defensive against errors... It can wait until the journal is complete though.
+
+        // Data cids don't need to be globally ordered, but should be consistent
+        // sort we need to get them into a vec then sort them (lexographically)
+        let mut data_cids = referenced_data_cids.into_iter().collect::<Vec<_>>();
+        data_cids.sort();
+
+        // todo(sstelfox): need to track removed nodes in the inner drive so we can report those in the
+        // maintenance logs
 
         let encoded_len = self.root_pid.encode(writer).await?;
         written_bytes += encoded_len;

@@ -361,12 +361,19 @@ impl DirectoryHandle {
     // on the consumer side.
     pub async fn read(
         &self,
-        _store: &impl DataStore,
+        store: &impl DataStore,
         path: &[&str],
     ) -> Result<Vec<u8>, OperationError> {
         if path.is_empty() {
             return Err(OperationError::UnexpectedEmptyPath);
         }
+
+        let inner_read = self.inner.read().await;
+        let actor_id = self.current_key.actor_id();
+        if !inner_read.access().has_read_access(actor_id) {
+            return Err(OperationError::AccessDenied);
+        }
+        drop(inner_read);
 
         let target_node_id = match walk_path(&self.inner, self.cwd_id, path, 0).await? {
             WalkState::FoundNode { node_id } => node_id,
@@ -375,17 +382,43 @@ impl DirectoryHandle {
         };
 
         let inner_read = self.inner.read().await;
-        let node_content = match inner_read.by_id(target_node_id)?.data() {
+
+        let read_node = inner_read.by_id(target_node_id)?;
+        let node_content = match read_node.data() {
             NodeData::File { content, .. } => content,
             NodeData::AssociatedData { content, .. } => content,
             _ => return Err(OperationError::NotReadable),
         };
 
-        let file_data = Vec::new();
+        if node_content.is_encrypted() {
+            let locked_key = node_content
+                .data_key()
+                .map_err(|_| OperationError::AccessDenied)?;
 
-        tracing::warn!("impl needed, have addresses need to reassemble files");
+            let data_key = match inner_read
+                .access()
+                .permission_keys()
+                .and_then(|pk| pk.data.as_ref())
+            {
+                Some(data_key) => data_key,
+                None => return Err(OperationError::AccessDenied),
+            };
 
-        Ok(file_data)
+            let unlocked_key = locked_key
+                .unlock(&data_key)
+                .map_err(|_| OperationError::AccessDenied)?;
+
+            let mut file_data = Vec::new();
+
+            //for reference in content {
+            //    let block = store.retrieve(reference).await?;
+            //    file_data.extend_from_slice(&block);
+            //}
+
+            return Ok(file_data);
+        } else {
+            unimplemented!()
+        }
     }
 
     pub async fn write(
@@ -398,6 +431,13 @@ impl DirectoryHandle {
         if path.is_empty() {
             return Err(OperationError::UnexpectedEmptyPath);
         }
+
+        let inner_read = self.inner.read().await;
+        let actor_id = self.current_key.actor_id();
+        if !inner_read.access().has_write_access(actor_id) {
+            return Err(OperationError::AccessDenied);
+        }
+        drop(inner_read);
 
         let (parent_path, name) = path.split_at(path.len() - 1);
         let file_name = NodeName::try_from(name[0]).map_err(OperationError::InvalidName)?;
@@ -442,6 +482,9 @@ impl DirectoryHandle {
         // this does not ensure the data store is fully synced, that is the responsibility of the
         // caller. Once we've registered all the data in the store we need to update our file's
         // stub node with the new addresses.
+        //
+        // need to make sure I have access to the data key here and encrypt the individual blocks
+        // befor they're stored...
 
         tracing::warn!("impl needed, break content into blocks, persist to data store");
 

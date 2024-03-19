@@ -1,6 +1,8 @@
+mod create_request;
 mod get_all_request;
 mod restore_request;
 
+use create_request::CreateRequest;
 use get_all_request::GetAllRequest;
 use restore_request::RestoreRequest;
 
@@ -9,12 +11,20 @@ use crate::api::platform::{ApiSnapshot, ApiSnapshotId};
 use crate::codec::Cid;
 
 pub async fn create(
-    _client: &ApiClient,
-    _bucket_id: &str,
-    _metadata_id: &str,
-    _cids: &[Cid],
+    client: &ApiClient,
+    bucket_id: &str,
+    metadata_id: &str,
+    cids: &[Cid],
 ) -> Result<ApiSnapshotId, ApiError> {
-    todo!()
+    let resp = client
+        .platform_request_full(CreateRequest::new(
+            bucket_id.into(),
+            metadata_id.into(),
+            cids,
+        ))
+        .await?;
+
+    Ok(resp.snapshot_id())
 }
 
 pub async fn get_all(client: &ApiClient, bucket_id: &str) -> Result<Vec<ApiSnapshot>, ApiError> {

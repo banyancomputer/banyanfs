@@ -4,6 +4,9 @@ use crate::filesystem::nodes::{NodeBuilderError, NodeError, NodeId, NodeNameErro
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum OperationError {
+    #[error("current user doesn't have the correct key to read or write to the drive")]
+    AccessDenied,
+
     #[error("creation of a node failed: {0}")]
     CreationFailed(#[from] NodeBuilderError),
 
@@ -21,6 +24,9 @@ pub enum OperationError {
 
     #[error("node operation failed: {0}")]
     NodeFailure(#[from] NodeError),
+
+    #[error("the requested content hasn't been uploaded and recorded yet")]
+    NotAvailable,
 
     #[error("path attempted to traverse a leaf node")]
     NotTraversable,
