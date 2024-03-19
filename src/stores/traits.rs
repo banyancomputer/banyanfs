@@ -7,7 +7,7 @@ use crate::codec::Cid;
 pub trait DataStore {
     async fn contains_cid(&self, cid: Cid) -> Result<bool, DataStoreError>;
 
-    async fn remove(&mut self, cid: Cid, recusrive: bool) -> Result<Option<u64>, DataStoreError>;
+    async fn remove(&mut self, cid: Cid, recusrive: bool) -> Result<(), DataStoreError>;
 
     async fn retrieve(&self, cid: Cid) -> Result<Vec<u8>, DataStoreError>;
 

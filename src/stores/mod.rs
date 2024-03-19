@@ -20,9 +20,9 @@ impl DataStore for MemoryDataStore {
         Ok(self.data.contains_key(&cid))
     }
 
-    async fn remove(&mut self, cid: Cid, _recusrive: bool) -> Result<Option<u64>, DataStoreError> {
-        let removed_data = self.data.remove(&cid).map(|d| d.len() as u64);
-        Ok(removed_data)
+    async fn remove(&mut self, cid: Cid, _recusrive: bool) -> Result<(), DataStoreError> {
+        self.data.remove(&cid);
+        Ok(())
     }
 
     async fn retrieve(&self, cid: Cid) -> Result<Vec<u8>, DataStoreError> {
@@ -40,9 +40,7 @@ impl DataStore for MemoryDataStore {
     ) -> Result<(), DataStoreError> {
         // We assume that CIDs are universally unique, if we're already storing a CID don't shuffle
         // our memory around again for a new one.
-        if !self.data.contains_key(&cid) {
-            self.data.insert(cid, data);
-        }
+        self.data.entry(cid).or_insert(data);
 
         Ok(())
     }
@@ -56,19 +54,21 @@ pub struct MemorySyncTracker {
 #[async_trait(?Send)]
 impl SyncTracker for MemorySyncTracker {
     async fn track(&mut self, cid: Cid, size: u64) -> Result<(), DataStoreError> {
-        todo!()
+        self.tracked.entry(cid).or_insert(size);
+        Ok(())
     }
 
     async fn tracked_cids(&self) -> Result<Vec<Cid>, DataStoreError> {
-        todo!()
+        Ok(self.tracked.keys().cloned().collect())
     }
 
     async fn tracked_size(&self) -> Result<u64, DataStoreError> {
-        todo!()
+        Ok(self.tracked.values().sum())
     }
 
     async fn untrack(&mut self, cid: Cid) -> Result<(), DataStoreError> {
-        todo!()
+        self.tracked.remove(&cid);
+        Ok(())
     }
 }
 
@@ -100,16 +100,15 @@ impl<MS: DataStore, ST: SyncTracker> DataStore for ApiSyncableStore<MS, ST> {
         todo!("check blocks existence and location on the network")
     }
 
-    async fn remove(&mut self, cid: Cid, recursive: bool) -> Result<Option<u64>, DataStoreError> {
-        if let Some(data_length) = self.cached_store.remove(cid.clone(), recursive).await? {
-            self.sync_tracker.untrack(cid.clone()).await?;
-        }
+    async fn remove(&mut self, cid: Cid, recursive: bool) -> Result<(), DataStoreError> {
+        self.cached_store.remove(cid.clone(), recursive).await?;
+        self.sync_tracker.untrack(cid.clone()).await?;
 
         if recursive {
             todo!("delete from remote stores as well, remember return value");
         }
 
-        Ok(None)
+        Ok(())
     }
 
     async fn retrieve(&self, cid: Cid) -> Result<Vec<u8>, DataStoreError> {
@@ -152,7 +151,15 @@ impl<MS: DataStore, ST: SyncTracker> SyncableDataStore for ApiSyncableStore<MS, 
     type Tracker = ST;
 
     async fn sync(&mut self) -> Result<(), DataStoreError> {
-        todo!()
+        for cid in self.sync_tracker.tracked_cids().await? {
+            let _data = self.cached_store.retrieve(cid.clone()).await?;
+
+            // todo: push the block to the network
+
+            self.tracker_mut().untrack(cid).await?;
+        }
+
+        Ok(())
     }
 
     fn tracker(&self) -> &ST {
