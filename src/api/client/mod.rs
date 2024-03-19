@@ -238,13 +238,13 @@ pub(crate) struct ApiAuth {
     account_id: String,
     key: Arc<SigningKey>,
 
-    cached_platform_tokens: PlatformTokens,
+    platform_token: PlatformToken,
     storage_hosts: Arc<Mutex<HashMap<String, StorageHost>>>,
 }
 
 impl ApiAuth {
     async fn platform_token(&self) -> Result<String, PlatformTokenError> {
-        self.cached_platform_tokens
+        self.platform_token
             .get_token(&self.account_id, &self.key)
             .await
     }
@@ -281,14 +281,14 @@ impl ApiAuth {
 
     pub fn new(account_id: impl Into<String>, key: Arc<SigningKey>) -> Self {
         let account_id = account_id.into();
-        let cached_platform_tokens = PlatformTokens::default();
+        let platform_token = PlatformToken::default();
         let storage_hosts = Arc::new(Mutex::new(HashMap::default()));
 
         Self {
             account_id,
             key,
 
-            cached_platform_tokens,
+            platform_token,
             storage_hosts,
         }
     }
@@ -305,18 +305,16 @@ impl ApiAuth {
 }
 
 #[derive(Clone, Default)]
-pub(crate) struct PlatformTokens(Arc<RwLock<BTreeMap<String, ExpiringToken>>>);
+pub(crate) struct PlatformToken(Arc<RwLock<Option<ExpiringToken>>>);
 
-impl PlatformTokens {
+impl PlatformToken {
     pub(crate) async fn get_token(
         &self,
         id: &str,
         key: &Arc<SigningKey>,
     ) -> Result<String, PlatformTokenError> {
-        let platform_tokens = &*self.0.read().await;
-
         // If we already have token and it's not expired, return it
-        if let Some(token) = platform_tokens.get(id) {
+        if let Some(token) = &*self.0.read().await {
             if !token.is_expired() {
                 return Ok(token.value());
             }
@@ -345,14 +343,16 @@ impl PlatformTokens {
         tracing::debug!("generated new platform token");
 
         let stored_token = ExpiringToken::new(token.clone(), expiration);
-        let platform_tokens = &mut *self.0.write().await;
-        platform_tokens.insert(id.to_string(), stored_token);
+        let platform_token = &mut *self.0.write().await;
+        *platform_token = Some(stored_token);
+
+        tracing::debug!("recorded token");
 
         Ok(token)
     }
 
     pub(crate) fn new() -> Self {
-        Self(Arc::new(RwLock::new(BTreeMap::new())))
+        Self(Arc::new(RwLock::new(None)))
     }
 }
 
