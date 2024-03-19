@@ -245,11 +245,11 @@ impl NodeData {
         }
     }
 
-    pub(crate) fn stub_file(size: u64) -> Self {
+    pub(crate) fn stub_file(data_size: u64) -> Self {
         Self::File {
             permissions: FilePermissions::default(),
             associated_data: HashMap::new(),
-            content: FileContent::Stub { size },
+            content: FileContent::Stub { data_size },
         }
     }
 }

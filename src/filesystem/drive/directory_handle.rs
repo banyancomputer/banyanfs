@@ -623,7 +623,8 @@ impl DirectoryHandle {
         let node = inner_write.by_perm_id_mut(&new_permanent_id)?;
         let node_data = node.data_mut().await;
 
-        let file_content = FileContent::encrypted(locked_key, plaintext_cid, content_references);
+        let file_content =
+            FileContent::encrypted(locked_key, plaintext_cid, data_size, content_references);
         *node_data = NodeData::full_file(file_content);
 
         Ok(())

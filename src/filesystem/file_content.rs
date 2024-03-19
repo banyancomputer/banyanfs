@@ -17,14 +17,16 @@ pub enum FileContent {
     Encrypted {
         locked_access_key: SymLockedAccessKey,
         cid: Cid,
+        data_size: u64,
         content: Vec<ContentReference>,
     },
     Public {
         cid: Cid,
+        data_size: u64,
         content: Vec<ContentReference>,
     },
     Stub {
-        size: u64,
+        data_size: u64,
     },
 }
 
@@ -41,11 +43,13 @@ impl FileContent {
     pub fn encrypted(
         access_key: SymLockedAccessKey,
         cid: Cid,
+        data_size: u64,
         content: Vec<ContentReference>,
     ) -> Self {
         Self::Encrypted {
             locked_access_key: access_key,
             cid,
+            data_size,
             content,
         }
     }
@@ -91,30 +95,43 @@ impl FileContent {
         let mut written_bytes = 0;
 
         match self {
-            Self::Stub { size } => {
+            Self::Stub { data_size } => {
                 writer.write_all(&[FILE_CONTENT_TYPE_STUB]).await?;
                 written_bytes += 1;
 
-                let size_bytes = size.to_le_bytes();
-                writer.write_all(&size_bytes).await?;
-                written_bytes += size_bytes.len();
+                let data_size_bytes = data_size.to_le_bytes();
+                writer.write_all(&data_size_bytes).await?;
+                written_bytes += data_size_bytes.len();
             }
-            Self::Public { cid, content } => {
+            Self::Public {
+                cid,
+                data_size,
+                content,
+            } => {
                 writer.write_all(&[FILE_CONTENT_TYPE_PUBLIC]).await?;
                 written_bytes += 1;
-
                 written_bytes += cid.encode(writer).await?;
+
+                let data_size_bytes = data_size.to_le_bytes();
+                writer.write_all(&data_size_bytes).await?;
+                written_bytes += data_size_bytes.len();
+
                 written_bytes += encode_content_list(writer, content).await?;
             }
             Self::Encrypted {
                 locked_access_key,
                 cid,
+                data_size,
                 content,
             } => {
                 writer.write_all(&[FILE_CONTENT_TYPE_ENCRYPTED]).await?;
                 written_bytes += 1;
-
                 written_bytes += cid.encode(writer).await?;
+
+                let data_size_bytes = data_size.to_le_bytes();
+                writer.write_all(&data_size_bytes).await?;
+                written_bytes += data_size_bytes.len();
+
                 written_bytes += locked_access_key.encode(writer).await?;
                 written_bytes += encode_content_list(writer, content).await?;
             }
@@ -136,18 +153,27 @@ impl FileContent {
 
         let parsed = match content_type {
             FILE_CONTENT_TYPE_STUB => {
-                let (input, size) = le_u64(input)?;
-                (input, FileContent::Stub { size })
+                let (input, data_size) = le_u64(input)?;
+                (input, FileContent::Stub { data_size })
             }
             FILE_CONTENT_TYPE_PUBLIC => {
                 let (input, cid) = Cid::parse(input)?;
+                let (input, data_size) = le_u64(input)?;
                 let (input, ref_count) = le_u8(input)?;
                 let (input, content) = ContentReference::parse_many(input, ref_count)?;
 
-                (input, FileContent::Public { cid, content })
+                (
+                    input,
+                    FileContent::Public {
+                        cid,
+                        data_size,
+                        content,
+                    },
+                )
             }
             FILE_CONTENT_TYPE_ENCRYPTED => {
                 let (input, cid) = Cid::parse(input)?;
+                let (input, data_size) = le_u64(input)?;
                 let (input, locked_access_key) = SymLockedAccessKey::parse(input)?;
 
                 let (input, ref_count) = le_u8(input)?;
@@ -155,6 +181,7 @@ impl FileContent {
 
                 let data = FileContent::Encrypted {
                     cid,
+                    data_size,
                     locked_access_key,
                     content,
                 };
@@ -172,9 +199,9 @@ impl FileContent {
 
     pub fn size(&self) -> u64 {
         match self {
-            FileContent::Encrypted { content, .. } => content.iter().map(|c| c.size() as u64).sum(),
-            FileContent::Public { content, .. } => content.iter().map(|c| c.size() as u64).sum(),
-            FileContent::Stub { size } => *size,
+            FileContent::Encrypted { data_size, .. } => *data_size,
+            FileContent::Public { data_size, .. } => *data_size,
+            FileContent::Stub { data_size } => *data_size,
         }
     }
 }
