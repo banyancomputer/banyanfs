@@ -5,22 +5,14 @@ use crate::codec::Cid;
 // todo: move this under src/stores
 #[async_trait(?Send)]
 pub trait DataStore {
-    type Client;
+    async fn retrieve(&self, cid: Cid) -> Result<Option<Vec<u8>>, DataStoreError>;
 
-    async fn retrieve(
-        &self,
-        client: &Self::Client,
-        cid: Cid,
-    ) -> Result<Option<Vec<u8>>, DataStoreError>;
+    async fn store(&mut self, cid: Cid, data: Vec<u8>) -> Result<(), DataStoreError>;
+}
 
-    async fn store(
-        &mut self,
-        client: &Self::Client,
-        cid: Cid,
-        data: Vec<u8>,
-    ) -> Result<(), DataStoreError>;
-
-    async fn sync(&mut self, client: &Self::Client) -> Result<(), DataStoreError>;
+#[async_trait(?Send)]
+pub trait DelayedDataStore: DataStore {
+    async fn sync(&mut self) -> Result<(), DataStoreError>;
 
     async fn unsynced_data_size(&self) -> u64;
 }

@@ -9,7 +9,7 @@ mod operations;
 mod walk_state;
 
 pub use access::DriveAccess;
-pub use data_store::{DataStore, DataStoreError};
+pub use data_store::{DataStore, DataStoreError, DelayedDataStore};
 pub use directory_entry::DirectoryEntry;
 pub use directory_handle::DirectoryHandle;
 pub use file_handle::FileHandle;
@@ -186,6 +186,10 @@ impl Drive {
         }
 
         Ok(responses)
+    }
+
+    pub fn rekey_data_references(_rng: &mut impl CryptoRngCore) -> Result<(), DriveError> {
+        todo!("not needed yet, but keeping as a placeholder")
     }
 
     pub async fn root(&self) -> Result<DirectoryHandle, OperationError> {

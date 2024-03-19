@@ -1,5 +1,4 @@
 use std::collections::{HashMap, HashSet};
-use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
@@ -11,6 +10,7 @@ use crate::codec::crypto::AccessKey;
 use crate::codec::*;
 use crate::filesystem::drive::DriveAccess;
 use crate::filesystem::nodes::{Node, NodeBuilder, NodeId};
+use crate::utils::std_io_err;
 
 use super::OperationError;
 
@@ -116,7 +116,7 @@ impl InnerDrive {
         while let Some(node_pid) = outstanding_ids.pop() {
             let node = self
                 .by_perm_id(&node_pid)
-                .map_err(|_| std_err("missing node PID"))?;
+                .map_err(|_| std_io_err("missing node PID"))?;
 
             // todo(sstelfox): The encoding order here still isn't correct, but I've loosened the
             // strictness on the decoder to finish the last production pieces.
@@ -127,7 +127,7 @@ impl InnerDrive {
                 let existing_pos = ordered_ids
                     .iter()
                     .position(|&pid| pid == permanent_id)
-                    .ok_or(std_err("expected PID to already be present"))?;
+                    .ok_or(std_io_err("expected PID to already be present"))?;
 
                 ordered_ids.remove(existing_pos);
                 ordered_ids.push(permanent_id);
@@ -152,7 +152,7 @@ impl InnerDrive {
         while let Some(node_pid) = ordered_ids.pop() {
             let node = self
                 .by_perm_id(&node_pid)
-                .map_err(|_| std_err("missing node PID"))?;
+                .map_err(|_| std_io_err("missing node PID"))?;
 
             node.encode(&mut node_buffer).await?;
 
@@ -348,8 +348,4 @@ impl InnerDrive {
     pub(crate) fn root_pid(&self) -> PermanentId {
         self.root_pid
     }
-}
-
-fn std_err(msg: &'static str) -> StdError {
-    StdError::new(StdErrorKind::Other, msg)
 }

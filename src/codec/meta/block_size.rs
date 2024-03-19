@@ -40,7 +40,7 @@ impl BlockSize {
     /// use in the wild at this point in time.
     fn new(total_space: u8, chunk_size: u8) -> Result<Self, BlockSizeError> {
         if chunk_size > total_space {
-            return Err(BlockSizeError::ChunkSizeTooLarge);
+            return Err(BlockSizeError::ChunkSizeTooLarge(chunk_size, total_space));
         }
 
         Ok(Self {
@@ -82,6 +82,9 @@ impl BlockSize {
 
 #[derive(Debug, thiserror::Error)]
 pub enum BlockSizeError {
-    #[error("provided chunk size was larger than block")]
-    ChunkSizeTooLarge,
+    #[error("received chunk with {0} bytes expected one with {1} bytes")]
+    ChunkSizeMismatch(usize, usize),
+
+    #[error("chunk size {0} is larger than total space {1}")]
+    ChunkSizeTooLarge(u8, u8),
 }

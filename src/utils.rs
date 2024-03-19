@@ -26,3 +26,7 @@ pub fn current_time_ms() -> i64 {
     use time::OffsetDateTime;
     (OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000) as i64
 }
+
+pub(crate) fn std_io_err(msg: &'static str) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::Other, msg)
+}

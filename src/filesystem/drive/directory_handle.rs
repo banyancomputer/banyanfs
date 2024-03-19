@@ -10,6 +10,8 @@ use crate::codec::filesystem::NodeKind;
 use crate::codec::*;
 
 use crate::codec::crypto::SigningKey;
+use crate::codec::filesystem::BlockKind;
+use crate::codec::header::DataBlock;
 use crate::filesystem::drive::{DataStore, DirectoryEntry, InnerDrive, OperationError, WalkState};
 use crate::filesystem::nodes::{Node, NodeData, NodeId, NodeName};
 use crate::filesystem::NodeBuilder;
@@ -213,13 +215,6 @@ impl DirectoryHandle {
                         return Ok(());
                     }
                 }
-                WalkState::NotTraversable {
-                    working_directory_id,
-                    blocking_name,
-                } => {
-                    trace!(cwd_id = working_directory_id, name = ?blocking_name, "drive::mkdir::not_traversable");
-                    return Err(OperationError::NotTraversable);
-                }
             }
         }
 
@@ -235,7 +230,6 @@ impl DirectoryHandle {
     ) -> Result<(), OperationError> {
         let src_node_id = match walk_path(&self.inner, self.cwd_id, src_path, 0).await? {
             WalkState::FoundNode { node_id } => node_id,
-            WalkState::NotTraversable { .. } => return Err(OperationError::NotTraversable),
             WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
         };
 
@@ -244,14 +238,12 @@ impl DirectoryHandle {
                 let inner_read = self.inner.read().await;
                 let found_node = inner_read.by_id(node_id)?;
 
-                // Node is a directory, we'll put the node in it instead
-                if found_node.kind() != NodeKind::Directory {
+                if !found_node.supports_children() {
                     return Err(OperationError::Exists(node_id));
                 }
 
                 node_id
             }
-            WalkState::NotTraversable { .. } => return Err(OperationError::NotTraversable),
             WalkState::MissingComponent {
                 working_directory_id,
                 remaining_path,
@@ -276,6 +268,7 @@ impl DirectoryHandle {
                 src_node_id,
                 "src node has no parent",
             ))?;
+
         let src_name = src_node.name();
         let src_perm_id = src_node.permanent_id();
         src_node.set_parent_id(src_perm_id).await;
@@ -334,7 +327,6 @@ impl DirectoryHandle {
 
         let target_node_id = match walk_path(&self.inner, self.cwd_id, path, 0).await? {
             WalkState::FoundNode { node_id } => node_id,
-            WalkState::NotTraversable { .. } => return Err(OperationError::NotTraversable),
             WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
         };
 
@@ -377,7 +369,6 @@ impl DirectoryHandle {
 
         let target_node_id = match walk_path(&self.inner, self.cwd_id, path, 0).await? {
             WalkState::FoundNode { node_id } => node_id,
-            WalkState::NotTraversable { .. } => return Err(OperationError::NotTraversable),
             WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
         };
 
@@ -408,7 +399,30 @@ impl DirectoryHandle {
                 .unlock(&data_key)
                 .map_err(|_| OperationError::AccessDenied)?;
 
+            let verifying_key = self.current_key.verifying_key();
+
             let mut file_data = Vec::new();
+
+            for content_ref in node_content.content_references()? {
+                let data_chunk = store
+                    .retrieve(content_ref.data_block_cid())
+                    .await?
+                    .ok_or_else(|| {
+                        OperationError::BlockUnavailable(content_ref.data_block_cid())
+                    })?;
+
+                let (remaining, block) =
+                    DataBlock::parse(&data_chunk, &unlocked_key, &verifying_key).map_err(|_| {
+                        OperationError::BlockCorrupted(content_ref.data_block_cid())
+                    })?;
+                debug_assert!(remaining.is_empty(), "no extra data should be present");
+
+                for location in content_ref.chunks() {
+                    if !matches!(location.block_kind(), BlockKind::Data) {
+                        unimplemented!("indirect reference loading");
+                    }
+                }
+            }
 
             //for reference in content {
             //    let block = store.retrieve(reference).await?;
@@ -446,7 +460,6 @@ impl DirectoryHandle {
 
         let parent_id = match walk_path(&self.inner, self.cwd_id, parent_path, 0).await? {
             WalkState::FoundNode { node_id } => node_id,
-            WalkState::NotTraversable { .. } => return Err(OperationError::NotTraversable),
             WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
         };
 

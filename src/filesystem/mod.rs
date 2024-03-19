@@ -6,12 +6,12 @@ pub mod nodes;
 
 pub(crate) use content_reference::ContentReference;
 pub(crate) use drive::InnerDrive;
-pub(crate) use file_content::FileContent;
+pub(crate) use file_content::{FileContent, FileContentError};
 pub(crate) use nodes::NodeBuilder;
 
 pub use nodes::{Node, NodeName};
 
 pub use drive::{
-    DataStore, DataStoreError, DirectoryEntry, DirectoryHandle, Drive, DriveAccess, DriveLoader,
-    DriveLoaderError, FileHandle, OperationError,
+    DataStore, DataStoreError, DelayedDataStore, DirectoryEntry, DirectoryHandle, Drive,
+    DriveAccess, DriveLoader, DriveLoaderError, FileHandle, OperationError,
 };

@@ -11,6 +11,7 @@ const FILE_CONTENT_TYPE_PUBLIC: u8 = 0x02;
 
 const FILE_CONTENT_TYPE_ENCRYPTED: u8 = 0x03;
 
+// todo(sstelfox): need to rename NodeContent...
 #[derive(Clone, Debug)]
 pub enum FileContent {
     Encrypted {

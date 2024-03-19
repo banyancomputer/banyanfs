@@ -74,6 +74,19 @@ impl SigningKey {
         self.verifying_key().key_id()
     }
 
+    pub fn sign(&self, rng: &mut impl CryptoRngCore, data: &[u8]) -> Signature {
+        // todo(sstelfox): ideally this would be blake3 to match the hashing we use everywhere
+        // else...
+        use sha2::{Digest, Sha384};
+
+        let mut digest = Sha384::new();
+        digest.update(data);
+
+        let signature: ecdsa::Signature<NistP384> = self.inner.sign_digest_with_rng(rng, digest);
+
+        Signature::from(signature)
+    }
+
     pub fn to_bytes(&self) -> [u8; KEY_SIZE] {
         let private_key: SecretKey = self.inner.clone().into();
         let private_key_bytes = private_key.to_bytes();

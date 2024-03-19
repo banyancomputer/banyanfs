@@ -1,5 +1,7 @@
 use crate::codec::meta::PermanentId;
+use crate::codec::Cid;
 use crate::filesystem::nodes::{NodeBuilderError, NodeError, NodeId, NodeNameError};
+use crate::filesystem::{DataStoreError, FileContentError};
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -7,11 +9,23 @@ pub enum OperationError {
     #[error("current user doesn't have the correct key to read or write to the drive")]
     AccessDenied,
 
+    #[error("block was found but wasn't valid: {0:?}")]
+    BlockCorrupted(Cid),
+
+    #[error("block with CID was not found in the data store: {0:?}")]
+    BlockUnavailable(Cid),
+
     #[error("creation of a node failed: {0}")]
     CreationFailed(#[from] NodeBuilderError),
 
+    #[error("data store operation failed: {0}")]
+    DataStore(#[from] DataStoreError),
+
     #[error("attempted to create a node where one already exists (node {0} in place)")]
     Exists(NodeId),
+
+    #[error("error working with file content: {0}")]
+    FileContentError(#[from] FileContentError),
 
     #[error("detected internal violation of assumptions (NID:{0}): {1}")]
     InternalCorruption(NodeId, &'static str),

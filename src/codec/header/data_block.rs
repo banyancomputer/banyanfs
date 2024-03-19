@@ -1,60 +1,67 @@
+use elliptic_curve::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::{tag, take};
 use nom::number::streaming::le_u8;
 
-use crate::codec::crypto::{AccessKey, SigningKey, VerifyingKey};
+use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce, SigningKey, VerifyingKey};
+
 use crate::codec::header::BANYAN_DATA_MAGIC;
 use crate::codec::meta::{BlockSize, BlockSizeError};
 use crate::codec::{Cid, ParserResult};
+use crate::utils::std_io_err;
 
 const ENCRYPTED_BIT: u8 = 0b1000_0000;
 
 const ECC_PRESENT_BIT: u8 = 0b0100_0000;
 
+use std::sync::{Arc, RwLock};
+
 pub struct DataBlock {
     data_options: DataOptions,
-    cid: Option<Cid>,
-
-    consumed_chunks: usize,
-    finalized: bool,
-
-    contents: Vec<Content>,
+    cid: Arc<RwLock<Option<Cid>>>,
+    contents: Vec<Vec<u8>>,
 }
 
 impl DataBlock {
-    pub fn add_data(&mut self, data: Vec<u8>) -> Result<(), DataBlockError> {
-        if self.finalized {
-            return Err(DataBlockError::AlreadyFinalized);
-        }
-
-        let mut data_len = data.len();
-        if data_len > self.remaining_space() as usize {
+    pub fn add_chunk(&mut self, data: Vec<u8>) -> Result<(), DataBlockError> {
+        if self.is_full() {
             return Err(DataBlockError::Full);
         }
 
-        // When allocating chunks we need to account for the data block's metadata overhead to
-        // ensure we don't over-allocate chunks.
-        if self.contents.is_empty() {
-            data_len += Self::storage_overhead();
+        let expected_chunk_size = self.data_options().block_size().chunk_capacity() as usize;
+        if data.len() != self.chunk_size() {
+            return Err(DataBlockError::Size(BlockSizeError::ChunkSizeMismatch(
+                data.len(),
+                expected_chunk_size,
+            )));
         }
 
-        let chunk_capacity = self.data_options.block_size().chunk_capacity() as usize;
-        let mut needed_chunks = data_len / chunk_capacity;
-        if (data_len % chunk_capacity) > 0 {
-            needed_chunks += 1;
-        }
-        self.consumed_chunks += needed_chunks;
+        let mut inner_cid = self.cid.write().map_err(|_| DataBlockError::LockPoisoned)?;
+        inner_cid.take();
+        drop(inner_cid);
 
-        let chunk = Content::create_data(data);
-        self.contents.push(chunk);
+        self.contents.push(data);
 
         Ok(())
     }
 
+    pub fn chunk_size(&self) -> usize {
+        let mut base_chunk_size = self.data_options().block_size().chunk_capacity() as usize;
+
+        if self.data_options().encrypted() {
+            base_chunk_size -= Nonce::size();
+            base_chunk_size -= AuthenticationTag::size();
+        }
+
+        base_chunk_size
+    }
+
     pub fn cid(&self) -> Result<Cid, DataBlockError> {
-        match &self.cid {
+        let inner_cid = self.cid.read().map_err(|_| DataBlockError::LockPoisoned)?;
+
+        match &*inner_cid {
             Some(cid) => Ok(cid.clone()),
-            None => Err(DataBlockError::NotFinalized),
+            None => Err(DataBlockError::EncodingRequired),
         }
     }
 
@@ -64,25 +71,59 @@ impl DataBlock {
 
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
+        rng: &mut impl CryptoRngCore,
         _access_key: &AccessKey,
-        _signing_key: &SigningKey,
-        _writer: &mut W,
+        signing_key: &SigningKey,
+        writer: &mut W,
     ) -> std::io::Result<usize> {
-        if !self.finalized {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "block must be finalized before encoding",
-            ));
+        if !self.is_full() {
+            todo!("pad the block");
         }
 
-        // todo: need to build
-        // todo: need to set external CID
+        if self.data_options.ecc_present() {
+            todo!("generate & append parity blocks for chunks");
+        }
+
+        let mut signed_data = Vec::new();
+
+        signed_data.write_all(BANYAN_DATA_MAGIC).await?;
+        signed_data.write_all(&[0x01]).await?;
+
+        let mut data_buffer = Vec::new();
+
+        // todo: for each chunk
+        //  - encrypt the contents, include nonce and tag if encrypted
+        //  - append chunk to data buffer
+
+        let cid = crate::utils::calculate_cid(&data_buffer);
+        cid.encode(&mut signed_data).await?;
+        self.data_options.encode(&mut signed_data).await?;
+
+        let mut inner_cid = self
+            .cid
+            .write()
+            .map_err(|_| std_io_err("cid lock was poisoned"))?;
+        inner_cid.replace(cid);
+        drop(inner_cid);
+
+        writer.write_all(&signed_data).await?;
+        let mut written_bytes = signed_data.len();
+
+        let signature = signing_key.sign(rng, &signed_data);
+        written_bytes += signature.encode(writer).await?;
 
         todo!()
     }
 
-    pub fn finalize(&mut self) {
-        self.finalized = true;
+    pub fn get_chunk_data(&self, index: usize) -> Result<&[u8], DataBlockError> {
+        self.contents
+            .get(index)
+            .map(|chunk| chunk.as_slice())
+            .ok_or(DataBlockError::ChunkIndexOutOfBounds)
+    }
+
+    pub fn is_full(&self) -> bool {
+        self.data_options().block_size().chunk_count() >= self.contents.len() as u64
     }
 
     pub fn parse<'a>(
@@ -112,19 +153,14 @@ impl DataBlock {
     }
 
     pub fn remaining_space(&self) -> u64 {
-        if self.contents.is_empty() {
-            let empty_storage = self.data_options.block_size().storage_capacity();
+        let block_size = self.data_options.block_size();
 
-            // The protocol overhead for the block consumes part of the first chunk, we represent
-            // that by including those bytes in the initial data chunk.
-            empty_storage - Self::storage_overhead() as u64
-        } else {
-            let total_chunks = self.data_options.block_size().chunk_count();
-            let remaining_chunks = total_chunks - self.consumed_chunks as u64;
-            let chunk_capacity = self.data_options.block_size().chunk_capacity();
+        let total_chunks = block_size.chunk_count();
+        let remaining_chunks = total_chunks - self.contents.len() as u64;
 
-            remaining_chunks * chunk_capacity
-        }
+        let chunk_capacity = block_size.chunk_capacity();
+
+        remaining_chunks * chunk_capacity
     }
 
     pub fn small() -> Result<Self, DataBlockError> {
@@ -136,10 +172,7 @@ impl DataBlock {
 
         Ok(Self {
             data_options,
-            cid: None,
-
-            consumed_chunks: 0,
-            finalized: false,
+            cid: Arc::new(RwLock::new(None)),
 
             contents: Vec::new(),
         })
@@ -154,32 +187,25 @@ impl DataBlock {
 
         Ok(Self {
             data_options,
-            cid: None,
-
-            consumed_chunks: 0,
-            finalized: false,
-
+            cid: Arc::new(RwLock::new(None)),
             contents: Vec::new(),
         })
-    }
-
-    const fn storage_overhead() -> usize {
-        // todo: this is missing a few things, need to walk through the protocol and properly
-        // account for things. Bugs from this will be annoying but fairly obvious.
-        1 + Cid::size() + DataOptions::size() + 1
     }
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum DataBlockError {
-    #[error("can't add more data once the block has been finalized")]
-    AlreadyFinalized,
+    #[error("requested chunk index that isn't in the block")]
+    ChunkIndexOutOfBounds,
 
-    #[error("block must be finalized and encoded before a CID is available")]
-    NotFinalized,
+    #[error("CID's are not available until after the block has been encoded")]
+    EncodingRequired,
 
     #[error("no space left in block")]
     Full,
+
+    #[error("cid lock was poisoned")]
+    LockPoisoned,
 
     #[error("block size was invalid: {0}")]
     Size(#[from] BlockSizeError),
@@ -199,6 +225,26 @@ impl DataOptions {
 
     pub fn ecc_present(&self) -> bool {
         self.ecc_present
+    }
+
+    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> std::io::Result<usize> {
+        let mut option_byte = 0u8;
+
+        if self.ecc_present {
+            option_byte |= ECC_PRESENT_BIT;
+        }
+
+        if self.encrypted {
+            option_byte |= ENCRYPTED_BIT;
+        }
+
+        writer.write_all(&[option_byte]).await?;
+        let block_size = self.block_size.encode(writer).await?;
+
+        Ok(1 + block_size)
     }
 
     pub fn encrypted(&self) -> bool {

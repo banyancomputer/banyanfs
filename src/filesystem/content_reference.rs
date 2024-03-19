@@ -13,6 +13,14 @@ pub struct ContentReference {
 }
 
 impl ContentReference {
+    pub(crate) fn block_size(&self) -> &BlockSize {
+        &self.block_size
+    }
+
+    pub(crate) fn chunks(&self) -> &[ContentLocation] {
+        &self.chunks
+    }
+
     pub(crate) fn data_block_cid(&self) -> Cid {
         self.data_block_cid.clone()
     }
@@ -79,6 +87,18 @@ pub struct ContentLocation {
 }
 
 impl ContentLocation {
+    pub fn block_index(&self) -> u64 {
+        self.block_index
+    }
+
+    pub fn block_kind(&self) -> &BlockKind {
+        &self.block_kind
+    }
+
+    pub fn content_cid(&self) -> &Cid {
+        &self.content_cid
+    }
+
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
