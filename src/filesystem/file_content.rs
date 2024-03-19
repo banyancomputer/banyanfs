@@ -38,6 +38,18 @@ pub enum FileContentError {
 }
 
 impl FileContent {
+    pub fn encrypted(
+        access_key: SymLockedAccessKey,
+        cid: Cid,
+        content: Vec<ContentReference>,
+    ) -> Self {
+        Self::Encrypted {
+            locked_access_key: access_key,
+            cid,
+            content,
+        }
+    }
+
     /// Return the CID over the plaintext content of the file. Be careful not to confuse these with
     /// the data CIDs which are the CIDs of the stored data blocks.
     pub fn cid(&self) -> Option<Cid> {

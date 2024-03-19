@@ -51,6 +51,9 @@ pub enum OperationError {
     #[error("Node({0:?}) was orphaned in filesystem and is unsafe to remove")]
     OrphanNode(PermanentId),
 
+    #[error("I needed a temporary catch all error: {0}")]
+    Other(&'static str),
+
     #[error("filesystem entries can only be placed under a directory")]
     ParentMustBeDirectory,
 

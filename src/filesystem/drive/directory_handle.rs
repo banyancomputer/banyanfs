@@ -9,12 +9,12 @@ use tracing::{debug, instrument, trace, Instrument, Level};
 use crate::codec::filesystem::NodeKind;
 use crate::codec::*;
 
-use crate::codec::crypto::SigningKey;
+use crate::codec::crypto::{AccessKey, SigningKey};
 use crate::codec::filesystem::BlockKind;
 use crate::codec::header::DataBlock;
 use crate::filesystem::drive::{DataStore, DirectoryEntry, InnerDrive, OperationError, WalkState};
 use crate::filesystem::nodes::{Node, NodeData, NodeId, NodeName};
-use crate::filesystem::NodeBuilder;
+use crate::filesystem::{ContentLocation, ContentReference, FileContent, NodeBuilder};
 
 use self::filesystem::FilePermissions;
 
@@ -441,7 +441,7 @@ impl DirectoryHandle {
                 }
             }
 
-            return Ok(file_data);
+            Ok(file_data)
         } else {
             unimplemented!()
         }
@@ -450,7 +450,7 @@ impl DirectoryHandle {
     pub async fn write(
         &mut self,
         rng: &mut impl CryptoRngCore,
-        _store: &mut impl DataStore,
+        store: &mut impl DataStore,
         path: &[&str],
         data: &[u8],
     ) -> Result<(), OperationError> {
@@ -463,6 +463,16 @@ impl DirectoryHandle {
         if !inner_read.access().has_write_access(actor_id) {
             return Err(OperationError::AccessDenied);
         }
+
+        let data_key = match inner_read
+            .access()
+            .permission_keys()
+            .and_then(|pk| pk.data.as_ref())
+        {
+            Some(data_key) => data_key.clone(),
+            None => return Err(OperationError::AccessDenied),
+        };
+
         drop(inner_read);
 
         let (parent_path, name) = path.split_at(path.len() - 1);
@@ -484,7 +494,11 @@ impl DirectoryHandle {
 
         let data_size = data.len() as u64;
         let node_name = file_name.clone();
-        let _new_permanent_id = self
+
+        // todo(sstelfox): handle the special case of an empty file, it shouldn't be a stub and
+        // doesn't need to go through the encoding process.
+
+        let new_permanent_id = self
             .insert_node(
                 rng,
                 parent_perm_id,
@@ -500,18 +514,108 @@ impl DirectoryHandle {
             )
             .await?;
 
-        // break data into blocks, persisting each one to the data store, the resulting addresses
-        // may need to be aggregated into a redirect block if they're too numerous, not going to
-        // handle that for now...
-        //
-        // this does not ensure the data store is fully synced, that is the responsibility of the
-        // caller. Once we've registered all the data in the store we need to update our file's
-        // stub node with the new addresses.
-        //
-        // need to make sure I have access to the data key here and encrypt the individual blocks
-        // befor they're stored...
+        const SMALL_BLOCK_THRESHOLD: usize = DataBlock::SMALL_ENCRYPTED_SIZE * 8;
+        let block_creator = if data_size > SMALL_BLOCK_THRESHOLD as u64 {
+            || match DataBlock::small() {
+                Ok(ab) => Ok(ab),
+                Err(err) => {
+                    tracing::error!("failed to create data block: {:?}", err);
+                    Err(OperationError::Other("data block failed"))
+                }
+            }
+        } else {
+            || match DataBlock::standard() {
+                Ok(ab) => Ok(ab),
+                Err(err) => {
+                    tracing::error!("failed to create data block: {:?}", err);
+                    Err(OperationError::Other("data block failed"))
+                }
+            }
+        };
 
-        tracing::warn!("impl needed, break content into blocks, persist to data store");
+        // todo(sstelfox): bit lazy here, should calculate this as I stream it but speed right
+        // now...
+        let plaintext_cid = crate::utils::calculate_cid(data);
+
+        let mut remaining_data = data;
+        let mut active_block = block_creator()?;
+        let active_block_chunk_size = active_block.chunk_size();
+        let node_data_key = AccessKey::generate(rng);
+        let mut content_references = Vec::new();
+
+        while !remaining_data.is_empty() {
+            let data_to_read = std::cmp::min(remaining_data.len(), active_block_chunk_size);
+            let (chunk_data, next_data) = remaining_data.split_at(data_to_read);
+            remaining_data = next_data;
+
+            active_block
+                .push_chunk(chunk_data.to_vec())
+                .map_err(|_| OperationError::Other("expected remaining capacity"))?;
+
+            if active_block.is_full() {
+                let mut sealed_block = Vec::new();
+
+                let (_, cids) = active_block
+                    .encode(rng, &node_data_key, &self.current_key, &mut sealed_block)
+                    .await
+                    .map_err(|_| OperationError::Other("failed to encode block"))?;
+
+                let block_size = *active_block.data_options().block_size();
+                let cid = active_block
+                    .cid()
+                    .map_err(|_| OperationError::Other("unable to access block cid"))?;
+
+                store.store(cid.clone(), sealed_block).await?;
+
+                let locations = cids
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, cid)| ContentLocation::data(cid, i as u64))
+                    .collect::<Vec<_>>();
+
+                let content_ref = ContentReference::new(cid, block_size, locations);
+                content_references.push(content_ref);
+
+                active_block = block_creator()?;
+            }
+        }
+
+        if !active_block.is_empty() {
+            // todo(sstelfox): this is duplicated, need to extract it
+            let mut sealed_block = Vec::new();
+
+            let (_, cids) = active_block
+                .encode(rng, &node_data_key, &self.current_key, &mut sealed_block)
+                .await
+                .map_err(|_| OperationError::Other("failed to encode block"))?;
+
+            let block_size = *active_block.data_options().block_size();
+            let cid = active_block
+                .cid()
+                .map_err(|_| OperationError::Other("unable to access block cid"))?;
+
+            store.store(cid.clone(), sealed_block).await?;
+
+            let locations = cids
+                .into_iter()
+                .enumerate()
+                .map(|(i, cid)| ContentLocation::data(cid, i as u64))
+                .collect::<Vec<_>>();
+
+            let content_ref = ContentReference::new(cid, block_size, locations);
+            content_references.push(content_ref);
+        }
+
+        let locked_key = node_data_key
+            .lock_with(rng, &data_key)
+            .map_err(|_| OperationError::Other("failed to seal node data key"))?;
+
+        let mut inner_write = self.inner.write().await;
+        let node = inner_write.by_perm_id_mut(&new_permanent_id)?;
+        let node_data = node.data_mut().await;
+
+        let file_content = FileContent::encrypted(locked_key, plaintext_cid, content_references);
+        *node_data = NodeData::full_file(file_content);
 
         Ok(())
     }

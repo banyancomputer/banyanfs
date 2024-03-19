@@ -4,6 +4,7 @@ use std::sync::Arc;
 use async_std::sync::RwLock;
 use async_trait::async_trait;
 use js_sys::Uint8Array;
+use tracing::instrument;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     File, FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemGetFileOptions,
@@ -23,16 +24,19 @@ pub struct DataStorage {
 }
 
 impl DataStorage {
+    #[instrument(skip(self))]
     pub async fn mark_synced(&self, cid: &Cid) -> Result<(), BanyanFsError> {
         let mut inner = self.inner.write().await;
         inner.mark_synced(cid).await
     }
 
+    #[instrument(skip(self))]
     pub async fn retrieve(&self, cid: &Cid) -> Result<Option<Vec<u8>>, BanyanFsError> {
         let inner = self.inner.read().await;
         inner.retrieve(cid).await
     }
 
+    #[instrument(skip(self, data))]
     pub async fn store(&self, cid: Cid, data: Vec<u8>) -> Result<(), BanyanFsError> {
         let mut inner = self.inner.write().await;
         inner.store(cid, data).await

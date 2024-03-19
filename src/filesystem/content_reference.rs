@@ -13,6 +13,18 @@ pub struct ContentReference {
 }
 
 impl ContentReference {
+    pub(crate) fn new(
+        data_block_cid: Cid,
+        block_size: BlockSize,
+        chunks: Vec<ContentLocation>,
+    ) -> Self {
+        Self {
+            data_block_cid,
+            block_size,
+            chunks,
+        }
+    }
+
     pub(crate) fn chunks(&self) -> &[ContentLocation] {
         &self.chunks
     }
@@ -91,6 +103,15 @@ impl ContentLocation {
         &self.block_kind
     }
 
+    pub fn data(cid: Cid, block_index: u64) -> Self {
+        Self {
+            block_kind: BlockKind::Data,
+            content_cid: cid,
+            block_index,
+        }
+    }
+
+    #[allow(dead_code)]
     pub fn content_cid(&self) -> &Cid {
         &self.content_cid
     }

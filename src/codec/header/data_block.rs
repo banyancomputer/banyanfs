@@ -23,27 +23,13 @@ pub struct DataBlock {
 }
 
 impl DataBlock {
-    pub fn add_chunk(&mut self, data: Vec<u8>) -> Result<(), DataBlockError> {
-        if self.is_full() {
-            return Err(DataBlockError::Full);
-        }
+    /// The amount of payload a small encrypted block can hold.
+    pub const SMALL_ENCRYPTED_SIZE: usize =
+        262_144 - (1 * Nonce::size() + AuthenticationTag::size());
 
-        let expected_chunk_size = self.chunk_size();
-        if data.len() != expected_chunk_size {
-            return Err(DataBlockError::Size(BlockSizeError::ChunkSizeMismatch(
-                data.len(),
-                expected_chunk_size,
-            )));
-        }
-
-        let mut inner_cid = self.cid.write().map_err(|_| DataBlockError::LockPoisoned)?;
-        inner_cid.take();
-        drop(inner_cid);
-
-        self.contents.push(data);
-
-        Ok(())
-    }
+    /// The amount of payload a standard encrypted block can hold.
+    pub const STANDARD_ENCRYPTED_SIZE: usize =
+        134_217_728 - (64 * Nonce::size() + AuthenticationTag::size());
 
     pub fn base_chunk_size(&self) -> usize {
         self.data_options().block_size().chunk_size() as usize
@@ -79,9 +65,14 @@ impl DataBlock {
         access_key: &AccessKey,
         signing_key: &SigningKey,
         writer: &mut W,
-    ) -> std::io::Result<usize> {
-        if !self.is_full() {
-            todo!("pad the block");
+    ) -> std::io::Result<(usize, Vec<Cid>)> {
+        let mut extra_chunks = Vec::new();
+        let needed_chunks = self.max_chunk_count() - self.contents.len();
+
+        for _ in 0..needed_chunks {
+            let mut padding = Vec::with_capacity(self.chunk_size());
+            rng.fill_bytes(&mut padding);
+            extra_chunks.push(padding);
         }
 
         if self.data_options.ecc_present() {
@@ -104,7 +95,7 @@ impl DataBlock {
         let mut data_buffer = Vec::new();
         let mut chunk_cids = Vec::new();
 
-        for chunk in self.contents.iter() {
+        for chunk in self.contents.iter().chain(&extra_chunks) {
             if chunk.len() != self.chunk_size() {
                 return Err(std_io_err("chunk size mismatch"));
             }
@@ -129,7 +120,7 @@ impl DataBlock {
         // We include a map of the chunks and their CIDs in a trailer at the end of the block. This
         // gets captured by the data block CID. We know how many entries there are, and the
         // index of each chunk matches its respective block so we can just write them straight out.
-        for cid in chunk_cids {
+        for cid in &chunk_cids {
             cid.encode(&mut data_buffer).await?;
         }
 
@@ -139,12 +130,14 @@ impl DataBlock {
         cid.encode(&mut signed_data).await?;
         self.data_options.encode(&mut signed_data).await?;
 
-        let mut inner_cid = self
-            .cid
-            .write()
-            .map_err(|_| std_io_err("cid lock was poisoned"))?;
-        inner_cid.replace(cid);
-        drop(inner_cid);
+        // This mutex is very picky, need to put it in its own scope
+        {
+            let mut inner_cid = self
+                .cid
+                .write()
+                .map_err(|_| std_io_err("cid lock was poisoned"))?;
+            inner_cid.replace(cid);
+        }
 
         writer.write_all(&signed_data).await?;
         let mut written_bytes = signed_data.len();
@@ -152,10 +145,10 @@ impl DataBlock {
         let signature = signing_key.sign(rng, &signed_data);
         written_bytes += signature.encode(writer).await?;
 
-        writer.write(&data_buffer).await?;
+        writer.write_all(&data_buffer).await?;
         written_bytes += data_buffer.len();
 
-        Ok(written_bytes)
+        Ok((written_bytes, chunk_cids))
     }
 
     pub fn get_chunk_data(&self, index: usize) -> Result<&[u8], DataBlockError> {
@@ -165,8 +158,16 @@ impl DataBlock {
             .ok_or(DataBlockError::ChunkIndexOutOfBounds)
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.contents.is_empty()
+    }
+
+    pub fn max_chunk_count(&self) -> usize {
+        self.data_options().block_size().chunk_count() as usize
+    }
+
     pub fn is_full(&self) -> bool {
-        self.data_options().block_size().chunk_count() >= self.contents.len() as u64
+        self.contents.len() >= self.max_chunk_count()
     }
 
     pub fn parse<'a>(
@@ -234,6 +235,28 @@ impl DataBlock {
     ) -> ParserResult<'a, Self> {
         let (input, _magic) = banyan_data_magic_tag(input)?;
         Self::parse(input, access_key, verifying_key)
+    }
+
+    pub fn push_chunk(&mut self, data: Vec<u8>) -> Result<(), DataBlockError> {
+        if self.is_full() {
+            return Err(DataBlockError::Full);
+        }
+
+        let expected_chunk_size = self.chunk_size();
+        if data.len() != expected_chunk_size {
+            return Err(DataBlockError::Size(BlockSizeError::ChunkSizeMismatch(
+                data.len(),
+                expected_chunk_size,
+            )));
+        }
+
+        let mut inner_cid = self.cid.write().map_err(|_| DataBlockError::LockPoisoned)?;
+        inner_cid.take();
+        drop(inner_cid);
+
+        self.contents.push(data);
+
+        Ok(())
     }
 
     pub fn remaining_space(&self) -> u64 {
