@@ -2,20 +2,16 @@ use async_trait::async_trait;
 use reqwest::{Method, RequestBuilder};
 use serde::Serialize;
 
-use crate::api::client::{ApiError, ApiRequest, StorageHostApiRequest};
+use crate::api::client::{ApiError, ApiRequest};
 use crate::codec::crypto::VerifyingKey;
 
 pub(crate) struct RegisterGrantRequest {
-    grant_token: String,
     public_key: VerifyingKey,
 }
 
 impl RegisterGrantRequest {
-    pub(crate) fn new(public_key: VerifyingKey, grant_token: String) -> Self {
-        Self {
-            grant_token,
-            public_key,
-        }
+    pub(crate) fn new(public_key: VerifyingKey) -> Self {
+        Self { public_key }
     }
 }
 
@@ -36,9 +32,7 @@ impl ApiRequest for RegisterGrantRequest {
 
         let inner = InnerRequest { public_key };
 
-        Ok(request_builder
-            .bearer_auth(self.grant_token.clone())
-            .json(&inner))
+        Ok(request_builder.json(&inner))
     }
 
     fn path(&self) -> String {
@@ -50,5 +44,3 @@ impl ApiRequest for RegisterGrantRequest {
 struct InnerRequest {
     public_key: String,
 }
-
-impl StorageHostApiRequest for RegisterGrantRequest {}

@@ -11,7 +11,6 @@ use js_sys::{Array, ArrayBuffer, Uint8Array};
 use wasm_bindgen::prelude::*;
 
 use crate::codec::Cid;
-use crate::filesystem::OperationError;
 use crate::utils::crypto_rng;
 use crate::wasm::tomb_compat::{
     TombCompat, WasmBucket, WasmBucketMetadata, WasmFsMetadataEntry, WasmSnapshot,
@@ -151,7 +150,10 @@ impl WasmMount {
             push_response.storage_authorization(),
         ) {
             (Some(sh), Some(sa)) => {
-                self.wasm_client.client().record_storage_grant(sh, sa).await;
+                self.wasm_client
+                    .client()
+                    .record_storage_grant(&sh, sa)
+                    .await;
             }
             (None, None) => (),
             _ => {

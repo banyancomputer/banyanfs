@@ -2,7 +2,7 @@ use async_std::prelude::*;
 use async_trait::async_trait;
 use bytes::Bytes;
 use reqwest::multipart::{Form, Part};
-use reqwest::{Body, Method, RequestBuilder};
+use reqwest::{Body, Method, RequestBuilder, Url};
 use serde::{Deserialize, Serialize};
 
 use crate::api::client::{ApiError, ApiRequest, PlatformApiRequest};
@@ -184,7 +184,9 @@ impl PushResponse {
         self.storage_authorization.as_deref()
     }
 
-    pub(crate) fn storage_host(&self) -> Option<&str> {
-        self.storage_host.as_deref()
+    pub(crate) fn storage_host(&self) -> Option<Url> {
+        self.storage_host
+            .as_deref()
+            .and_then(|s| Url::parse(s).ok())
     }
 }

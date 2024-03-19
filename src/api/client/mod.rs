@@ -11,10 +11,10 @@ pub(crate) use traits::{
     ApiRequest, FromReqwestResponse, PlatformApiRequest, StorageHostApiRequest,
 };
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use async_std::sync::{Mutex, RwLock};
+use async_std::sync::RwLock;
 use jwt_simple::prelude::*;
 use reqwest::{Client, Url};
 use serde::Deserialize;
@@ -22,6 +22,7 @@ use time::OffsetDateTime;
 use tracing::debug;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
+use crate::api::storage_host;
 use crate::codec::crypto::SigningKey;
 use crate::prelude::BanyanFsError;
 
@@ -153,7 +154,7 @@ impl ApiClient {
         }
     }
 
-    pub(crate) async fn record_storage_grant(&self, storage_host_url: &str, auth_token: &str) {
+    pub(crate) async fn record_storage_grant(&self, storage_host_url: &Url, auth_token: &str) {
         tracing::info!(?storage_host_url, "registered storage grant");
 
         let auth = match &self.auth {
@@ -176,11 +177,19 @@ impl ApiClient {
 
     pub(crate) async fn storage_host_request<R: StorageHostApiRequest>(
         &self,
+        storage_host_url: &Url,
         request: R,
     ) -> Result<Option<R::Response>, ApiError> {
         // Send authentication if its available even if the request is not marked as requiring it
         let token = match &self.auth {
-            Some(auth) => Some(auth.platform_token().await?),
+            Some(auth) => {
+                if let Some(grant) = auth.get_storage_grant(storage_host_url).await {
+                    storage_host::auth::register_grant(&self, storage_host_url, &grant).await?;
+                    auth.clear_storage_grant(storage_host_url).await;
+                }
+
+                Some(auth.platform_token().await?)
+            }
             None => None,
         };
 
@@ -189,9 +198,10 @@ impl ApiClient {
 
     pub(crate) async fn storage_host_request_full<R: StorageHostApiRequest>(
         &self,
+        storage_host_url: &Url,
         request: R,
     ) -> Result<R::Response, ApiError> {
-        match self.storage_host_request(request).await? {
+        match self.storage_host_request(storage_host_url, request).await? {
             Some(resp) => Ok(resp),
             None => Err(ApiError::UnexpectedResponse("response should not be empty")),
         }
@@ -208,7 +218,7 @@ fn default_reqwest_client() -> Result<reqwest::Client, ApiClientError> {
 #[derive(Default)]
 pub(crate) struct StorageHost {
     pending_storage_grant: Option<String>,
-    tokens: BTreeMap<String, ExpiringToken>,
+    token: Option<ExpiringToken>,
 }
 
 impl StorageHost {
@@ -220,7 +230,7 @@ impl StorageHost {
         self.pending_storage_grant.clone()
     }
 
-    pub(crate) async fn get_token(
+    pub(crate) fn get_token(
         &self,
         _id: &str,
         _key: &Arc<SigningKey>,
@@ -237,9 +247,8 @@ impl StorageHost {
 pub(crate) struct ApiAuth {
     account_id: String,
     key: Arc<SigningKey>,
-
     platform_token: PlatformToken,
-    storage_hosts: Arc<Mutex<HashMap<String, StorageHost>>>,
+    storage_hosts: Arc<RwLock<StorageHostsAuth>>,
 }
 
 impl ApiAuth {
@@ -249,40 +258,27 @@ impl ApiAuth {
             .await
     }
 
-    pub(crate) async fn clear_storage_grant(&self, storage_host_url: &str) {
-        let mut storage_hosts = self.storage_hosts.lock().await;
-
-        let host = storage_hosts
-            .entry(storage_host_url.to_string())
-            .or_default();
-
-        host.clear_storage_grant();
+    pub(crate) async fn clear_storage_grant(&self, storage_host_url: &Url) {
+        let mut storage_hosts = self.storage_hosts.write().await;
+        storage_hosts.clear_storage_grant(storage_host_url);
     }
 
-    pub(crate) async fn get_storage_grant(&self, storage_host_url: &str) -> Option<String> {
-        let mut storage_hosts = self.storage_hosts.lock().await;
-
-        let host = storage_hosts
-            .entry(storage_host_url.to_string())
-            .or_default();
-
-        host.get_storage_grant()
+    pub(crate) async fn get_storage_grant(&self, storage_host_url: &Url) -> Option<String> {
+        let mut storage_hosts = self.storage_hosts.write().await;
+        storage_hosts.get_storage_grant(storage_host_url)
     }
 
-    pub(crate) async fn record_storage_grant(&self, storage_host_url: &str, auth_token: &str) {
-        let mut storage_hosts = self.storage_hosts.lock().await;
-
-        let host = storage_hosts
-            .entry(storage_host_url.to_string())
-            .or_default();
-
-        host.record_storage_grant(auth_token);
+    pub(crate) async fn record_storage_grant(&self, storage_host_url: &Url, auth_token: &str) {
+        let mut storage_hosts = self.storage_hosts.write().await;
+        storage_hosts
+            .record_storage_grant(storage_host_url, auth_token)
+            .await;
     }
 
     pub fn new(account_id: impl Into<String>, key: Arc<SigningKey>) -> Self {
         let account_id = account_id.into();
         let platform_token = PlatformToken::default();
-        let storage_hosts = Arc::new(Mutex::new(HashMap::default()));
+        let storage_hosts = Arc::new(RwLock::new(StorageHostsAuth::default()));
 
         Self {
             account_id,
@@ -293,14 +289,9 @@ impl ApiAuth {
         }
     }
 
-    async fn storage_host_token(&self, host: &str) -> Result<String, StorageTokenError> {
-        let mut storage_hosts = self.storage_hosts.lock().await;
-
-        storage_hosts
-            .entry(host.to_string())
-            .or_default()
-            .get_token(&self.account_id, &self.key)
-            .await
+    async fn storage_host_token(&self, host_url: &Url) -> Result<String, StorageTokenError> {
+        let mut storage_hosts = self.storage_hosts.write().await;
+        storage_hosts.get_token(host_url, &self.account_id, &self.key)
     }
 }
 
@@ -360,6 +351,51 @@ impl PlatformToken {
 pub enum PlatformTokenError {
     #[error("failed to generate token for platform platform: {0}")]
     JwtSimpleError(#[from] jwt_simple::Error),
+}
+
+#[derive(Default)]
+struct StorageHostsAuth {
+    storage_hosts: HashMap<Url, StorageHost>,
+}
+
+impl StorageHostsAuth {
+    fn clear_storage_grant(&mut self, storage_host_url: &Url) {
+        if let Some(shu) = self.storage_hosts.get_mut(storage_host_url) {
+            shu.clear_storage_grant();
+        }
+    }
+
+    fn get_storage_grant(&mut self, storage_host_url: &Url) -> Option<String> {
+        let host = self
+            .storage_hosts
+            .entry(storage_host_url.clone())
+            .or_default();
+
+        host.get_storage_grant()
+    }
+
+    pub(crate) fn get_token(
+        &mut self,
+        storage_host_url: &Url,
+        account_id: &str,
+        key: &Arc<SigningKey>,
+    ) -> Result<String, StorageTokenError> {
+        let host = self
+            .storage_hosts
+            .entry(storage_host_url.clone())
+            .or_default();
+
+        host.get_token(account_id, key)
+    }
+
+    pub(crate) async fn record_storage_grant(&mut self, storage_host_url: &Url, auth_token: &str) {
+        let host = self
+            .storage_hosts
+            .entry(storage_host_url.clone())
+            .or_default();
+
+        host.record_storage_grant(auth_token);
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
