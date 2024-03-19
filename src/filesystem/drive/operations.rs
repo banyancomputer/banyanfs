@@ -1,7 +1,8 @@
 use crate::codec::meta::PermanentId;
 use crate::codec::Cid;
 use crate::filesystem::nodes::{NodeBuilderError, NodeError, NodeId, NodeNameError};
-use crate::filesystem::{DataStoreError, FileContentError};
+use crate::filesystem::FileContentError;
+use crate::stores::DataStoreError;
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]

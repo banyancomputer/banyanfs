@@ -12,9 +12,10 @@ use crate::codec::*;
 use crate::codec::crypto::{AccessKey, SigningKey};
 use crate::codec::filesystem::BlockKind;
 use crate::codec::header::DataBlock;
-use crate::filesystem::drive::{DataStore, DirectoryEntry, InnerDrive, OperationError, WalkState};
+use crate::filesystem::drive::{DirectoryEntry, InnerDrive, OperationError, WalkState};
 use crate::filesystem::nodes::{Node, NodeData, NodeId, NodeName};
 use crate::filesystem::{ContentLocation, ContentReference, FileContent, NodeBuilder};
+use crate::stores::DataStore;
 
 use self::filesystem::FilePermissions;
 
@@ -412,12 +413,13 @@ impl DirectoryHandle {
             let mut file_data = Vec::new();
 
             for content_ref in node_content.content_references()? {
-                let data_chunk = store
-                    .retrieve(content_ref.data_block_cid())
-                    .await?
-                    .ok_or_else(|| {
-                        OperationError::BlockUnavailable(content_ref.data_block_cid())
-                    })?;
+                if !store.contains_cid(content_ref.data_block_cid()).await? {
+                    return Err(OperationError::BlockUnavailable(
+                        content_ref.data_block_cid(),
+                    ));
+                }
+
+                let data_chunk = store.retrieve(content_ref.data_block_cid()).await?;
 
                 let (_remaining, block) =
                     DataBlock::parse_with_magic(&data_chunk, &unlocked_key, &verifying_key)
@@ -572,7 +574,7 @@ impl DirectoryHandle {
                     .cid()
                     .map_err(|_| OperationError::Other("unable to access block cid"))?;
 
-                store.store(cid.clone(), sealed_block).await?;
+                store.store(cid.clone(), sealed_block, false).await?;
 
                 let locations = cids
                     .into_iter()
@@ -601,7 +603,7 @@ impl DirectoryHandle {
                 .cid()
                 .map_err(|_| OperationError::Other("unable to access block cid"))?;
 
-            store.store(cid.clone(), sealed_block).await?;
+            store.store(cid.clone(), sealed_block, false).await?;
 
             let locations = cids
                 .into_iter()

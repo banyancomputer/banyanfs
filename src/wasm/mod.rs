@@ -3,8 +3,7 @@ use tracing_wasm::{ConsoleConfig, WASMLayerConfigBuilder};
 use wasm_bindgen::prelude::*;
 
 pub(crate) mod data_storage;
-
-pub use data_storage::DataStorage;
+pub(crate) use data_storage::WasmDataStorage;
 
 #[cfg(feature = "tomb-compat")]
 pub(crate) mod tomb_compat;

@@ -35,7 +35,7 @@ async fn main() -> BanyanFsResult<()> {
 
     let _ = signing_key.to_bytes();
 
-    let mut memory_store = MemoryStore::default();
+    let mut memory_store = MemoryDataStore::default();
 
     let drive = Drive::initialize_private(&mut rng, signing_key.clone()).unwrap();
     if !drive.has_read_access(actor_id).await {

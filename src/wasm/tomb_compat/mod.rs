@@ -32,6 +32,7 @@ use zeroize::Zeroize;
 use crate::prelude::*;
 
 use crate::api::platform::{DriveKind, StorageClass};
+use crate::wasm::data_storage::{initialize_store, WasmDataStorage};
 
 use models::TombBucket;
 
@@ -40,11 +41,16 @@ use models::TombBucket;
 pub struct TombCompat {
     client: ApiClient,
     key: Arc<SigningKey>,
+    store: WasmDataStorage,
 }
 
 impl TombCompat {
     pub(crate) fn client(&self) -> &ApiClient {
         &self.client
+    }
+
+    pub(crate) fn store(&self) -> WasmDataStorage {
+        self.store.clone()
     }
 
     pub(crate) fn signing_key(&self) -> Arc<SigningKey> {
@@ -129,7 +135,8 @@ impl TombCompat {
         let id = platform::drives::create(&self.client, &name, &public_key).await?;
 
         let wasm_bucket = WasmBucket(TombBucket::from_components(id.clone(), name, sc, dk));
-        let wasm_mount = WasmMount::initialize(wasm_bucket.clone(), self.clone()).await?;
+        let wasm_mount =
+            WasmMount::initialize(wasm_bucket.clone(), self.clone(), self.store.clone()).await?;
 
         Ok(WasmBucketMount::new(wasm_bucket, wasm_mount))
     }
@@ -261,7 +268,9 @@ impl TombCompat {
         let client = ApiClient::authenticated(&api_endpoint, &account_id, key.clone())
             .expect("need return type fixed");
 
-        Self { client, key }
+        let store = initialize_store(client.clone());
+
+        Self { client, key, store }
     }
 
     // new transfered and checked

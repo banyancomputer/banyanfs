@@ -1,5 +1,4 @@
 mod access;
-mod data_store;
 mod directory_entry;
 mod directory_handle;
 mod inner;
@@ -8,7 +7,6 @@ mod operations;
 mod walk_state;
 
 pub use access::DriveAccess;
-pub use data_store::{DataStore, DataStoreError, DelayedDataStore};
 pub use directory_entry::DirectoryEntry;
 pub use directory_handle::DirectoryHandle;
 pub use loader::{DriveLoader, DriveLoaderError};
