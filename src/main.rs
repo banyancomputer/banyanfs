@@ -111,6 +111,7 @@ async fn main() -> BanyanFsResult<()> {
                 return Ok(());
             }
         };
+        tracing::info!(?file_data, "read back file data");
 
         assert_eq!(file_data, b"a filesystem was born");
     }
