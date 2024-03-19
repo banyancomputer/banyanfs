@@ -7,12 +7,14 @@ pub use error::ApiClientError;
 pub(crate) mod utils;
 
 pub(crate) use direct_response::DirectResponse;
-pub(crate) use traits::{ApiRequest, FromReqwestResponse, PlatformApiRequest};
+pub(crate) use traits::{
+    ApiRequest, FromReqwestResponse, PlatformApiRequest, StorageHostApiRequest,
+};
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-use async_std::sync::RwLock;
+use async_std::sync::{Mutex, RwLock};
 use jwt_simple::prelude::*;
 use reqwest::{Client, Url};
 use serde::Deserialize;
@@ -64,23 +66,23 @@ impl ApiClient {
         self.base_url.clone()
     }
 
-    pub(crate) async fn platform_request<R: PlatformApiRequest>(
+    pub(crate) async fn request<R: ApiRequest>(
         &self,
+        base_url: &Url,
+        bearer_token: Option<String>,
         mut request: R,
     ) -> Result<Option<R::Response>, ApiError> {
-        debug!(method = %R::METHOD, url = %request.path(), "platform_request");
+        debug!(method = %R::METHOD, ?base_url, url = %request.path(), "request");
 
-        if R::REQUIRES_AUTH && self.auth.is_none() {
+        let full_url = base_url.join(&request.path())?;
+        let mut request_builder = self.client.request(R::METHOD, full_url);
+
+        if R::REQUIRES_AUTH && bearer_token.is_none() {
             return Err(ApiError::RequiresAuth);
         }
 
-        let full_url = self.base_url.join(&request.path())?;
-        let mut request_builder = self.client.request(R::METHOD, full_url);
-
-        // Send authentication if its available even if the request is not marked as requiring it
-        if let Some(auth) = &self.auth {
-            let token = auth.platform_token().await?;
-            request_builder = request_builder.bearer_auth(token);
+        if let Some(tok) = bearer_token {
+            request_builder = request_builder.bearer_auth(tok);
         }
 
         request_builder = request.add_payload(request_builder).await?;
@@ -112,6 +114,19 @@ impl ApiClient {
         }
     }
 
+    pub(crate) async fn platform_request<R: PlatformApiRequest>(
+        &self,
+        request: R,
+    ) -> Result<Option<R::Response>, ApiError> {
+        // Send authentication if its available even if the request is not marked as requiring it
+        let token = match &self.auth {
+            Some(auth) => Some(auth.platform_token().await?),
+            None => None,
+        };
+
+        self.request(&self.base_url, token, request).await
+    }
+
     pub(crate) async fn platform_request_empty_response<R>(
         &self,
         request: R,
@@ -138,9 +153,48 @@ impl ApiClient {
         }
     }
 
-    #[cfg(target_arch = "wasm32")]
+    pub(crate) async fn record_storage_grant(&self, storage_host_url: &str, auth_token: &str) {
+        tracing::info!(?storage_host_url, "registered storage grant");
+
+        let auth = match &self.auth {
+            Some(auth) => auth,
+            None => {
+                tracing::warn!(
+                    "registering storage grants without authentication doesn't have any effect"
+                );
+                return;
+            }
+        };
+
+        auth.record_storage_grant(storage_host_url, auth_token)
+            .await;
+    }
+
     pub(crate) fn signing_key(&self) -> Option<Arc<SigningKey>> {
         self.auth.as_ref().map(|a| a.key.clone())
+    }
+
+    pub(crate) async fn storage_host_request<R: StorageHostApiRequest>(
+        &self,
+        request: R,
+    ) -> Result<Option<R::Response>, ApiError> {
+        // Send authentication if its available even if the request is not marked as requiring it
+        let token = match &self.auth {
+            Some(auth) => Some(auth.platform_token().await?),
+            None => None,
+        };
+
+        self.request(&self.base_url, token, request).await
+    }
+
+    pub(crate) async fn storage_host_request_full<R: StorageHostApiRequest>(
+        &self,
+        request: R,
+    ) -> Result<R::Response, ApiError> {
+        match self.storage_host_request(request).await? {
+            Some(resp) => Ok(resp),
+            None => Err(ApiError::UnexpectedResponse("response should not be empty")),
+        }
     }
 }
 
@@ -151,52 +205,118 @@ fn default_reqwest_client() -> Result<reqwest::Client, ApiClientError> {
     Ok(client)
 }
 
+#[derive(Default)]
+pub(crate) struct StorageHost {
+    pending_storage_grant: Option<String>,
+    tokens: BTreeMap<String, ExpiringToken>,
+}
+
+impl StorageHost {
+    pub(crate) fn clear_storage_grant(&mut self) {
+        self.pending_storage_grant.take();
+    }
+
+    pub(crate) fn get_storage_grant(&self) -> Option<String> {
+        self.pending_storage_grant.clone()
+    }
+
+    pub(crate) async fn get_token(
+        &self,
+        _id: &str,
+        _key: &Arc<SigningKey>,
+    ) -> Result<String, StorageTokenError> {
+        todo!()
+    }
+
+    pub(crate) fn record_storage_grant(&mut self, grant_token: &str) {
+        self.pending_storage_grant = Some(grant_token.to_string())
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct ApiAuth {
     account_id: String,
     key: Arc<SigningKey>,
 
-    platform_token: PlatformToken,
-    storage_tokens: StorageTokens,
+    cached_platform_tokens: PlatformTokens,
+    storage_hosts: Arc<Mutex<HashMap<String, StorageHost>>>,
 }
 
 impl ApiAuth {
     async fn platform_token(&self) -> Result<String, PlatformTokenError> {
-        self.platform_token.get(&self.account_id, &self.key).await
+        self.cached_platform_tokens
+            .get_token(&self.account_id, &self.key)
+            .await
+    }
+
+    pub(crate) async fn clear_storage_grant(&self, storage_host_url: &str) {
+        let mut storage_hosts = self.storage_hosts.lock().await;
+
+        let host = storage_hosts
+            .entry(storage_host_url.to_string())
+            .or_default();
+
+        host.clear_storage_grant();
+    }
+
+    pub(crate) async fn get_storage_grant(&self, storage_host_url: &str) -> Option<String> {
+        let mut storage_hosts = self.storage_hosts.lock().await;
+
+        let host = storage_hosts
+            .entry(storage_host_url.to_string())
+            .or_default();
+
+        host.get_storage_grant()
+    }
+
+    pub(crate) async fn record_storage_grant(&self, storage_host_url: &str, auth_token: &str) {
+        let mut storage_hosts = self.storage_hosts.lock().await;
+
+        let host = storage_hosts
+            .entry(storage_host_url.to_string())
+            .or_default();
+
+        host.record_storage_grant(auth_token);
     }
 
     pub fn new(account_id: impl Into<String>, key: Arc<SigningKey>) -> Self {
         let account_id = account_id.into();
-        let platform_token = PlatformToken::default();
-        let storage_tokens = StorageTokens::default();
+        let cached_platform_tokens = PlatformTokens::default();
+        let storage_hosts = Arc::new(Mutex::new(HashMap::default()));
 
         Self {
             account_id,
             key,
 
-            platform_token,
-            storage_tokens,
+            cached_platform_tokens,
+            storage_hosts,
         }
     }
 
-    async fn storage_token(&self, host: &str) -> Result<String, StorageTokenError> {
-        self.storage_tokens
-            .get(host, &self.account_id, &self.key)
+    async fn storage_host_token(&self, host: &str) -> Result<String, StorageTokenError> {
+        let mut storage_hosts = self.storage_hosts.lock().await;
+
+        storage_hosts
+            .entry(host.to_string())
+            .or_default()
+            .get_token(&self.account_id, &self.key)
             .await
     }
 }
 
 #[derive(Clone, Default)]
-pub(crate) struct PlatformToken(Arc<RwLock<Option<ExpiringToken>>>);
+pub(crate) struct PlatformTokens(Arc<RwLock<BTreeMap<String, ExpiringToken>>>);
 
-impl PlatformToken {
-    pub(crate) async fn get(
+impl PlatformTokens {
+    pub(crate) async fn get_token(
         &self,
         id: &str,
         key: &Arc<SigningKey>,
     ) -> Result<String, PlatformTokenError> {
+        let platform_tokens = &*self.0.read().await;
+
         // If we already have token and it's not expired, return it
-        if let Some(token) = &*self.0.read().await {
+        if let Some(token) = platform_tokens.get(id) {
             if !token.is_expired() {
                 return Ok(token.value());
             }
@@ -224,14 +344,15 @@ impl PlatformToken {
 
         tracing::debug!("generated new platform token");
 
-        let mut writable = self.0.write().await;
-        *writable = Some(ExpiringToken::new(token.clone(), expiration));
+        let stored_token = ExpiringToken::new(token.clone(), expiration);
+        let platform_tokens = &mut *self.0.write().await;
+        platform_tokens.insert(id.to_string(), stored_token);
 
         Ok(token)
     }
 
     pub(crate) fn new() -> Self {
-        Self(Arc::new(RwLock::new(None)))
+        Self(Arc::new(RwLock::new(BTreeMap::new())))
     }
 }
 
@@ -239,27 +360,6 @@ impl PlatformToken {
 pub enum PlatformTokenError {
     #[error("failed to generate token for platform platform: {0}")]
     JwtSimpleError(#[from] jwt_simple::Error),
-}
-
-#[derive(Clone, Default)]
-pub(crate) struct StorageTokens {
-    known_tokens: Arc<RwLock<BTreeMap<String, ExpiringToken>>>,
-}
-
-impl StorageTokens {
-    pub(crate) async fn get(
-        &self,
-        _host: &str,
-        _id: &str,
-        _key: &Arc<SigningKey>,
-    ) -> Result<String, StorageTokenError> {
-        todo!()
-    }
-
-    pub(crate) fn new() -> Self {
-        let known_tokens = Arc::new(RwLock::new(BTreeMap::new()));
-        Self { known_tokens }
-    }
 }
 
 #[derive(Debug, thiserror::Error)]

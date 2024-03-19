@@ -141,11 +141,24 @@ impl WasmMount {
         )
         .await?;
 
-        tracing::warn!("impl metadata synced but data remains outstanding");
-
         self.dirty = false;
 
         let new_metadata_id = push_response.id();
+        tracing::info!(metadata_id = ?new_metadata_id, state = push_response.state(), "metadata recorded");
+
+        match (
+            push_response.storage_host(),
+            push_response.storage_authorization(),
+        ) {
+            (Some(sh), Some(sa)) => {
+                self.wasm_client.client().record_storage_grant(sh, sa).await;
+            }
+            (None, None) => (),
+            _ => {
+                tracing::warn!("received incomplete storage host authorization");
+            }
+        }
+
         let new_metadata = platform::metadata::get(
             self.wasm_client.client(),
             &self.bucket.id(),
@@ -153,8 +166,6 @@ impl WasmMount {
         )
         .await
         .map_err(|e| format!("error while fetching new metadata: {}", e))?;
-
-        // todo(sstelfox): need to register the storage host details with the client
 
         //{
         //    let mut writable_store = self.store.write().await;
