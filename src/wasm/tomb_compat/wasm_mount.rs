@@ -438,7 +438,7 @@ impl WasmMount {
         let mut data_block_cids = HashSet::new();
 
         fn get_node_data_cids(node: &Node) -> Result<Option<Vec<Cid>>, OperationError> {
-            todo!()
+            Ok(node.data_cids().clone())
         }
 
         let cid_groups = unlocked_drive
