@@ -115,6 +115,10 @@ impl FileContent {
         matches!(self, Self::Encrypted { .. })
     }
 
+    pub fn is_stub(&self) -> bool {
+        matches!(self, Self::Stub { .. })
+    }
+
     pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, content_type) = le_u8(input)?;
 

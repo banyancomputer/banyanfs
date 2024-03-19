@@ -381,6 +381,10 @@ impl DirectoryHandle {
             _ => return Err(OperationError::NotReadable),
         };
 
+        if node_content.is_stub() {
+            return Err(OperationError::NotAvailable);
+        }
+
         if node_content.is_encrypted() {
             let locked_key = node_content
                 .data_key()
@@ -399,7 +403,8 @@ impl DirectoryHandle {
                 .unlock(&data_key)
                 .map_err(|_| OperationError::AccessDenied)?;
 
-            let verifying_key = self.current_key.verifying_key();
+            let author_id = read_node.owner_id();
+            let verifying_key = inner_read.access().actor_key(&author_id);
 
             let mut file_data = Vec::new();
 
