@@ -36,10 +36,7 @@ impl ApiRequest for CreateRequest {
         &mut self,
         request_builder: RequestBuilder,
     ) -> Result<RequestBuilder, ApiError> {
-        let inner = InnerRequest {
-            cids: self.cids.as_slice(),
-        };
-
+        let inner = InnerRequest(self.cids.as_slice());
         Ok(request_builder.json(&inner))
     }
 
@@ -51,11 +48,9 @@ impl ApiRequest for CreateRequest {
     }
 }
 
+// todo(sstelfox): this api request should be a bit more structured
 #[derive(Debug, Serialize)]
-struct InnerRequest<'a> {
-    #[serde(rename = "active_cids")]
-    cids: &'a [String],
-}
+struct InnerRequest<'a>(&'a [String]);
 
 impl PlatformApiRequest for CreateRequest {}
 
