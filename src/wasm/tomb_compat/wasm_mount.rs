@@ -156,14 +156,14 @@ impl WasmMount {
 
         // todo(sstelfox): need to register the storage host details with the client
 
-        {
-            let mut writable_store = self.store.write().await;
-            writable_store.sync().await.map_err(|err| {
-                let err_msg = format!("error syncing data store: {}", err);
-                tracing::error!(err_msg);
-                err_msg
-            })?;
-        }
+        //{
+        //    let mut writable_store = self.store.write().await;
+        //    writable_store.sync().await.map_err(|err| {
+        //        let err_msg = format!("error syncing data store: {}", err);
+        //        tracing::error!(err_msg);
+        //        err_msg
+        //    })?;
+        //}
 
         tracing::info!(metadata_id = &new_metadata_id, "drive synced");
         self.last_saved_metadata = Some(WasmBucketMetadata::new(self.bucket.id(), new_metadata));
