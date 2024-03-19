@@ -10,10 +10,10 @@ use web_sys::{
     FileSystemWritableFileStream, StorageManager,
 };
 
-use crate::api::storage_host;
+use crate::api::{storage_host, ApiClient};
 use crate::codec::Cid;
 use crate::error::BanyanFsError;
-use crate::filesystem::{DataStore, DataStoreError};
+use crate::filesystem::{DataStore, DataStoreError, DelayedDataStore};
 
 #[derive(Clone, Default)]
 pub struct DataStorage {
@@ -134,13 +134,7 @@ impl DataStorageInner {
 
 #[async_trait(?Send)]
 impl DataStore for DataStorage {
-    type Client = crate::api::ApiClient;
-
-    async fn retrieve(
-        &self,
-        _client: &Self::Client,
-        cid: Cid,
-    ) -> Result<Option<Vec<u8>>, DataStoreError> {
+    async fn retrieve(&self, cid: Cid) -> Result<Option<Vec<u8>>, DataStoreError> {
         // todo(sstelfox): should attempt to retrieve from the storag network using the api client
         // if not found locally
         self.retrieve(&cid)
@@ -148,16 +142,16 @@ impl DataStore for DataStorage {
             .map_err(|_| DataStoreError::LookupFailure)
     }
 
-    async fn store(
-        &mut self,
-        _client: &Self::Client,
-        cid: Cid,
-        data: Vec<u8>,
-    ) -> Result<(), DataStoreError> {
+    async fn store(&mut self, cid: Cid, data: Vec<u8>) -> Result<(), DataStoreError> {
         DataStorage::store(self, cid, data)
             .await
             .map_err(|_| DataStoreError::StoreFailure)
     }
+}
+
+#[async_trait(?Send)]
+impl DelayedDataStore for DataStorage {
+    type Client = ApiClient;
 
     async fn sync(&mut self, client: &Self::Client) -> Result<(), DataStoreError> {
         let to_sync = self.unsynced_cids().await;

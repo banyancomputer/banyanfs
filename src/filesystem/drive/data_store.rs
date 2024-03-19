@@ -12,7 +12,9 @@ pub trait DataStore {
 
 #[async_trait(?Send)]
 pub trait DelayedDataStore: DataStore {
-    async fn sync(&mut self) -> Result<(), DataStoreError>;
+    type Client;
+
+    async fn sync(&mut self, client: &Self::Client) -> Result<(), DataStoreError>;
 
     async fn unsynced_data_size(&self) -> u64;
 }
