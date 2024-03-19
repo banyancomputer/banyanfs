@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use tracing::instrument;
 
 use crate::codec::Cid;
 use crate::filesystem::{DataStore, DataStoreError};

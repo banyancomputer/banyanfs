@@ -117,17 +117,11 @@ impl DataBlock {
             let mut payload = Vec::with_capacity(full_size);
             payload.extend_from_slice(&chunk_length_bytes);
             payload.extend_from_slice(chunk);
-            //payload.resize_with(full_size, || rng.gen());
-            payload.resize_with(full_size, || 0);
+            payload.resize_with(full_size, || rng.gen());
 
             let (nonce, tag) = access_key
                 .encrypt_buffer(rng, &[], &mut payload)
                 .map_err(|_| std_io_err("failed to encrypt chunk"))?;
-
-            tracing::info!(len = ?payload.len(), data = ?payload, "full encrypted chunk (encode)");
-
-            let encrypted_data_hash = crate::utils::calculate_cid(&payload);
-            tracing::info!(?encrypted_data_hash, len = ?payload.len(), data = ?payload, "encrypted data hash encode");
 
             let mut chunk_data = Vec::with_capacity(self.base_chunk_size());
 
@@ -228,17 +222,12 @@ impl DataBlock {
         let mut contents = Vec::with_capacity(chunk_count);
         for _ in 0..chunk_count {
             let (input, chunk_data) = take(base_chunk_size)(input)?;
-            tracing::info!(len = ?chunk_data.len(), data = ?chunk_data, "full encrypted chunk (decode)");
 
-            tracing::info!(size = ?chunk_data.len(), "chunk data");
             let (chunk_data, nonce) = Nonce::parse(chunk_data)?;
             let (chunk_data, data) = take(encrypted_chunk_size)(chunk_data)?;
-
             let (chunk_data, tag) = AuthenticationTag::parse(chunk_data)?;
-            debug_assert!(chunk_data.is_empty(), "chunk should be fully read");
 
-            let encrypted_data_hash = crate::utils::calculate_cid(data);
-            tracing::info!(?encrypted_data_hash, len = ?data.len(), ?data, "encrypted data hash decode");
+            debug_assert!(chunk_data.is_empty(), "chunk should be fully read");
 
             let mut plaintext_data = data.to_vec();
             if let Err(err) = access_key.decrypt_buffer(nonce, &[], &mut plaintext_data, tag) {
@@ -260,16 +249,9 @@ impl DataBlock {
                         )));
                     }
                 };
-            tracing::info!(size = data_length, "data length");
             let plaintext_data: Vec<u8> = plaintext_data
                 .drain(8..(data_length as usize + 8))
                 .collect();
-
-            tracing::info!(
-                len = ?plaintext_data.len(),
-                ?plaintext_data,
-                "plaintext data"
-            );
 
             contents.push(plaintext_data);
         }

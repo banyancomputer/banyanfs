@@ -419,13 +419,14 @@ impl DirectoryHandle {
                         OperationError::BlockUnavailable(content_ref.data_block_cid())
                     })?;
 
-                let (remaining, block) =
+                let (_remaining, block) =
                     DataBlock::parse_with_magic(&data_chunk, &unlocked_key, &verifying_key)
                         .map_err(|err| {
                             tracing::error!("parsing of data block failed: {err:?}");
                             OperationError::BlockCorrupted(content_ref.data_block_cid())
                         })?;
-                tracing::info!(?remaining, "drive::read::remaining");
+                // todo(sstelfox): still stuff remaining which means this decoder is sloppy
+                //tracing::info!(?remaining, "drive::read::remaining");
                 //debug_assert!(remaining.is_empty(), "no extra data should be present");
 
                 for location in content_ref.chunks() {

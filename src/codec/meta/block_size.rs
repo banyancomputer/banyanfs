@@ -63,9 +63,7 @@ impl BlockSize {
     }
 
     pub fn small() -> Result<Self, BlockSizeError> {
-        tracing::warn!("small block is rediculously small");
-        //Self::new(18, 18)
-        Self::new(7, 7)
+        Self::new(18, 18)
     }
 
     pub fn standard() -> Result<Self, BlockSizeError> {

@@ -343,6 +343,8 @@ impl WasmMount {
             .await
             .map_err(|err| format!("failed to read data: {err:?}"))?;
 
+        tracing::info!(len = data.len(), "we have the file data");
+
         Ok(Uint8Array::from(data.as_slice()))
     }
 
@@ -478,6 +480,7 @@ impl WasmMount {
             Some(drive) => drive,
             None => return Err("unable to delete content of a locked bucket".into()),
         };
+        tracing::info!("unlocked_drive");
 
         let mut rng = crypto_rng();
         let mut drive_root = unlocked_drive
@@ -486,11 +489,15 @@ impl WasmMount {
             .map_err(|_| "root unavailable")?;
 
         let file_data = Uint8Array::new(&content_buffer).to_vec();
+        tracing::info!("prepared data");
 
-        drive_root
+        if let Err(err) = drive_root
             .write(&mut rng, &mut self.data_cache, &path_refs, &file_data)
             .await
-            .map_err(|err| format!("error writing to {}: {}", path_refs.join("/"), err))?;
+        {
+            let err_msg = format!("error writing to {}: {}", path_refs.join("/"), err);
+            return Err(err_msg.into());
+        }
 
         // note(sstelfox): ideally we don't need to sync after every change, but it doesn't seem
         // like there are any external checks currently to ensure changes are being written.

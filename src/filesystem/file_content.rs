@@ -148,7 +148,6 @@ impl FileContent {
             }
             FILE_CONTENT_TYPE_ENCRYPTED => {
                 let (input, cid) = Cid::parse(input)?;
-
                 let (input, locked_access_key) = SymLockedAccessKey::parse(input)?;
 
                 let (input, ref_count) = le_u8(input)?;
@@ -184,8 +183,6 @@ async fn encode_content_list<W: AsyncWrite + Unpin + Send>(
     writer: &mut W,
     content: &[ContentReference],
 ) -> std::io::Result<usize> {
-    let mut written_bytes = 0;
-
     let ref_count = content.len();
     if ref_count > u8::MAX as usize {
         return Err(std::io::Error::new(
@@ -193,6 +190,9 @@ async fn encode_content_list<W: AsyncWrite + Unpin + Send>(
             "too many content references for a single file, redirect block required",
         ));
     }
+
+    writer.write_all(&[ref_count as u8]).await?;
+    let mut written_bytes = 1;
 
     for c in content {
         written_bytes += c.encode(writer).await?;
