@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 mod direct_response;
 mod error;
 mod traits;
@@ -194,6 +195,23 @@ impl ApiClient {
         };
 
         self.request(&self.base_url, token, request).await
+    }
+
+    pub(crate) async fn storage_host_request_empty_response<R>(
+        &self,
+        storage_host_url: &Url,
+        request: R,
+    ) -> Result<(), ApiError>
+    where
+        R: StorageHostApiRequest<Response = ()>,
+    {
+        let resp = self.storage_host_request(storage_host_url, request).await?;
+
+        if cfg!(feature = "strict") && resp.is_some() {
+            return Err(ApiError::UnexpectedResponse("expected empty response"));
+        }
+
+        Ok(())
     }
 
     pub(crate) async fn storage_host_request_full<R: StorageHostApiRequest>(
