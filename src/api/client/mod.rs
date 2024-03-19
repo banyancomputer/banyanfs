@@ -137,6 +137,11 @@ impl ApiClient {
             None => Err(ApiError::UnexpectedResponse("response should not be empty")),
         }
     }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn signing_key(&self) -> Option<Arc<SigningKey>> {
+        self.auth.as_ref().map(|a| a.key.clone())
+    }
 }
 
 fn default_reqwest_client() -> Result<reqwest::Client, ApiClientError> {
