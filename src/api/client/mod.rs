@@ -174,6 +174,20 @@ impl ApiClient {
             .await;
     }
 
+    pub(crate) async fn set_active_storage_host(&self, storage_host_url: &Url) {
+        let mut storage_hosts = match &self.auth {
+            Some(auth) => auth.storage_hosts.write().await,
+            None => {
+                tracing::warn!(
+                    "setting active storage host without authentication doesn't have any effect"
+                );
+                return;
+            }
+        };
+
+        storage_hosts.set_active_storage_host(storage_host_url);
+    }
+
     pub(crate) fn signing_key(&self) -> Option<Arc<SigningKey>> {
         self.auth.as_ref().map(|a| a.key.clone())
     }

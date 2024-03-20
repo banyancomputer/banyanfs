@@ -144,6 +144,13 @@ impl WasmMount {
         let new_metadata_id = push_response.id();
         tracing::info!(metadata_id = ?new_metadata_id, state = push_response.state(), "metadata recorded");
 
+        if let Some(host) = push_response.storage_host() {
+            self.wasm_client
+                .client()
+                .set_active_storage_host(&host)
+                .await;
+        }
+
         match (
             push_response.storage_host(),
             push_response.storage_authorization(),
