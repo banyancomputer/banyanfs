@@ -55,6 +55,12 @@ impl Cid {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum CidError {
+    #[error("invalid CID str")]
+    Invalid,
+}
+
 impl std::fmt::Debug for Cid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_base64url_multicodec())
@@ -64,5 +70,13 @@ impl std::fmt::Debug for Cid {
 impl From<[u8; CID_LENGTH]> for Cid {
     fn from(bytes: [u8; CID_LENGTH]) -> Self {
         Self(bytes)
+    }
+}
+
+impl TryFrom<&str> for Cid {
+    type Error = CidError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        todo!()
     }
 }

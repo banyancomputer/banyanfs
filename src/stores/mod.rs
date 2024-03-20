@@ -104,15 +104,21 @@ impl<MS: DataStore, ST: SyncTracker> DataStore for ApiSyncableStore<MS, ST> {
         }
 
         // todo(sstelfox): check cid map, do the dumb thing for now
-        let location = crate::api::platform::blocks::locate(&self.client, &[cid.clone()])
+        let locations = crate::api::platform::blocks::locate(&self.client, &[cid.clone()])
             .await
             .map_err(|err| {
                 tracing::error!("failed to locate block: {err}");
-                DataStoreError::UnknownBlock(cid)
+                DataStoreError::UnknownBlock(cid.clone())
             })?;
 
-        // todo: update cid map
-        // todo: return determination
+        if locations.is_missing(&cid) {
+            tracing::error!("remote API doesn't know about the block: {cid}");
+            return Err(DataStoreError::UnknownBlock(cid.clone()));
+        }
+
+        // todo(sstelfox): cache cid locations, for now we'll always do lookups which will be
+        // slow...
+        //let host_urls = match locations.storage_hosts_with_cid(cid)
 
         todo!("check blocks existence and location on the network")
     }
