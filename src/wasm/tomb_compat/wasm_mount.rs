@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::ops::DerefMut;
 
 use futures::io::Cursor;
 use futures::StreamExt;
@@ -111,8 +110,8 @@ impl WasmMount {
             .await
             .map_err(|e| format!("error while encoding drive for sync: {e}"))?;
 
-        let store_reader = self.store.read().await;
-        let expected_data_size = store_reader
+        let expected_data_size = self
+            .store
             .unsynced_data_size()
             .await
             .map_err(|e| format!("failed to read unsynced data size: {e}"))?;
@@ -169,14 +168,11 @@ impl WasmMount {
         .await
         .map_err(|e| format!("error while fetching new metadata: {}", e))?;
 
-        //{
-        //    let mut writable_store = self.store.write().await;
-        //    writable_store.sync().await.map_err(|err| {
-        //        let err_msg = format!("error syncing data store: {}", err);
-        //        tracing::error!(err_msg);
-        //        err_msg
-        //    })?;
-        //}
+        self.store.sync().await.map_err(|err| {
+            let err_msg = format!("error syncing data store: {}", err);
+            tracing::error!(err_msg);
+            err_msg
+        })?;
 
         tracing::info!(metadata_id = &new_metadata_id, "drive synced");
         self.last_saved_metadata = Some(WasmBucketMetadata::new(self.bucket.id(), new_metadata));
@@ -361,9 +357,8 @@ impl WasmMount {
             .await
             .map_err(|_| "root unavailable")?;
 
-        let store_reader = self.store.read().await;
         let data = drive_root
-            .read(&*store_reader, &path_refs)
+            .read(&self.store, &path_refs)
             .await
             .map_err(|err| format!("failed to read data: {err:?}"))?;
 
@@ -512,9 +507,8 @@ impl WasmMount {
         let file_data = Uint8Array::new(&content_buffer).to_vec();
 
         {
-            let store_writer = &mut self.store.write().await;
             if let Err(err) = drive_root
-                .write(&mut rng, store_writer.deref_mut(), &path_refs, &file_data)
+                .write(&mut rng, &mut self.store, &path_refs, &file_data)
                 .await
             {
                 let err_msg = format!("error writing to {}: {}", path_refs.join("/"), err);

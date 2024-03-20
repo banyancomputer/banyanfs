@@ -1,6 +1,3 @@
-use std::sync::Arc;
-
-use async_std::sync::RwLock;
 //use js_sys::Uint8Array;
 //use wasm_bindgen_futures::JsFuture;
 //use web_sys::{
@@ -14,15 +11,13 @@ use crate::stores::{ApiSyncableStore, MemoryDataStore, MemorySyncTracker};
 // todo(sstelfox): I really want WASM aware versions of this that can be shared between browser
 // tabs, likely this means using the filesystem for the data store and indexdb for the sync
 // tracker.
-pub(crate) type WasmDataStorage = Arc<RwLock<ApiSyncableStore<MemoryDataStore, MemorySyncTracker>>>;
+pub(crate) type WasmDataStorage = ApiSyncableStore<MemoryDataStore, MemorySyncTracker>;
 
 pub(crate) fn initialize_store(api_client: ApiClient) -> WasmDataStorage {
     let store = MemoryDataStore::default();
     let tracker = MemorySyncTracker::default();
 
-    let store = ApiSyncableStore::new(api_client, store, tracker);
-
-    Arc::new(RwLock::new(store))
+    ApiSyncableStore::new(api_client, store, tracker)
 }
 
 //impl WasmDataStorage {

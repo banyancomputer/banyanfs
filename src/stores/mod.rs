@@ -75,7 +75,6 @@ impl SyncTracker for MemorySyncTracker {
     }
 }
 
-#[derive(Clone)]
 pub struct ApiSyncableStore<MS: DataStore, ST: SyncTracker> {
     client: ApiClient,
     inner: Arc<RwLock<ApiSyncableStoreInner<MS, ST>>>,
@@ -157,6 +156,15 @@ impl<MS: DataStore, ST: SyncTracker> SyncTracker for ApiSyncableStore<MS, ST> {
 impl<MS: DataStore, ST: SyncTracker> SyncableDataStore for ApiSyncableStore<MS, ST> {
     async fn sync(&mut self) -> Result<(), DataStoreError> {
         self.inner.write().await.sync(&self.client).await
+    }
+}
+
+impl<MS: DataStore, ST: SyncTracker> Clone for ApiSyncableStore<MS, ST> {
+    fn clone(&self) -> Self {
+        Self {
+            client: self.client.clone(),
+            inner: self.inner.clone(),
+        }
     }
 }
 
