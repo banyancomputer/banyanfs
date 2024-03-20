@@ -139,8 +139,6 @@ impl WasmMount {
         )
         .await?;
 
-        self.dirty = false;
-
         let new_metadata_id = push_response.id();
         tracing::info!(metadata_id = ?new_metadata_id, state = push_response.state(), "metadata recorded");
 
@@ -149,21 +147,12 @@ impl WasmMount {
                 .client()
                 .set_active_storage_host(&host)
                 .await;
-        }
 
-        match (
-            push_response.storage_host(),
-            push_response.storage_authorization(),
-        ) {
-            (Some(sh), Some(sa)) => {
+            if let Some(grant) = push_response.storage_authorization() {
                 self.wasm_client
                     .client()
-                    .record_storage_grant(&sh, sa)
+                    .record_storage_grant(&host, grant)
                     .await;
-            }
-            (None, None) => (),
-            _ => {
-                tracing::warn!("received incomplete storage host authorization");
             }
         }
 
@@ -175,14 +164,16 @@ impl WasmMount {
         .await
         .map_err(|e| format!("error while fetching new metadata: {}", e))?;
 
+        self.dirty = false;
+        self.last_saved_metadata = Some(WasmBucketMetadata::new(self.bucket.id(), new_metadata));
+
+        tracing::info!(metadata_id = &new_metadata_id, "drive synced");
+
         self.store.sync().await.map_err(|err| {
             let err_msg = format!("error syncing data store: {}", err);
             tracing::error!(err_msg);
             err_msg
         })?;
-
-        tracing::info!(metadata_id = &new_metadata_id, "drive synced");
-        self.last_saved_metadata = Some(WasmBucketMetadata::new(self.bucket.id(), new_metadata));
 
         Ok(())
     }
