@@ -222,7 +222,7 @@ impl ApiClient {
             None => None,
         };
 
-        self.request(&self.base_url, token, request).await
+        self.request(storage_host_url, token, request).await
     }
 
     pub(crate) async fn storage_host_request_empty_response<R>(
