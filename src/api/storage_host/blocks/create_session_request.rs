@@ -36,7 +36,7 @@ impl ApiRequest for CreateSessionRequest {
     }
 
     fn path(&self) -> String {
-        "/api/v1/blocks/new".to_string()
+        "/api/v1/upload/new".to_string()
     }
 }
 

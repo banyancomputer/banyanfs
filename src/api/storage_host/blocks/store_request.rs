@@ -98,7 +98,7 @@ impl ApiRequest for StoreRequest {
     }
 
     fn path(&self) -> String {
-        format!("/api/v1/blocks/{}", self.block_cid)
+        "/api/v1/upload/block".to_string()
     }
 }
 
