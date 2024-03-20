@@ -112,7 +112,7 @@ impl<MS: DataStore, ST: SyncTracker> DataStore for ApiSyncableStore<MS, ST> {
             })?;
 
         if locations.is_missing(&cid) {
-            tracing::error!("remote API doesn't know about the block: {cid}");
+            tracing::error!("remote API doesn't know about the block: {cid:?}");
             return Err(DataStoreError::UnknownBlock(cid.clone()));
         }
 
