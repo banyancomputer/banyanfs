@@ -3,7 +3,9 @@ mod traits;
 pub use traits::{DataStore, DataStoreError, SyncTracker, SyncableDataStore};
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
+use async_std::sync::RwLock;
 use async_trait::async_trait;
 use reqwest::Url;
 
@@ -73,25 +75,25 @@ impl SyncTracker for MemorySyncTracker {
     }
 }
 
+#[derive(Clone)]
 pub struct ApiSyncableStore<MS: DataStore, ST: SyncTracker> {
     client: ApiClient,
-
-    cached_store: MS,
-    sync_tracker: ST,
-
-    // todo(sstelfox): need to expire this information
-    cid_map: HashMap<Cid, Vec<Url>>,
+    inner: Arc<RwLock<ApiSyncableStoreInner<MS, ST>>>,
 }
 
 impl<MS: DataStore, ST: SyncTracker> ApiSyncableStore<MS, ST> {
     pub fn new(client: ApiClient, cached_store: MS, sync_tracker: ST) -> Self {
-        Self {
-            client,
+        let cid_map = HashMap::new();
 
+        let inner = ApiSyncableStoreInner {
             cached_store,
             sync_tracker,
+            cid_map,
+        };
 
-            cid_map: HashMap::new(),
+        Self {
+            client,
+            inner: Arc::new(RwLock::new(inner)),
         }
     }
 }
@@ -99,12 +101,81 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStore<MS, ST> {
 #[async_trait(?Send)]
 impl<MS: DataStore, ST: SyncTracker> DataStore for ApiSyncableStore<MS, ST> {
     async fn contains_cid(&self, cid: Cid) -> Result<bool, DataStoreError> {
+        self.inner
+            .read()
+            .await
+            .contains_cid(&self.client, cid)
+            .await
+    }
+
+    async fn remove(&mut self, cid: Cid, recursive: bool) -> Result<(), DataStoreError> {
+        self.inner
+            .write()
+            .await
+            .remove(&self.client, cid, recursive)
+            .await
+    }
+
+    async fn retrieve(&self, cid: Cid) -> Result<Vec<u8>, DataStoreError> {
+        self.inner.read().await.retrieve(&self.client, cid).await
+    }
+
+    async fn store(
+        &mut self,
+        cid: Cid,
+        data: Vec<u8>,
+        immediate: bool,
+    ) -> Result<(), DataStoreError> {
+        self.inner
+            .write()
+            .await
+            .store(&self.client, cid, data, immediate)
+            .await
+    }
+}
+
+#[async_trait(?Send)]
+impl<MS: DataStore, ST: SyncTracker> SyncTracker for ApiSyncableStore<MS, ST> {
+    async fn track(&mut self, cid: Cid, size: u64) -> Result<(), DataStoreError> {
+        self.inner.write().await.sync_tracker.track(cid, size).await
+    }
+
+    async fn tracked_cids(&self) -> Result<Vec<Cid>, DataStoreError> {
+        self.inner.read().await.sync_tracker.tracked_cids().await
+    }
+
+    async fn tracked_size(&self) -> Result<u64, DataStoreError> {
+        self.inner.read().await.sync_tracker.tracked_size().await
+    }
+
+    async fn untrack(&mut self, cid: Cid) -> Result<(), DataStoreError> {
+        self.inner.write().await.sync_tracker.untrack(cid).await
+    }
+}
+
+#[async_trait(?Send)]
+impl<MS: DataStore, ST: SyncTracker> SyncableDataStore for ApiSyncableStore<MS, ST> {
+    async fn sync(&mut self) -> Result<(), DataStoreError> {
+        self.inner.write().await.sync(&self.client).await
+    }
+}
+
+pub struct ApiSyncableStoreInner<MS: DataStore, ST: SyncTracker> {
+    cached_store: MS,
+    sync_tracker: ST,
+
+    // todo(sstelfox): need to expire this information
+    cid_map: HashMap<Cid, Vec<Url>>,
+}
+
+impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
+    async fn contains_cid(&self, client: &ApiClient, cid: Cid) -> Result<bool, DataStoreError> {
         if self.cached_store.contains_cid(cid.clone()).await? {
             return Ok(true);
         }
 
         // todo(sstelfox): check cid map, do the dumb thing for now
-        let locations = crate::api::platform::blocks::locate(&self.client, &[cid.clone()])
+        let locations = crate::api::platform::blocks::locate(client, &[cid.clone()])
             .await
             .map_err(|err| {
                 tracing::error!("failed to locate block: {err}");
@@ -123,7 +194,12 @@ impl<MS: DataStore, ST: SyncTracker> DataStore for ApiSyncableStore<MS, ST> {
         todo!("check blocks existence and location on the network")
     }
 
-    async fn remove(&mut self, cid: Cid, recursive: bool) -> Result<(), DataStoreError> {
+    async fn remove(
+        &mut self,
+        _client: &ApiClient,
+        cid: Cid,
+        recursive: bool,
+    ) -> Result<(), DataStoreError> {
         self.cached_store.remove(cid.clone(), recursive).await?;
         self.sync_tracker.untrack(cid.clone()).await?;
 
@@ -134,7 +210,7 @@ impl<MS: DataStore, ST: SyncTracker> DataStore for ApiSyncableStore<MS, ST> {
         Ok(())
     }
 
-    async fn retrieve(&self, cid: Cid) -> Result<Vec<u8>, DataStoreError> {
+    async fn retrieve(&self, client: &ApiClient, cid: Cid) -> Result<Vec<u8>, DataStoreError> {
         if self.cached_store.contains_cid(cid.clone()).await? {
             return self.cached_store.retrieve(cid).await;
         }
@@ -147,6 +223,7 @@ impl<MS: DataStore, ST: SyncTracker> DataStore for ApiSyncableStore<MS, ST> {
 
     async fn store(
         &mut self,
+        client: &ApiClient,
         cid: Cid,
         data: Vec<u8>,
         immediate: bool,
@@ -167,29 +244,16 @@ impl<MS: DataStore, ST: SyncTracker> DataStore for ApiSyncableStore<MS, ST> {
 
         Ok(())
     }
-}
 
-#[async_trait(?Send)]
-impl<MS: DataStore, ST: SyncTracker> SyncableDataStore for ApiSyncableStore<MS, ST> {
-    type Tracker = ST;
-
-    async fn sync(&mut self) -> Result<(), DataStoreError> {
+    async fn sync(&mut self, client: &ApiClient) -> Result<(), DataStoreError> {
         for cid in self.sync_tracker.tracked_cids().await? {
             let _data = self.cached_store.retrieve(cid.clone()).await?;
 
             // todo: push the block to the network
 
-            self.tracker_mut().untrack(cid).await?;
+            self.sync_tracker.untrack(cid).await?;
         }
 
         Ok(())
-    }
-
-    fn tracker(&self) -> &ST {
-        &self.sync_tracker
-    }
-
-    fn tracker_mut(&mut self) -> &mut ST {
-        &mut self.sync_tracker
     }
 }

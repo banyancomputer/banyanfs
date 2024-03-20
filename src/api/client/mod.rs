@@ -76,7 +76,7 @@ impl ApiClient {
         bearer_token: Option<String>,
         mut request: R,
     ) -> Result<Option<R::Response>, ApiError> {
-        debug!(method = %R::METHOD, ?base_url, url = %request.path(), "request");
+        debug!(method = %R::METHOD, %base_url, url = %request.path(), "request");
 
         let full_url = base_url.join(&request.path())?;
         let mut request_builder = self.client.request(R::METHOD, full_url);

@@ -20,21 +20,15 @@ pub trait DataStore {
 }
 
 #[async_trait(?Send)]
-pub trait SyncableDataStore: DataStore {
-    type Tracker: SyncTracker;
-
-    async fn sync(&mut self) -> Result<(), DataStoreError>;
-
-    fn tracker(&self) -> &Self::Tracker;
-
-    fn tracker_mut(&mut self) -> &mut Self::Tracker;
-
+pub trait SyncableDataStore: DataStore + SyncTracker {
     async fn store_sync(&mut self, cid: Cid, data: Vec<u8>) -> Result<(), DataStoreError> {
         self.store(cid, data, true).await
     }
 
+    async fn sync(&mut self) -> Result<(), DataStoreError>;
+
     async fn unsynced_data_size(&self) -> Result<u64, DataStoreError> {
-        self.tracker().tracked_size().await
+        self.tracked_size().await
     }
 }
 
