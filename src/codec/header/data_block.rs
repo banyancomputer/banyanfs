@@ -103,8 +103,9 @@ impl DataBlock {
         let mut chunk_cids = Vec::new();
 
         for chunk in self.contents.iter().chain(&extra_chunks) {
-            if chunk.len() >= self.chunk_size() {
-                return Err(std_io_err("chunk size mismatch"));
+            if chunk.len() > self.chunk_size() {
+                tracing::error!(true_length = ?chunk.len(), max_length = self.chunk_size(), "chunk too large");
+                return Err(std_io_err("chunk size mismatch (chunk too large)"));
             }
 
             // write out the true data length
