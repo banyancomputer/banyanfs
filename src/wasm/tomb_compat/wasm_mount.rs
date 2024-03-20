@@ -410,7 +410,6 @@ impl WasmMount {
             None => return Err("unable to delete content of a locked bucket".into()),
         };
 
-        let mut rng = crypto_rng();
         let mut drive_root = unlocked_drive
             .root()
             .await

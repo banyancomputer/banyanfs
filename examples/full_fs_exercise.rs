@@ -99,7 +99,7 @@ async fn main() {
     let _contents = root_dir.ls(&[]).await.unwrap();
 
     root_dir
-        .rm(&mut rng, &["new base documents", "deeply"])
+        .rm(&mut memory_store, &["new base documents", "deeply"])
         .await
         .unwrap();
 }

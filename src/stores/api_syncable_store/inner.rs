@@ -73,6 +73,8 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
         client: &ApiClient,
         cid: Cid,
     ) -> Result<Vec<u8>, DataStoreError> {
+        tracing::info!("retrieving block: {cid:?}");
+
         if self.cached_store.contains_cid(cid.clone()).await? {
             return self.cached_store.retrieve(cid).await;
         }
@@ -100,6 +102,7 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
         }
 
         if immediate {
+            tracing::info!("would sync to the network");
             // todo: push the block to the network
             // todo: mark the block as synced
         }
@@ -112,6 +115,7 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
             let _data = self.cached_store.retrieve(cid.clone()).await?;
 
             // todo: push the block to the network
+            tracing::info!("syncing block to the network: {cid:?}");
 
             self.sync_tracker.untrack(cid).await?;
         }
