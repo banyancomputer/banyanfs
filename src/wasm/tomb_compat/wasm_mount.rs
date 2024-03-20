@@ -123,7 +123,12 @@ impl WasmMount {
 
         // todo(sstelfox): still need the following:
         let valid_keys = vec![];
-        let deleted_block_cids = vec![];
+
+        let deleted_block_cids = self
+            .store
+            .deleted_cids()
+            .await
+            .map_err(|e| format!("unable to retrieve deleted data CIDs"))?;
 
         let drive_stream = crate::api::client::utils::vec_to_pinned_stream(encoded_drive);
 
@@ -412,7 +417,7 @@ impl WasmMount {
             .map_err(|_| "root unavailable")?;
 
         drive_root
-            .rm(&mut rng, path_refs.as_slice())
+            .rm(&mut self.store, path_refs.as_slice())
             .await
             .map_err(|err| format!("error deleting fs entry {}: {}", path_refs.join("/"), err))?;
 

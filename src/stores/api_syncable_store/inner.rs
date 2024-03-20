@@ -25,7 +25,10 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
             return Ok(true);
         }
 
-        // todo(sstelfox): check cid map, do the dumb thing for now
+        if self.cid_map.contains_key(&cid) {
+            return Ok(true);
+        }
+
         let locations = crate::api::platform::blocks::locate(client, &[cid.clone()])
             .await
             .map_err(|err| {
@@ -38,11 +41,7 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
             return Err(DataStoreError::UnknownBlock(cid.clone()));
         }
 
-        // todo(sstelfox): cache cid locations, for now we'll always do lookups which will be
-        // slow...
-        //let host_urls = match locations.storage_hosts_with_cid(cid)
-
-        todo!("check blocks existence and location on the network")
+        Ok(locations.contains_cid(&cid))
     }
 
     pub(crate) fn new(cached_store: MS, sync_tracker: ST) -> Self {
@@ -63,7 +62,7 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
         self.sync_tracker.untrack(cid.clone()).await?;
 
         if recursive {
-            todo!("delete from remote stores as well, remember return value");
+            self.sync_tracker.delete(cid).await?;
         }
 
         Ok(())

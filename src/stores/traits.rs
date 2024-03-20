@@ -2,7 +2,6 @@ use async_trait::async_trait;
 
 use crate::codec::Cid;
 
-// todo: move this under src/stores
 #[async_trait(?Send)]
 pub trait DataStore {
     async fn contains_cid(&self, cid: Cid) -> Result<bool, DataStoreError>;
@@ -34,6 +33,12 @@ pub trait SyncableDataStore: DataStore + SyncTracker {
 
 #[async_trait(?Send)]
 pub trait SyncTracker {
+    async fn clear_deleted(&mut self) -> Result<(), DataStoreError>;
+
+    async fn delete(&mut self, cid: Cid) -> Result<(), DataStoreError>;
+
+    async fn deleted_cids(&self) -> Result<Vec<Cid>, DataStoreError>;
+
     async fn track(&mut self, cid: Cid, size: u64) -> Result<(), DataStoreError>;
 
     async fn tracked_cids(&self) -> Result<Vec<Cid>, DataStoreError>;

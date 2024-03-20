@@ -65,6 +65,28 @@ impl<MS: DataStore, ST: SyncTracker> DataStore for ApiSyncableStore<MS, ST> {
 
 #[async_trait(?Send)]
 impl<MS: DataStore, ST: SyncTracker> SyncTracker for ApiSyncableStore<MS, ST> {
+    async fn clear_deleted(&mut self) -> Result<(), DataStoreError> {
+        self.inner
+            .write()
+            .await
+            .sync_tracker_mut()
+            .clear_deleted()
+            .await
+    }
+
+    async fn delete(&mut self, cid: Cid) -> Result<(), DataStoreError> {
+        self.inner
+            .write()
+            .await
+            .sync_tracker_mut()
+            .delete(cid)
+            .await
+    }
+
+    async fn deleted_cids(&self) -> Result<Vec<Cid>, DataStoreError> {
+        self.inner.read().await.sync_tracker().deleted_cids().await
+    }
+
     async fn track(&mut self, cid: Cid, size: u64) -> Result<(), DataStoreError> {
         self.inner
             .write()

@@ -316,10 +316,10 @@ impl DirectoryHandle {
         Ok(())
     }
 
-    #[instrument(level = Level::DEBUG, skip(self, _rng))]
+    #[instrument(level = Level::DEBUG, skip(self, store))]
     pub async fn rm(
         &mut self,
-        _rng: &mut impl CryptoRngCore,
+        store: &mut impl DataStore,
         path: &[&str],
     ) -> Result<(), OperationError> {
         if path.is_empty() {
@@ -453,6 +453,7 @@ impl DirectoryHandle {
         }
     }
 
+    #[instrument(level = Level::DEBUG, skip(self, rng, store))]
     pub async fn write(
         &mut self,
         rng: &mut impl CryptoRngCore,

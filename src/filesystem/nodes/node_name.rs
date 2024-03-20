@@ -74,6 +74,10 @@ impl NodeName {
             _ => {}
         }
 
+        if name.contains('/') {
+            return Err(NodeNameError::ContainsSlash);
+        }
+
         // todo: extra validation, reserved names and characters etc..
 
         Ok(Self::Named(name))
@@ -126,6 +130,9 @@ impl std::convert::TryFrom<&str> for NodeName {
 
 #[derive(Debug, thiserror::Error)]
 pub enum NodeNameError {
+    #[error("name can't contain slashes")]
+    ContainsSlash,
+
     #[error("name can't be empty")]
     Empty,
 

@@ -57,6 +57,10 @@ pub struct LocateResponse {
 }
 
 impl LocateResponse {
+    pub fn contains_cid(&self, cid: &Cid) -> bool {
+        self.cid_locations.contains_key(cid)
+    }
+
     pub fn is_missing(&self, cid: &Cid) -> bool {
         self.known_missing_blocks.contains(cid)
     }
