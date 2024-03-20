@@ -8,6 +8,8 @@ homepage = "https://banyan.computer"
 repository = "https://github.com/banyancomputer/banyanfs"
 readme = "README.md"
 edition = "2021"
+keywords = ["banyan", "filesystem", "encryption", "storage"]
+categories = ["filesystems", "cryptography", "storage"]
 
 [features]
 default = ["banyan-api", "pem", "strict", "tomb-compat"]
