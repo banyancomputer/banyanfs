@@ -1,9 +1,11 @@
 [package]
 name = "banyanfs"
-description = "A first pass implmentation of a BanyanFS format and platform client all-in-one. Spec reference implementation."
-repository = "https://github.com/banyancomputer"
 version = "0.1.0"
+authors = ["Sam Stelfox <sstelfox@bedroomprogrammers.net>"]
 license = "MIT OR Apache-2.0"
+description = "A modern end-to-end encrypted filesystem built on distributed block replication primitives"
+homepage = "https://banyan.computer"
+repository = "https://github.com/banyancomputer/banyanfs"
 readme = "README.md"
 edition = "2021"
 
@@ -72,9 +74,8 @@ serde = { version = "^1", features = ["derive"], optional = true }
 serde_json = { version = "^1", optional = true }
 url = { version = "^2", optional = true }
 
-[[bin]]
-name = "banyanfs"
-path = "src/main.rs"
+[[example]]
+name = "full_fs_exercise"
 
 [lib]
 path = "src/lib.rs"
