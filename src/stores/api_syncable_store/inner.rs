@@ -87,7 +87,7 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
 
     pub(crate) async fn store(
         &mut self,
-        client: &ApiClient,
+        _client: &ApiClient,
         cid: Cid,
         data: Vec<u8>,
         immediate: bool,
@@ -102,20 +102,55 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
         }
 
         if immediate {
-            tracing::info!("would sync to the network");
-            // todo: push the block to the network
-            // todo: mark the block as synced
+            tracing::warn!("immedate storage of blocks isn't support, only bulk metadata tagged uploads for now");
         }
 
         Ok(())
     }
 
-    pub(crate) async fn sync(&mut self, client: &ApiClient) -> Result<(), DataStoreError> {
-        for cid in self.sync_tracker.tracked_cids().await? {
-            let _data = self.cached_store.retrieve(cid.clone()).await?;
+    pub(crate) async fn sync(
+        &mut self,
+        client: &ApiClient,
+        metadata_id: &str,
+    ) -> Result<(), DataStoreError> {
+        use crate::api::storage_host::blocks;
 
-            // todo: push the block to the network
+        let tracked_cids = self.sync_tracker.tracked_cids().await?;
+        if tracked_cids.is_empty() {
+            // No sync necessary
+            return Ok(());
+        }
+
+        let storage_host_url = client
+            .active_storage_host()
+            .await
+            .ok_or(DataStoreError::NoActiveStorageHost)?;
+
+        let session_data_size = self.sync_tracker.tracked_size().await?;
+
+        let session =
+            blocks::create_session(client, &storage_host_url, metadata_id, session_data_size)
+                .await
+                .map_err(|_| DataStoreError::SessionRejected)?;
+
+        let upload_id = session.upload_id();
+        let cid_count = tracked_cids.len();
+
+        for (idx, cid) in tracked_cids.into_iter().enumerate() {
+            let data = self.cached_store.retrieve(cid.clone()).await?;
+            let block_stream = crate::api::client::utils::vec_to_pinned_stream(data);
+
             tracing::info!("syncing block to the network: {cid:?}");
+            if idx == cid_count - 1 {
+                // If we're the last one, we need to tweak our request
+                blocks::store_complete(client, &storage_host_url, &upload_id, &cid, block_stream)
+                    .await
+                    .map_err(|_| DataStoreError::StoreFailure)?;
+            } else {
+                blocks::store_ongoing(client, &storage_host_url, &upload_id, &cid, block_stream)
+                    .await
+                    .map_err(|_| DataStoreError::StoreFailure)?;
+            }
 
             self.sync_tracker.untrack(cid).await?;
         }

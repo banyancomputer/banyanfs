@@ -1,6 +1,8 @@
+mod create_session_request;
 //mod retrieve_request;
 mod store_request;
 
+use create_session_request::{CreateSessionRequest, CreateSessionResponse};
 //use retrieve_request::RetrieveRequest;
 use store_request::{StoreLifecycle, StoreRequest, StoreResponse};
 
@@ -11,6 +13,19 @@ use reqwest::Url;
 use crate::api::client::{ApiClient, ApiError};
 
 use crate::codec::Cid;
+
+pub async fn create_session(
+    client: &ApiClient,
+    storage_host_url: &Url,
+    metadata_id: &str,
+    session_data_size: u64,
+) -> Result<CreateSessionResponse, ApiError> {
+    let store_request = CreateSessionRequest::new(metadata_id, session_data_size);
+
+    client
+        .storage_host_request_full(storage_host_url, store_request)
+        .await
+}
 
 //pub async fn retrieve(
 //    client: &ApiClient,

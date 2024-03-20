@@ -116,8 +116,12 @@ impl<MS: DataStore, ST: SyncTracker> SyncTracker for ApiSyncableStore<MS, ST> {
 
 #[async_trait(?Send)]
 impl<MS: DataStore, ST: SyncTracker> SyncableDataStore for ApiSyncableStore<MS, ST> {
-    async fn sync(&mut self) -> Result<(), DataStoreError> {
-        self.inner.write().await.sync(&self.client).await
+    async fn sync(&mut self, metadata_id: &str) -> Result<(), DataStoreError> {
+        self.inner
+            .write()
+            .await
+            .sync(&self.client, metadata_id)
+            .await
     }
 }
 

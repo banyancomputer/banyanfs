@@ -57,8 +57,8 @@ impl Cid {
 
 #[derive(Debug, thiserror::Error)]
 pub enum CidError {
-    #[error("invalid CID str")]
-    Invalid,
+    #[error("unsupport encoding version provided")]
+    InvalidEncoding,
 }
 
 impl std::fmt::Debug for Cid {
@@ -77,6 +77,13 @@ impl TryFrom<&str> for Cid {
     type Error = CidError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
+        if !value.starts_with("u") {
+            return Err(CidError::InvalidEncoding);
+        }
+
+        use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        use base64::Engine;
+
         todo!()
     }
 }

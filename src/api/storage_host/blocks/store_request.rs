@@ -2,7 +2,7 @@ use async_std::prelude::*;
 use async_trait::async_trait;
 use bytes::Bytes;
 use reqwest::multipart::{Form, Part};
-use reqwest::{Body, Method, RequestBuilder, Url};
+use reqwest::{Body, Method, RequestBuilder};
 use serde::{Deserialize, Serialize};
 
 use crate::api::client::{ApiError, ApiRequest, StorageHostApiRequest};

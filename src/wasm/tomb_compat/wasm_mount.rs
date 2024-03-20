@@ -128,7 +128,7 @@ impl WasmMount {
             .store
             .deleted_cids()
             .await
-            .map_err(|e| format!("unable to retrieve deleted data CIDs"))?;
+            .map_err(|e| format!("unable to retrieve deleted data CIDs: {e}"))?;
 
         let drive_stream = crate::api::client::utils::vec_to_pinned_stream(encoded_drive);
 
@@ -174,7 +174,7 @@ impl WasmMount {
 
         tracing::info!(metadata_id = &new_metadata_id, "drive synced");
 
-        self.store.sync().await.map_err(|err| {
+        self.store.sync(&new_metadata_id).await.map_err(|err| {
             let err_msg = format!("error syncing data store: {}", err);
             tracing::error!(err_msg);
             err_msg

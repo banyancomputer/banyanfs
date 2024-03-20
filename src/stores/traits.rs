@@ -24,7 +24,7 @@ pub trait SyncableDataStore: DataStore + SyncTracker {
         self.store(cid, data, true).await
     }
 
-    async fn sync(&mut self) -> Result<(), DataStoreError>;
+    async fn sync(&mut self, version_id: &str) -> Result<(), DataStoreError>;
 
     async fn unsynced_data_size(&self) -> Result<u64, DataStoreError> {
         self.tracked_size().await
@@ -52,6 +52,12 @@ pub trait SyncTracker {
 pub enum DataStoreError {
     #[error("failed to retrieve block")]
     LookupFailure,
+
+    #[error("no storage hosts have been registered to interact with")]
+    NoActiveStorageHost,
+
+    #[error("failed to open storage session")]
+    SessionRejected,
 
     #[error("failed to store block")]
     StoreFailure,

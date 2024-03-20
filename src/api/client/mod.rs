@@ -174,6 +174,13 @@ impl ApiClient {
             .await;
     }
 
+    pub(crate) async fn active_storage_host(&self) -> Option<Url> {
+        match &self.auth {
+            Some(auth) => auth.active_storage_host().await,
+            None => None,
+        }
+    }
+
     pub(crate) async fn set_active_storage_host(&self, storage_host_url: &Url) {
         let mut storage_hosts = match &self.auth {
             Some(auth) => auth.storage_hosts.write().await,
@@ -355,6 +362,11 @@ impl ApiAuth {
             platform_token,
             storage_hosts,
         }
+    }
+
+    async fn active_storage_host(&self) -> Option<Url> {
+        let storage_hosts = self.storage_hosts.read().await;
+        storage_hosts.active_storage_host()
     }
 
     async fn storage_host_token(&self, host_url: &Url) -> Result<String, StorageTokenError> {
