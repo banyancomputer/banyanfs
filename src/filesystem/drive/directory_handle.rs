@@ -335,7 +335,11 @@ impl DirectoryHandle {
         let target_node = inner_write.by_id(target_node_id)?;
         let target_perm_id = target_node.permanent_id();
 
-        inner_write.remove_node(target_perm_id).await?;
+        if let Some(removed_data_cids) = inner_write.remove_node(target_perm_id).await? {
+            for cid in removed_data_cids.into_iter() {
+                store.remove(cid, true).await?;
+            }
+        }
 
         Ok(())
     }

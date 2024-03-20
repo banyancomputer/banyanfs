@@ -306,7 +306,10 @@ impl InnerDrive {
         Ok((node_input, inner_drive))
     }
 
-    pub(crate) async fn remove_node(&mut self, perm_id: PermanentId) -> Result<(), OperationError> {
+    pub(crate) async fn remove_node(
+        &mut self,
+        perm_id: PermanentId,
+    ) -> Result<Option<Vec<Cid>>, OperationError> {
         // We need to first make this node an orphan by removing it from its parent and marking the
         // parent as dirty.
         let target_node = self.by_perm_id(&perm_id)?;
@@ -334,11 +337,18 @@ impl InnerDrive {
                     "missing node for removal",
                 ))?;
 
-            data_cids_removed.extend(node.data().data_cids());
-            nodes_to_remove.extend(node.data().ordered_child_pids());
+            if let Some(data_cids) = node.data_cids() {
+                data_cids_removed.extend(data_cids);
+            }
+
+            nodes_to_remove.append(&mut node.data().ordered_child_pids());
         }
 
-        Ok(())
+        if data_cids_removed.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(data_cids_removed))
+        }
     }
 
     pub(crate) fn root_node(&self) -> Result<&Node, OperationError> {
