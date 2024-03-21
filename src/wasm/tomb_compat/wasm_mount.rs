@@ -171,11 +171,9 @@ impl WasmMount {
 
         self.last_saved_metadata = Some(WasmBucketMetadata::new(self.bucket.id(), new_metadata));
 
-        // todo(sstelfox): should probably fail the sync here but it is recoverable with futures
-        // syncs
-        if let Err(err) = self.store.sync(&new_metadata_id).await {
-            tracing::error!(metadata_id = ?new_metadata_id, "error syncing data store: {}", err);
-        }
+        // note(sstelfox): this could be recoverable with future syncs, but we should probably
+        // still fail here...
+        self.store.sync(&new_metadata_id).await?;
 
         self.dirty = false;
         tracing::info!(metadata_id = &new_metadata_id, "drive synced");

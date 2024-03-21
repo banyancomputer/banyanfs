@@ -55,7 +55,7 @@ impl StoreRequest {
 
 #[async_trait(?Send)]
 impl ApiRequest for StoreRequest {
-    type Response = StoreResponse;
+    type Response = ();
 
     const METHOD: Method = Method::POST;
 
@@ -117,6 +117,3 @@ struct UploadDetails {
     completed: bool,
     upload_id: String,
 }
-
-#[derive(Deserialize)]
-pub struct StoreResponse {}

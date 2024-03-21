@@ -4,7 +4,7 @@ mod store_request;
 
 use create_session_request::{CreateSessionRequest, CreateSessionResponse};
 use retrieve_request::RetrieveRequest;
-use store_request::{StoreLifecycle, StoreRequest, StoreResponse};
+use store_request::{StoreLifecycle, StoreRequest};
 
 use bytes::Bytes;
 use futures::Stream;
@@ -45,7 +45,7 @@ pub async fn store_ongoing<S>(
     upload_id: &str,
     cid: &Cid,
     stream_body: S,
-) -> Result<StoreResponse, ApiError>
+) -> Result<(), ApiError>
 where
     S: Stream<Item = Result<Bytes, std::io::Error>> + Unpin,
 {
@@ -56,7 +56,7 @@ where
     let store_request = StoreRequest::new(cid.clone(), lifecycle, stream_body).await?;
 
     client
-        .storage_host_request_full(storage_host_url, store_request)
+        .storage_host_request_empty_response(storage_host_url, store_request)
         .await
 }
 
@@ -66,7 +66,7 @@ pub async fn store_complete<S>(
     upload_id: &str,
     cid: &Cid,
     stream_body: S,
-) -> Result<StoreResponse, ApiError>
+) -> Result<(), ApiError>
 where
     S: Stream<Item = Result<Bytes, std::io::Error>> + Unpin,
 {
@@ -77,6 +77,6 @@ where
     let store_request = StoreRequest::new(cid.clone(), lifecycle, stream_body).await?;
 
     client
-        .storage_host_request_full(storage_host_url, store_request)
+        .storage_host_request_empty_response(storage_host_url, store_request)
         .await
 }
