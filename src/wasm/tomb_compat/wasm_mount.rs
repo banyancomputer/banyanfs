@@ -169,16 +169,16 @@ impl WasmMount {
         .await
         .map_err(|e| format!("error while fetching new metadata: {}", e))?;
 
-        self.dirty = false;
         self.last_saved_metadata = Some(WasmBucketMetadata::new(self.bucket.id(), new_metadata));
 
-        tracing::info!(metadata_id = &new_metadata_id, "drive synced");
+        // todo(sstelfox): should probably fail the sync here but it is recoverable with futures
+        // syncs
+        if let Err(err) = self.store.sync(&new_metadata_id).await {
+            tracing::error!(metadata_id = ?new_metadata_id, "error syncing data store: {}", err);
+        }
 
-        self.store.sync(&new_metadata_id).await.map_err(|err| {
-            let err_msg = format!("error syncing data store: {}", err);
-            tracing::error!(err_msg);
-            err_msg
-        })?;
+        self.dirty = false;
+        tracing::info!(metadata_id = &new_metadata_id, "drive synced");
 
         Ok(())
     }
