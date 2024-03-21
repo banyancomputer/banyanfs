@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
-use reqwest::{RequestBuilder, Url};
+use reqwest::{Method, RequestBuilder, Url};
 use serde::{Deserialize, Serialize};
 
 use crate::api::client::{ApiError, ApiRequest, PlatformApiRequest};
@@ -28,6 +28,8 @@ impl LocateRequest {
 #[async_trait(?Send)]
 impl ApiRequest for LocateRequest {
     type Response = InnerLocateResponse;
+
+    const METHOD: Method = Method::POST;
 
     async fn add_payload(
         &mut self,
