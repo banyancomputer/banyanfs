@@ -153,6 +153,11 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
 
         let upload_id = session.upload_id();
         let cid_count = tracked_cids.len();
+        tracing::info!(
+            upload_id,
+            cid_count,
+            "created upload session with storage host"
+        );
 
         for (idx, cid) in tracked_cids.into_iter().enumerate() {
             let data = self.cached_store.retrieve(cid.clone()).await?;
@@ -161,11 +166,11 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
             tracing::info!("syncing block to the network: {cid:?}");
             if idx == cid_count - 1 {
                 // If we're the last one, we need to tweak our request
-                blocks::store_complete(client, &storage_host_url, &upload_id, &cid, block_stream)
+                blocks::store_complete(client, &storage_host_url, upload_id, &cid, block_stream)
                     .await
                     .map_err(|_| DataStoreError::StoreFailure)?;
             } else {
-                blocks::store_ongoing(client, &storage_host_url, &upload_id, &cid, block_stream)
+                blocks::store_ongoing(client, &storage_host_url, upload_id, &cid, block_stream)
                     .await
                     .map_err(|_| DataStoreError::StoreFailure)?;
             }

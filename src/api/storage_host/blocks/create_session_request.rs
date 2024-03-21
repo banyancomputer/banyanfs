@@ -7,8 +7,6 @@ use crate::api::client::{ApiError, ApiRequest, StorageHostApiRequest};
 #[derive(Serialize)]
 pub(crate) struct CreateSessionRequest {
     metadata_id: String,
-
-    #[serde(skip)]
     session_data_size: u64,
 }
 
@@ -31,13 +29,7 @@ impl ApiRequest for CreateSessionRequest {
         &mut self,
         request_builder: RequestBuilder,
     ) -> Result<RequestBuilder, ApiError> {
-        let request_builder = request_builder
-            .json(&self)
-            // todo(sstelfox); is weird, it should probably be part of the actual request data, this
-            // definitely is against http spec...
-            .header("content-len", self.session_data_size.to_string());
-
-        Ok(request_builder)
+        Ok(request_builder.json(&self))
     }
 
     fn path(&self) -> String {
