@@ -67,12 +67,12 @@ impl ApiRequest for StoreRequest {
 
         let mut form = Form::new();
 
-        let block_details = match &self.lifecycle {
-            StoreLifecycle::Ongoing { upload_id } => BlockDetails::Ongoing {
+        let details = match &self.lifecycle {
+            StoreLifecycle::Ongoing { upload_id } => UploadDetails {
                 completed: false,
                 upload_id: upload_id.clone(),
             },
-            StoreLifecycle::Complete { upload_id } => BlockDetails::Ongoing {
+            StoreLifecycle::Complete { upload_id } => UploadDetails {
                 completed: true,
                 upload_id: upload_id.clone(),
             },
@@ -80,7 +80,7 @@ impl ApiRequest for StoreRequest {
 
         let inner_request = InnerStoreRequest {
             cid: self.block_cid.clone(),
-            block_details,
+            upload_details: Some(details),
         };
 
         let json_bytes = serde_json::to_vec(&inner_request)?;
@@ -108,15 +108,14 @@ impl StorageHostApiRequest for StoreRequest {}
 struct InnerStoreRequest {
     cid: String,
 
-    #[serde(rename = "details", flatten)]
-    block_details: BlockDetails,
+    #[serde(flatten, rename = "details", skip_serializing_if = "Option::is_none")]
+    upload_details: Option<UploadDetails>,
 }
 
 #[derive(Serialize)]
-#[serde(untagged)]
-enum BlockDetails {
-    Ongoing { completed: bool, upload_id: String },
-    OneOff,
+struct UploadDetails {
+    completed: bool,
+    upload_id: String,
 }
 
 #[derive(Deserialize)]
