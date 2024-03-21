@@ -13,18 +13,11 @@ pub(crate) fn vec_to_pinned_stream(
 pub(crate) struct VecStream {
     data: Vec<u8>,
     pos: usize,
-    length: usize,
 }
 
 impl VecStream {
     pub(crate) fn new(data: Vec<u8>) -> Self {
-        let length = data.len();
-
-        Self {
-            data,
-            pos: 0,
-            length,
-        }
+        Self { data, pos: 0 }
     }
 }
 

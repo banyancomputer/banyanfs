@@ -17,7 +17,7 @@ pub struct ApiSyncableStoreInner<MS: DataStore, ST: SyncTracker> {
 
 impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
     pub(crate) async fn contains_cid(
-        &self,
+        &mut self,
         client: &ApiClient,
         cid: Cid,
     ) -> Result<bool, DataStoreError> {
@@ -39,6 +39,10 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
         if locations.is_missing(&cid) {
             tracing::error!("remote API doesn't know about the block: {cid:?}");
             return Err(DataStoreError::UnknownBlock(cid.clone()));
+        }
+
+        if let Some(locs) = locations.storage_hosts_with_cid(&cid) {
+            self.cid_map.insert(cid.clone(), locs);
         }
 
         Ok(locations.contains_cid(&cid))
@@ -77,6 +81,20 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
 
         if self.cached_store.contains_cid(cid.clone()).await? {
             return self.cached_store.retrieve(cid).await;
+        }
+
+        if !self.cid_map.contains_key(&cid) {
+            let locations = crate::api::platform::blocks::locate(client, &[cid.clone()])
+                .await
+                .map_err(|err| {
+                    tracing::error!("failed to locate block: {err}");
+                    DataStoreError::UnknownBlock(cid.clone())
+                })?;
+
+            if locations.is_missing(&cid) {
+                tracing::error!("remote API doesn't know about the block: {cid:?}");
+                return Err(DataStoreError::UnknownBlock(cid.clone()));
+            }
         }
 
         // check whether the block is available on the network and if so where

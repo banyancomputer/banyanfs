@@ -1,9 +1,9 @@
 mod create_session_request;
-//mod retrieve_request;
+mod retrieve_request;
 mod store_request;
 
 use create_session_request::{CreateSessionRequest, CreateSessionResponse};
-//use retrieve_request::RetrieveRequest;
+use retrieve_request::RetrieveRequest;
 use store_request::{StoreLifecycle, StoreRequest, StoreResponse};
 
 use bytes::Bytes;
@@ -27,20 +27,17 @@ pub async fn create_session(
         .await
 }
 
-//pub async fn retrieve(
-//    client: &ApiClient,
-//    storage_host_url: &Url,
-//    cid: &str,
-//) -> Result<impl Stream<Item = Result<Bytes, reqwest::Error>>, ApiError> {
-//    let response = client
-//        .storage_host_request_full(
-//            storage_host_url,
-//            RetrieveRequest::new(drive_id.into(), metadata_id.into()),
-//        )
-//        .await?;
-//
-//    Ok(response.consume().bytes_stream())
-//}
+pub async fn retrieve(
+    client: &ApiClient,
+    storage_host_url: &Url,
+    block_cid: &str,
+) -> Result<impl Stream<Item = Result<Bytes, reqwest::Error>>, ApiError> {
+    let response = client
+        .storage_host_request_full(storage_host_url, RetrieveRequest::new(block_cid))
+        .await?;
+
+    Ok(response.consume().bytes_stream())
+}
 
 pub async fn store_ongoing<S>(
     client: &ApiClient,

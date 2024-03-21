@@ -1,7 +1,5 @@
-#[cfg(target_arch = "wasm32")]
 mod vec_stream;
 
-#[cfg(target_arch = "wasm32")]
 pub(crate) use vec_stream::vec_to_pinned_stream;
 
 use async_std::prelude::*;

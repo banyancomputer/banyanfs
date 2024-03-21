@@ -19,7 +19,7 @@ impl PullRequest {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl ApiRequest for PullRequest {
     type Response = DirectResponse;
 

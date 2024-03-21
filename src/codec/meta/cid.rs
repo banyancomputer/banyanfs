@@ -59,6 +59,9 @@ impl Cid {
 pub enum CidError {
     #[error("unsupport encoding version provided")]
     InvalidEncoding,
+
+    #[error("invalid hash size")]
+    InvalidHashSize,
 }
 
 impl std::fmt::Debug for Cid {
@@ -77,13 +80,26 @@ impl TryFrom<&str> for Cid {
     type Error = CidError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        if !value.starts_with("u") {
+        let mut value = value.to_string();
+        if value.remove(0) != 'u' {
             return Err(CidError::InvalidEncoding);
         }
 
         use base64::engine::general_purpose::URL_SAFE_NO_PAD;
         use base64::Engine;
 
-        todo!()
+        let data = URL_SAFE_NO_PAD
+            .decode(value.as_bytes())
+            .map_err(|_| CidError::InvalidEncoding)?;
+
+        if data[0..4] != [0x01, 0x55, 0x1e, 0x20] {
+            return Err(CidError::InvalidEncoding);
+        }
+
+        let cid_bytes: [u8; CID_LENGTH] = data[4..]
+            .try_into()
+            .map_err(|_| CidError::InvalidHashSize)?;
+
+        Ok(Cid::from(cid_bytes))
     }
 }

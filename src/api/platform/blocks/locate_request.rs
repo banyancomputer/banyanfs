@@ -65,12 +65,15 @@ impl LocateResponse {
         self.known_missing_blocks.contains(cid)
     }
 
-    pub fn storage_hosts_with_cid(&self, cid: &Cid) -> Option<Vec<&Url>> {
+    pub fn storage_hosts_with_cid(&self, cid: &Cid) -> Option<Vec<Url>> {
         let known_indexes = self.cid_locations.get(cid)?;
+
         let idx_list = known_indexes
             .iter()
             .flat_map(|idx| self.storage_hosts.get(*idx))
+            .cloned()
             .collect();
+
         Some(idx_list)
     }
 }

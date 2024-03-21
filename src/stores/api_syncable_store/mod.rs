@@ -31,7 +31,7 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStore<MS, ST> {
 impl<MS: DataStore, ST: SyncTracker> DataStore for ApiSyncableStore<MS, ST> {
     async fn contains_cid(&self, cid: Cid) -> Result<bool, DataStoreError> {
         self.inner
-            .read()
+            .write()
             .await
             .contains_cid(&self.client, cid)
             .await

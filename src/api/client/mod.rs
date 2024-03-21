@@ -287,7 +287,9 @@ impl StorageHost {
             }
         }
 
-        let token_kid = format!("{account_id}@{}", key.fingerprint().to_hex());
+        let verifying_key = key.verifying_key();
+        let fingerprint = crate::api::client::utils::api_fingerprint_key(&verifying_key);
+        let token_kid = format!("{account_id}@{}", fingerprint);
         let expiration = OffsetDateTime::now_utc() + std::time::Duration::from_secs(300);
 
         // todo(sstelfox): this jwt library is definitely an integration pain point, we have all
