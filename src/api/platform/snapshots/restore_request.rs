@@ -3,19 +3,22 @@ use reqwest::Method;
 use serde::{Deserialize, Serialize};
 
 use crate::api::client::{ApiRequest, PlatformApiRequest};
-use crate::api::platform::{ApiDriveId, ApiMetadataId, ApiSnapshotId};
+use crate::api::platform::{ApiDriveId, ApiMetadataId};
+
+// todo(sstelfox): the ID here is currently for metadata but it really should be for the snapshot
+// that is getting restored.
 
 #[derive(Serialize)]
 pub(crate) struct RestoreRequest {
     drive_id: ApiDriveId,
-    snapshot_id: ApiSnapshotId,
+    metadata_id: ApiMetadataId,
 }
 
 impl RestoreRequest {
-    pub(crate) fn new(drive_id: ApiDriveId, snapshot_id: ApiSnapshotId) -> Self {
+    pub(crate) fn new(drive_id: ApiDriveId, metadata_id: ApiMetadataId) -> Self {
         Self {
             drive_id,
-            snapshot_id,
+            metadata_id,
         }
     }
 }
@@ -29,7 +32,7 @@ impl ApiRequest for RestoreRequest {
     fn path(&self) -> String {
         format!(
             "/api/v1/buckets/{}/snapshots/{}/restore",
-            self.drive_id, self.snapshot_id
+            self.drive_id, self.metadata_id
         )
     }
 }

@@ -150,7 +150,7 @@ impl WasmMount {
         if let Some(host) = push_response.storage_host() {
             self.wasm_client
                 .client()
-                .set_active_storage_host(&host)
+                .set_active_storage_host(host.clone())
                 .await;
 
             if let Some(grant) = push_response.storage_authorization() {
