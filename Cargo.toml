@@ -1,6 +1,6 @@
 [package]
 name = "banyanfs"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Sam Stelfox <sstelfox@bedroomprogrammers.net>"]
 license = "MIT OR Apache-2.0"
 description = "A modern end-to-end encrypted filesystem built on distributed block replication primitives"
