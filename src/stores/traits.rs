@@ -56,6 +56,9 @@ pub enum DataStoreError {
     #[error("no storage hosts have been registered to interact with")]
     NoActiveStorageHost,
 
+    #[error("failed to retreive block from network")]
+    RetrievalFailure,
+
     #[error("failed to open storage session")]
     SessionRejected,
 

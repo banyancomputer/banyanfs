@@ -73,34 +73,81 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
     }
 
     pub(crate) async fn retrieve(
-        &self,
+        &mut self,
         client: &ApiClient,
         cid: Cid,
     ) -> Result<Vec<u8>, DataStoreError> {
+        use crate::api::platform::blocks as platform_blocks;
+        use crate::api::storage_host::blocks as storage_blocks;
+
         tracing::info!("retrieving block: {cid:?}");
 
         if self.cached_store.contains_cid(cid.clone()).await? {
             return self.cached_store.retrieve(cid).await;
         }
 
-        if !self.cid_map.contains_key(&cid) {
-            let locations = crate::api::platform::blocks::locate(client, &[cid.clone()])
-                .await
-                .map_err(|err| {
-                    tracing::error!("failed to locate block: {err}");
+        // If we don't locally know about the block check the network store to see if it knows
+        // about it. This also populates the cid_map with the location so we can immediately use
+        // it.
+        let mut block_hosts = match self.cid_map.get(&cid) {
+            Some(hosts) => hosts.clone(),
+            None => {
+                let locations = platform_blocks::locate(client, &[cid.clone()])
+                    .await
+                    .map_err(|err| {
+                        tracing::error!("failed to locate block: {err}");
+                        DataStoreError::UnknownBlock(cid.clone())
+                    })?;
+
+                if locations.is_missing(&cid) {
+                    tracing::error!("remote API doesn't know about the block: {cid:?}");
+                    return Err(DataStoreError::UnknownBlock(cid.clone()));
+                }
+
+                let hosts = locations.storage_hosts_with_cid(&cid).ok_or_else(|| {
+                    tracing::error!("no storage hosts known for block: {cid:?}");
                     DataStoreError::UnknownBlock(cid.clone())
                 })?;
 
-            if locations.is_missing(&cid) {
-                tracing::error!("remote API doesn't know about the block: {cid:?}");
-                return Err(DataStoreError::UnknownBlock(cid.clone()));
+                self.cid_map.insert(cid.clone(), hosts.clone());
+
+                hosts
             }
+        };
+
+        use rand::seq::SliceRandom;
+        let mut rng = crate::utils::crypto_rng();
+        block_hosts.shuffle(&mut rng);
+
+        use crate::api::client::utils::consume_stream_into_bytes;
+
+        for host in block_hosts.iter() {
+            let cid_str = cid.as_base64url_multicodec();
+
+            let block = match storage_blocks::retrieve(client, host, &cid_str).await {
+                Ok(block) => block,
+                Err(err) => {
+                    tracing::error!("failed to retrieve block from {host}: {err}");
+                    continue;
+                }
+            };
+
+            let block_data = consume_stream_into_bytes(block)
+                .await
+                .map(|data| data.to_vec())
+                .map_err(|err| {
+                    tracing::error!("failed to consume block stream: {err}");
+                    DataStoreError::RetrievalFailure
+                })?;
+
+            self.cached_store
+                .store(cid.clone(), block_data.clone(), false)
+                .await?;
+
+            return Ok(block_data);
         }
 
-        // check whether the block is available on the network and if so where
-        // retrieve block from the network and cache it
-        // return the block
-        todo!("fall back to network retrieval and cache the block")
+        Err(DataStoreError::RetrievalFailure)
     }
 
     pub(crate) async fn store(

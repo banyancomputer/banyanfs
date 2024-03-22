@@ -33,9 +33,10 @@ pub(crate) fn api_fingerprint_key(key: &VerifyingKey) -> String {
 /// Consumes an async stream into a single Bytes object. This will consume potentially boundless
 /// memory which is especially problematic since we will be handling very large files. It is
 /// intended primarily for WASM targeted builds where async is significantly more limited.
-pub(crate) async fn consume_stream_into_bytes<S>(mut stream: S) -> Result<Bytes, std::io::Error>
+pub(crate) async fn consume_stream_into_bytes<S, E>(mut stream: S) -> Result<Bytes, E>
 where
-    S: Stream<Item = Result<Bytes, std::io::Error>> + Unpin,
+    S: Stream<Item = Result<Bytes, E>> + Unpin,
+    E: std::error::Error,
 {
     let mut bytes_mut = BytesMut::new();
 
