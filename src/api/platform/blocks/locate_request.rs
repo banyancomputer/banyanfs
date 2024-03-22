@@ -9,10 +9,10 @@ use crate::codec::Cid;
 
 const NOT_FOUND_HOST_ID: &str = "NA";
 
+// todo(sstelfox): we shouldn't use raw vecs for our payloads... update ths API
+// endpoint
 #[derive(Serialize)]
-pub(crate) struct LocateRequest {
-    cids: Vec<String>,
-}
+pub(crate) struct LocateRequest(Vec<String>);
 
 impl LocateRequest {
     pub(crate) fn new(cids: Vec<Cid>) -> Self {
@@ -21,7 +21,7 @@ impl LocateRequest {
             .map(|c| c.as_base64url_multicodec())
             .collect::<Vec<_>>();
 
-        Self { cids }
+        Self(cids)
     }
 }
 
