@@ -46,7 +46,7 @@ impl<MS: DataStore, ST: SyncTracker> DataStore for ApiSyncableStore<MS, ST> {
     }
 
     async fn retrieve(&self, cid: Cid) -> Result<Vec<u8>, DataStoreError> {
-        self.inner.read().await.retrieve(&self.client, cid).await
+        self.inner.write().await.retrieve(&self.client, cid).await
     }
 
     async fn store(
