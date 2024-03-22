@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use reqwest::multipart::{Form, Part};
 use reqwest::{Body, Method, RequestBuilder};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::api::client::{ApiError, ApiRequest, StorageHostApiRequest};
 use crate::codec::Cid;
