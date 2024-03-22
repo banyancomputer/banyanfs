@@ -433,13 +433,13 @@ impl WasmMount {
     // checked, returns URL to access file
     #[wasm_bindgen(js_name = shareFile)]
     pub async fn share_file(&mut self, _path_segments: js_sys::Array) -> BanyanFsResult<String> {
-        todo!()
+        Err("share file is not currently implemented".into())
     }
 
     // checked
     #[wasm_bindgen(js_name = shareWith)]
     pub async fn share_with(&mut self, _bucket_key_id: String) -> BanyanFsResult<()> {
-        todo!()
+        Err("share with is not currently implemented".into())
     }
 
     // checked
