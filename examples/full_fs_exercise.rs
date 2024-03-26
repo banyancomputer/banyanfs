@@ -49,14 +49,14 @@ async fn main() {
         root.write(
             &mut rng,
             &mut memory_store,
-            &["testing", "poem.txt"],
+            &["testing", "poem-♥.txt"],
             b"a filesystem was born",
         )
         .await
         .unwrap();
 
         let file_data = root
-            .read(&memory_store, &["testing", "poem.txt"])
+            .read(&memory_store, &["testing", "poem-♥.txt"])
             .await
             .unwrap();
         assert_eq!(file_data, b"a filesystem was born");
