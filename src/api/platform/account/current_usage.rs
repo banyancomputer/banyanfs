@@ -1,10 +1,8 @@
 use async_trait::async_trait;
-use reqwest::Method;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::api::client::{ApiRequest, PlatformApiRequest};
 
-#[derive(Serialize)]
 pub(crate) struct CurrentUsage;
 
 #[derive(Deserialize)]
@@ -22,8 +20,6 @@ impl CurrentUsageResponse {
 #[async_trait]
 impl ApiRequest for CurrentUsage {
     type Response = CurrentUsageResponse;
-
-    const METHOD: Method = Method::GET;
 
     fn path(&self) -> String {
         "/api/v1/buckets/usage".to_string()

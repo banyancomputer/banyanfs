@@ -1,9 +1,11 @@
 mod current_usage;
 mod current_usage_limit;
+mod get_storage_grant;
 mod register_api_key;
 
 use current_usage::{CurrentUsage, CurrentUsageResponse};
 use current_usage_limit::{CurrentUsageLimit, CurrentUsageLimitResponse};
+use get_storage_grant::{GetStorageGrant, GetStorageGrantResponse};
 use register_api_key::RegisterApiKey;
 
 use crate::api::client::{ApiClient, ApiError};
@@ -18,6 +20,14 @@ pub async fn current_usage_limit(
     client: &ApiClient,
 ) -> Result<CurrentUsageLimitResponse, ApiError> {
     client.platform_request_full(CurrentUsageLimit).await
+}
+
+pub async fn get_storage_grant(
+    client: &ApiClient,
+    storage_hostname: &str,
+) -> Result<GetStorageGrantResponse, ApiError> {
+    let get_storage_grant = GetStorageGrant::new(storage_hostname.to_string());
+    client.platform_request_full(get_storage_grant).await
 }
 
 // note(sstelfox): We don't handle API keys well right now. I think this workflow is a

@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use reqwest::Method;
 use serde::{Deserialize, Serialize};
 
 use crate::api::client::{ApiRequest, PlatformApiRequest};
@@ -32,8 +31,6 @@ impl CurrentUsageLimitResponse {
 #[async_trait]
 impl ApiRequest for CurrentUsageLimit {
     type Response = CurrentUsageLimitResponse;
-
-    const METHOD: Method = Method::GET;
 
     fn path(&self) -> String {
         "/api/v1/buckets/usage_limit".to_string()
