@@ -9,6 +9,7 @@ use crate::codec::crypto::SigningKey;
 #[derive(Default)]
 pub(crate) struct StorageHost {
     pending_storage_grant: Option<String>,
+    storage_exceeded: bool,
     token: Option<ExpiringToken>,
 }
 
@@ -61,6 +62,11 @@ impl StorageHost {
     }
 
     pub(crate) fn record_storage_grant(&mut self, grant_token: &str) {
-        self.pending_storage_grant = Some(grant_token.to_string())
+        self.pending_storage_grant = Some(grant_token.to_string());
+        self.storage_exceeded = false;
+    }
+
+    pub(crate) fn storage_exceeded(&mut self) {
+        self.storage_exceeded = true;
     }
 }

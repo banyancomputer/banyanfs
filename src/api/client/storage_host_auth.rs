@@ -51,6 +51,15 @@ impl StorageHostAuth {
         host.get_token(account_id, key)
     }
 
+    pub(crate) async fn notify_storage_exceeded(&mut self, storage_host_url: &Url) {
+        let host = self
+            .storage_hosts
+            .entry(storage_host_url.clone())
+            .or_default();
+
+        host.storage_exceeded();
+    }
+
     pub(crate) async fn record_storage_grant(&mut self, storage_host_url: &Url, auth_token: &str) {
         let host = self
             .storage_hosts

@@ -36,6 +36,13 @@ impl ApiAuth {
         storage_hosts.get_storage_grant(storage_host_url)
     }
 
+    pub(crate) async fn notify_storage_exceeded(&self, storage_host_url: &Url) {
+        let mut storage_hosts = self.storage_hosts.write().await;
+        storage_hosts
+            .notify_storage_exceeded(storage_host_url)
+            .await;
+    }
+
     pub(crate) async fn record_storage_grant(&self, storage_host_url: &Url, auth_token: &str) {
         let mut storage_hosts = self.storage_hosts.write().await;
         storage_hosts

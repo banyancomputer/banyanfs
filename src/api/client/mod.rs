@@ -23,7 +23,7 @@ use std::sync::Arc;
 
 use async_std::sync::RwLock;
 use jwt_simple::prelude::*;
-use reqwest::{Client, Url};
+use reqwest::{Client, StatusCode, Url};
 use serde::Deserialize;
 use time::OffsetDateTime;
 use tracing::debug;
@@ -103,6 +103,25 @@ impl ApiClient {
         if status.is_success() {
             FromReqwestResponse::from_response(response).await
         } else {
+            // Insufficient storage is a special case in our authentication workflow and the client
+            // needs to handle it differently. If we're not talking to our configured base_url
+            // we're likely talking to a storage host, so we'll track the base host as needing a
+            // fresh storage grant.
+            if status == StatusCode::INSUFFICIENT_STORAGE {
+                if base_url != &self.base_url {
+                    if let Some(auth) = &self.auth {
+                        auth.notify_storage_exceeded(base_url).await;
+                    } else {
+                        // This really shouldn't happen as we don't really us unauthenticated
+                        // requests but the client is going to be open to more external use so a
+                        // few extra warnings might go along way.
+                        tracing::warn!(%base_url, "received insufficient storage with unauthenticated client");
+                    }
+                }
+
+                return Err(ApiError::InsufficientStorage);
+            }
+
             let resp_bytes = response.bytes().await?;
 
             match serde_json::from_slice::<RawApiError>(&resp_bytes) {
@@ -312,10 +331,6 @@ impl PlatformToken {
 
         Ok(token)
     }
-
-    pub(crate) fn new() -> Self {
-        Self(Arc::new(RwLock::new(None)))
-    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -328,6 +343,9 @@ pub enum PlatformTokenError {
 pub enum ApiError {
     #[error("network client experienced issue: {0}")]
     ClientError(#[from] reqwest::Error),
+
+    #[error("the user does not have sufficient authorized capacity to accept the request")]
+    InsufficientStorage,
 
     #[error("the data provided to the API client wasn't valid: {0}")]
     InvalidData(String),
