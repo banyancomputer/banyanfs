@@ -1,72 +1,53 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use reqwest::Url;
 
-use crate::api::client::StorageHost;
+use crate::api::client::ExpiringToken;
 use crate::codec::crypto::SigningKey;
 
 #[derive(Default)]
 pub(crate) struct StorageHostAuth {
-    active_storage_host: Option<Url>,
-    storage_hosts: HashMap<Url, StorageHost>,
+    active_tokens: HashMap<Url, ExpiringToken>,
+    authenticated_storage_hosts: HashSet<Url>,
+    _pending_grants: HashMap<Url, String>,
 }
 
 impl StorageHostAuth {
-    pub(crate) fn active_storage_host(&self) -> Option<Url> {
-        // todo(sstelfox): could fallback by randomly selecting from the known storage hosts
-        self.active_storage_host.clone()
-    }
-
-    pub(crate) fn clear_storage_grant(&mut self, storage_host_url: &Url) {
-        if let Some(shu) = self.storage_hosts.get_mut(storage_host_url) {
-            shu.clear_storage_grant();
-        }
-    }
-
-    pub(crate) fn get_storage_grant(&mut self, storage_host_url: &Url) -> Option<String> {
-        let host = self
-            .storage_hosts
-            .entry(storage_host_url.clone())
-            .or_default();
-
-        host.get_storage_grant()
-    }
-
-    pub(crate) fn set_active_storage_host(&mut self, storage_host_url: Url) {
-        self.active_storage_host = Some(storage_host_url);
-    }
-
     pub(crate) fn get_token(
         &mut self,
-        storage_host_url: &Url,
-        account_id: &str,
-        key: &Arc<SigningKey>,
+        _storage_host_url: &Url,
+        _account_id: &str,
+        _key: &Arc<SigningKey>,
     ) -> Result<String, StorageTokenError> {
-        let host = self
-            .storage_hosts
-            .entry(storage_host_url.clone())
-            .or_default();
+        // Check if we have any pending grants for the storage host
+        // - If so attempt to register it with the storage host and clear it locally
+        // - If it succeeds mark the host as authenticated
 
-        host.get_token(account_id, key)
+        // If this storage host is listed as authenticated
+        // - Check if we have an active token, if so return it
+        // - If not generate a new one, register it in the cache, and return it
+
+        // Perform a who_am_i request against it
+        // - On success add it to the authenticated storage hosts set, generate,
+        //   cache, and return a token
+        // - On failure or the available capacity is too low, request an updated
+        //   grant from the platform and register it with the storage host
+
+        // Last resort is to _assume_ we're authenticated, generate, and cache a token anyway. A
+        // not authorized error will be handled by the client by clearing the host from the list of
+        // authenticated hosts.
+        todo!()
     }
 
-    pub(crate) async fn notify_storage_exceeded(&mut self, storage_host_url: &Url) {
-        let host = self
-            .storage_hosts
-            .entry(storage_host_url.clone())
-            .or_default();
-
-        host.storage_exceeded();
+    // todo(sstelfox): need to call from the storage host client requests
+    pub(crate) fn not_authenticated(&mut self, storage_host_url: &Url) {
+        self.active_tokens.remove(storage_host_url);
+        self.authenticated_storage_hosts.remove(storage_host_url);
     }
 
-    pub(crate) async fn record_storage_grant(&mut self, storage_host_url: &Url, auth_token: &str) {
-        let host = self
-            .storage_hosts
-            .entry(storage_host_url.clone())
-            .or_default();
-
-        host.record_storage_grant(auth_token);
+    pub(crate) async fn record_storage_grant(&mut self, _storage_host_url: Url, _auth_token: &str) {
+        todo!()
     }
 }
 

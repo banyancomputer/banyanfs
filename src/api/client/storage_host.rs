@@ -6,22 +6,7 @@ use time::OffsetDateTime;
 use crate::api::client::{ExpiringToken, StorageTokenError, STORAGE_HOST_AUDIENCE};
 use crate::codec::crypto::SigningKey;
 
-#[derive(Default)]
-pub(crate) struct StorageHost {
-    pending_storage_grant: Option<String>,
-    storage_exceeded: bool,
-    token: Option<ExpiringToken>,
-}
-
 impl StorageHost {
-    pub(crate) fn clear_storage_grant(&mut self) {
-        self.pending_storage_grant.take();
-    }
-
-    pub(crate) fn get_storage_grant(&self) -> Option<String> {
-        self.pending_storage_grant.clone()
-    }
-
     pub(crate) fn get_token(
         &mut self,
         account_id: &str,

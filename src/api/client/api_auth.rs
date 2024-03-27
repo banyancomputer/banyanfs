@@ -15,35 +15,13 @@ pub(crate) struct ApiAuth {
 }
 
 impl ApiAuth {
-    pub(crate) async fn active_storage_host(&self) -> Option<Url> {
-        let storage_hosts = self.storage_hosts.read().await;
-        storage_hosts.active_storage_host()
-    }
-
     pub(crate) async fn platform_token(&self) -> Result<String, PlatformTokenError> {
         self.platform_token
             .get_token(&self.account_id, &self.key)
             .await
     }
 
-    pub(crate) async fn clear_storage_grant(&self, storage_host_url: &Url) {
-        let mut storage_hosts = self.storage_hosts.write().await;
-        storage_hosts.clear_storage_grant(storage_host_url);
-    }
-
-    pub(crate) async fn get_storage_grant(&self, storage_host_url: &Url) -> Option<String> {
-        let mut storage_hosts = self.storage_hosts.write().await;
-        storage_hosts.get_storage_grant(storage_host_url)
-    }
-
-    pub(crate) async fn notify_storage_exceeded(&self, storage_host_url: &Url) {
-        let mut storage_hosts = self.storage_hosts.write().await;
-        storage_hosts
-            .notify_storage_exceeded(storage_host_url)
-            .await;
-    }
-
-    pub(crate) async fn record_storage_grant(&self, storage_host_url: &Url, auth_token: &str) {
+    pub(crate) async fn record_storage_grant(&self, storage_host_url: Url, auth_token: &str) {
         let mut storage_hosts = self.storage_hosts.write().await;
         storage_hosts
             .record_storage_grant(storage_host_url, auth_token)
@@ -66,11 +44,6 @@ impl ApiAuth {
 
     pub(crate) fn signing_key(&self) -> Arc<SigningKey> {
         self.key.clone()
-    }
-
-    pub(crate) async fn set_active_storage_host(&self, host_url: Url) {
-        let mut storage_hosts = self.storage_hosts.write().await;
-        storage_hosts.set_active_storage_host(host_url);
     }
 
     pub(crate) async fn storage_host_token(

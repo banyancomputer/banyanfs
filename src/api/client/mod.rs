@@ -2,7 +2,6 @@ mod api_auth;
 mod direct_response;
 mod error;
 mod expiring_token;
-mod storage_host;
 mod storage_host_auth;
 mod traits;
 
@@ -13,7 +12,6 @@ pub(crate) mod utils;
 pub(crate) use api_auth::ApiAuth;
 pub(crate) use direct_response::DirectResponse;
 pub(crate) use expiring_token::ExpiringToken;
-pub(crate) use storage_host::StorageHost;
 pub(crate) use storage_host_auth::{StorageHostAuth, StorageTokenError};
 pub(crate) use traits::{
     ApiRequest, FromReqwestResponse, PlatformApiRequest, StorageHostApiRequest,
@@ -23,7 +21,7 @@ use std::sync::Arc;
 
 use async_std::sync::RwLock;
 use jwt_simple::prelude::*;
-use reqwest::{Client, StatusCode, Url};
+use reqwest::{Client, Url};
 use serde::Deserialize;
 use time::OffsetDateTime;
 use tracing::debug;
@@ -37,30 +35,19 @@ pub(crate) const STORAGE_HOST_AUDIENCE: &str = "banyan-storage";
 
 #[derive(Clone)]
 pub struct ApiClient {
-    auth: Option<ApiAuth>,
+    auth: ApiAuth,
     base_url: Url,
     client: Client,
 }
 
 impl ApiClient {
-    pub fn anonymous(base_url: &str) -> Result<Self, ApiClientError> {
-        let client = default_reqwest_client()?;
-        let base_url = Url::parse(base_url)?;
-
-        Ok(Self {
-            auth: None,
-            base_url,
-            client,
-        })
-    }
-
-    pub fn authenticated(
+    pub fn new(
         base_url: &str,
         account_id: &str,
         key: Arc<SigningKey>,
     ) -> Result<Self, ApiClientError> {
         let base_url = Url::parse(base_url)?;
-        let auth = Some(ApiAuth::new(account_id, key));
+        let auth = ApiAuth::new(account_id, key);
         let client = default_reqwest_client()?;
 
         Ok(Self {
@@ -77,7 +64,7 @@ impl ApiClient {
     pub(crate) async fn request<R: ApiRequest>(
         &self,
         base_url: &Url,
-        bearer_token: Option<String>,
+        bearer_token: &str,
         mut request: R,
     ) -> Result<Option<R::Response>, ApiError> {
         debug!(method = %R::METHOD, %base_url, url = %request.path(), "request");
@@ -85,14 +72,7 @@ impl ApiClient {
         let full_url = base_url.join(&request.path())?;
         let mut request_builder = self.client.request(R::METHOD, full_url);
 
-        if R::REQUIRES_AUTH && bearer_token.is_none() {
-            return Err(ApiError::RequiresAuth);
-        }
-
-        if let Some(tok) = bearer_token {
-            request_builder = request_builder.bearer_auth(tok);
-        }
-
+        request_builder = request_builder.bearer_auth(bearer_token);
         request_builder = request.add_payload(request_builder).await?;
 
         let response = request_builder.send().await?;
@@ -103,25 +83,6 @@ impl ApiClient {
         if status.is_success() {
             FromReqwestResponse::from_response(response).await
         } else {
-            // Insufficient storage is a special case in our authentication workflow and the client
-            // needs to handle it differently. If we're not talking to our configured base_url
-            // we're likely talking to a storage host, so we'll track the base host as needing a
-            // fresh storage grant.
-            if status == StatusCode::INSUFFICIENT_STORAGE {
-                if base_url != &self.base_url {
-                    if let Some(auth) = &self.auth {
-                        auth.notify_storage_exceeded(base_url).await;
-                    } else {
-                        // This really shouldn't happen as we don't really us unauthenticated
-                        // requests but the client is going to be open to more external use so a
-                        // few extra warnings might go along way.
-                        tracing::warn!(%base_url, "received insufficient storage with unauthenticated client");
-                    }
-                }
-
-                return Err(ApiError::InsufficientStorage);
-            }
-
             let resp_bytes = response.bytes().await?;
 
             match serde_json::from_slice::<RawApiError>(&resp_bytes) {
@@ -146,12 +107,8 @@ impl ApiClient {
         request: R,
     ) -> Result<Option<R::Response>, ApiError> {
         // Send authentication if its available even if the request is not marked as requiring it
-        let token = match &self.auth {
-            Some(auth) => Some(auth.platform_token().await?),
-            None => None,
-        };
-
-        self.request(&self.base_url, token, request).await
+        let token = self.auth.platform_token().await?;
+        self.request(&self.base_url, &token, request).await
     }
 
     pub(crate) async fn platform_request_empty_response<R>(
@@ -180,46 +137,16 @@ impl ApiClient {
         }
     }
 
-    pub(crate) async fn record_storage_grant(&self, storage_host_url: &Url, auth_token: &str) {
-        tracing::info!(?storage_host_url, "registered storage grant");
+    pub(crate) async fn record_storage_grant(&self, storage_host_url: Url, auth_token: &str) {
+        tracing::debug!(?storage_host_url, "registered storage grant");
 
-        let auth = match &self.auth {
-            Some(auth) => auth,
-            None => {
-                tracing::warn!(
-                    "registering storage grants without authentication doesn't have any effect"
-                );
-                return;
-            }
-        };
-
-        auth.record_storage_grant(storage_host_url, auth_token)
+        self.auth
+            .record_storage_grant(storage_host_url, auth_token)
             .await;
     }
 
-    pub(crate) async fn active_storage_host(&self) -> Option<Url> {
-        match &self.auth {
-            Some(auth) => auth.active_storage_host().await,
-            None => None,
-        }
-    }
-
-    pub(crate) async fn set_active_storage_host(&self, storage_host_url: Url) {
-        let auth = match &self.auth {
-            Some(auth) => auth,
-            None => {
-                tracing::warn!(
-                    "setting active storage host without authentication doesn't have any effect"
-                );
-                return;
-            }
-        };
-
-        auth.set_active_storage_host(storage_host_url).await;
-    }
-
-    pub(crate) fn signing_key(&self) -> Option<Arc<SigningKey>> {
-        self.auth.as_ref().map(|a| a.signing_key())
+    pub(crate) fn signing_key(&self) -> Arc<SigningKey> {
+        self.auth.signing_key()
     }
 
     pub(crate) async fn storage_host_request<R: StorageHostApiRequest>(
@@ -227,26 +154,12 @@ impl ApiClient {
         storage_host_url: &Url,
         request: R,
     ) -> Result<Option<R::Response>, ApiError> {
-        // Send authentication if its available even if the request is not marked as requiring it
-        let token = match &self.auth {
-            Some(auth) => {
-                if let Some(grant) = auth.get_storage_grant(storage_host_url).await {
-                    crate::api::storage_host::auth::register_grant(self, storage_host_url, &grant)
-                        .await?;
-                    auth.clear_storage_grant(storage_host_url).await;
-                }
+        let token = self.auth.storage_host_token(storage_host_url).await?;
 
-                // todo(sstelfox): there is another side to the auth sequence I haven't done yet,
-                // if the storage host doesn't know about this client we need to request a fresh
-                // storage grant from the platform before continuing. This whole process is
-                // probably worth extracting from this location...
+        // todo(sstelfox): add a check on the returned result, if its not authorized we should clear it from
+        // the storage auth's authenticated host list
 
-                Some(auth.storage_host_token(storage_host_url).await?)
-            }
-            None => None,
-        };
-
-        self.request(storage_host_url, token, request).await
+        self.request(storage_host_url, &token, request).await
     }
 
     pub(crate) async fn storage_host_request_empty_response<R>(

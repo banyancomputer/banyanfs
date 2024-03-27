@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use url::Url;
 
 use crate::codec::Cid;
 
@@ -20,6 +21,8 @@ pub trait DataStore {
 
 #[async_trait(?Send)]
 pub trait SyncableDataStore: DataStore + SyncTracker {
+    async fn set_sync_host(&mut self, host: Url) -> Result<(), DataStoreError>;
+
     async fn store_sync(&mut self, cid: Cid, data: Vec<u8>) -> Result<(), DataStoreError> {
         self.store(cid, data, true).await
     }

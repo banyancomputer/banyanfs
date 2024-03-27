@@ -11,6 +11,8 @@ pub struct ApiSyncableStoreInner<MS: DataStore, ST: SyncTracker> {
     cached_store: MS,
     sync_tracker: ST,
 
+    sync_host: Option<Url>,
+
     // todo(sstelfox): need to expire this information
     cid_map: HashMap<Cid, Vec<Url>>,
 }
@@ -52,6 +54,7 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
         Self {
             cached_store,
             sync_tracker,
+            sync_host: None,
             cid_map: HashMap::new(),
         }
     }
@@ -150,6 +153,11 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
         Err(DataStoreError::RetrievalFailure)
     }
 
+    pub(crate) async fn set_sync_host(&mut self, host: Url) -> Result<(), DataStoreError> {
+        self.sync_host = Some(host);
+        Ok(())
+    }
+
     pub(crate) async fn store(
         &mut self,
         _client: &ApiClient,
@@ -186,9 +194,9 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
             return Ok(());
         }
 
-        let storage_host_url = client
-            .active_storage_host()
-            .await
+        let storage_host_url = self
+            .sync_host
+            .clone()
             .ok_or(DataStoreError::NoActiveStorageHost)?;
 
         let session_data_size = self.sync_tracker.tracked_size().await?;

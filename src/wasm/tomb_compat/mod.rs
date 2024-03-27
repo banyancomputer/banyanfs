@@ -265,7 +265,7 @@ impl TombCompat {
         private_key_pem.zeroize();
         debug!(account_id, key_id = ?key.key_id(), "initialized new TombWasm instance");
 
-        let client = ApiClient::authenticated(&api_endpoint, &account_id, key.clone())
+        let client = ApiClient::new(&api_endpoint, &account_id, key.clone())
             .expect("need return type fixed");
 
         let store = initialize_store(client.clone());

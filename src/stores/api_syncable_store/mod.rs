@@ -3,6 +3,7 @@ mod inner;
 use inner::ApiSyncableStoreInner;
 
 use std::sync::Arc;
+use url::Url;
 
 use async_std::sync::RwLock;
 use async_trait::async_trait;
@@ -116,6 +117,10 @@ impl<MS: DataStore, ST: SyncTracker> SyncTracker for ApiSyncableStore<MS, ST> {
 
 #[async_trait(?Send)]
 impl<MS: DataStore, ST: SyncTracker> SyncableDataStore for ApiSyncableStore<MS, ST> {
+    async fn set_sync_host(&mut self, host: Url) -> Result<(), DataStoreError> {
+        self.inner.write().await.set_sync_host(host).await
+    }
+
     async fn sync(&mut self, metadata_id: &str) -> Result<(), DataStoreError> {
         self.inner
             .write()

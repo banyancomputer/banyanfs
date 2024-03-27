@@ -53,8 +53,6 @@ pub(crate) struct InnerLocateResponse(HashMap<String, Vec<String>>);
 pub struct LocateResponse {
     cid_locations: HashMap<Cid, Vec<usize>>,
     known_missing_blocks: HashSet<Cid>,
-
-    seen_hosts: HashSet<Url>,
     storage_hosts: Vec<Url>,
 }
 
@@ -134,7 +132,6 @@ impl TryFrom<InnerLocateResponse> for LocateResponse {
         let resp = Self {
             cid_locations,
             known_missing_blocks,
-            seen_hosts,
             storage_hosts,
         };
 

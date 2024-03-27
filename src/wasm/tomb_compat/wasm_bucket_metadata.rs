@@ -8,7 +8,7 @@ pub struct WasmBucketMetadata(ApiDriveId, ApiMetadata);
 
 impl WasmBucketMetadata {
     pub(crate) fn new(bucket_id: String, metadata: ApiMetadata) -> Self {
-        WasmBucketMetadata(bucket_id.into(), metadata)
+        WasmBucketMetadata(bucket_id, metadata)
     }
 
     pub(crate) fn api_metadata(&self) -> &ApiMetadata {

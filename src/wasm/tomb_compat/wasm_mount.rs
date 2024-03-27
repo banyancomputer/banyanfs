@@ -148,15 +148,16 @@ impl WasmMount {
         tracing::info!(metadata_id = ?new_metadata_id, state = push_response.state(), "metadata recorded");
 
         if let Some(host) = push_response.storage_host() {
-            self.wasm_client
-                .client()
-                .set_active_storage_host(host.clone())
-                .await;
+            if let Err(err) = self.store.set_sync_host(host.clone()).await {
+                // In practice this should never happen, the trait defines an error type for
+                // flexibility in the future but no implementations currently produce an error.
+                tracing::warn!("failed to set sync host: {err}");
+            }
 
             if let Some(grant) = push_response.storage_authorization() {
                 self.wasm_client
                     .client()
-                    .record_storage_grant(&host, grant)
+                    .record_storage_grant(host, grant)
                     .await;
             }
         }
@@ -531,7 +532,7 @@ impl WasmMount {
 }
 
 async fn try_load_drive(client: &ApiClient, drive_id: &str, metadata_id: &str) -> Option<Drive> {
-    let key = client.signing_key()?;
+    let key = client.signing_key();
 
     // todo(sstelfox): we should return something other than a 404 when we've seen at least once
     // metadata for a drive (if we've seen zero its safe to create a new drive, its not otherwise).
