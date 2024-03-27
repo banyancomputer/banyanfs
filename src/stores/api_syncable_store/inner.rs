@@ -121,7 +121,7 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
 
         use crate::api::client::utils::consume_stream_into_bytes;
 
-        for host in block_hosts.iter() {
+        for host in block_hosts.iter().take(3) {
             let cid_str = cid.as_base64url_multicodec();
 
             let block = match storage_blocks::retrieve(client, host, &cid_str).await {
