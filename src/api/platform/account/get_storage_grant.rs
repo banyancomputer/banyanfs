@@ -1,15 +1,17 @@
 use async_trait::async_trait;
+use base64::{engine::general_purpose::URL_SAFE, Engine as _};
+use reqwest::Url;
 use serde::Deserialize;
 
 use crate::api::client::{ApiRequest, PlatformApiRequest};
 
 pub(crate) struct GetStorageGrant {
-    storage_domain: String,
+    base_url: Url,
 }
 
 impl GetStorageGrant {
-    pub(crate) fn new(storage_domain: String) -> Self {
-        Self { storage_domain }
+    pub(crate) fn new(base_url: Url) -> Self {
+        Self { base_url }
     }
 }
 
@@ -18,7 +20,8 @@ impl ApiRequest for GetStorageGrant {
     type Response = GetStorageGrantResponse;
 
     fn path(&self) -> String {
-        format!("/api/v1/auth/storage_grant/{}", self.storage_domain)
+        let encoded_base_url = URL_SAFE.encode(self.base_url.as_str());
+        format!("/api/v1/users/storage_grant/{}", encoded_base_url)
     }
 }
 

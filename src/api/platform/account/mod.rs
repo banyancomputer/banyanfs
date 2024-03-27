@@ -8,6 +8,8 @@ use current_usage_limit::{CurrentUsageLimit, CurrentUsageLimitResponse};
 use get_storage_grant::{GetStorageGrant, GetStorageGrantResponse};
 use register_api_key::RegisterApiKey;
 
+use url::Url;
+
 use crate::api::client::{ApiClient, ApiError};
 use crate::api::platform::ApiDriveKeyId;
 use crate::codec::crypto::VerifyingKey;
@@ -24,9 +26,9 @@ pub async fn current_usage_limit(
 
 pub async fn get_storage_grant(
     client: &ApiClient,
-    storage_hostname: &str,
+    storage_base_url: Url,
 ) -> Result<GetStorageGrantResponse, ApiError> {
-    let get_storage_grant = GetStorageGrant::new(storage_hostname.to_string());
+    let get_storage_grant = GetStorageGrant::new(storage_base_url);
     client.platform_request_full(get_storage_grant).await
 }
 
