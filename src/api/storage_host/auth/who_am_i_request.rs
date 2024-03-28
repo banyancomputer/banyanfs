@@ -10,7 +10,7 @@ impl ApiRequest for WhoAmIRequest {
     type Response = WhoAmIResponse;
 
     fn path(&self) -> String {
-        "/api/v1/who_am_i".to_string()
+        "/api/v1/auth/who_am_i".to_string()
     }
 }
 
@@ -19,8 +19,8 @@ impl StorageHostApiRequest for WhoAmIRequest {}
 #[derive(Debug, Deserialize)]
 pub struct WhoAmIResponse {
     consumed_storage: u64,
-    fingerprint: String,
     platform_id: String,
+    remaining_storage: u64,
 }
 
 impl WhoAmIResponse {
@@ -28,11 +28,11 @@ impl WhoAmIResponse {
         self.consumed_storage
     }
 
-    pub fn fingerprint(&self) -> &str {
-        &self.fingerprint
-    }
-
     pub fn platform_id(&self) -> &str {
         &self.platform_id
+    }
+
+    pub fn remaining_storage(&self) -> u64 {
+        self.remaining_storage
     }
 }
