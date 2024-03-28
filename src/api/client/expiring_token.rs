@@ -18,7 +18,11 @@ impl ExpiringToken {
         Self { token, expiration }
     }
 
-    pub(crate) fn value(&self) -> String {
-        self.token.clone()
+    pub(crate) fn value(&self) -> Option<String> {
+        if self.is_expired() {
+            return None;
+        }
+
+        Some(self.token.clone())
     }
 }

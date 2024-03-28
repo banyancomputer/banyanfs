@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use async_std::sync::RwLock;
 use jwt_simple::prelude::*;
-use reqwest::{Client, Url};
+use reqwest::{Client, StatusCode, Url};
 use serde::Deserialize;
 use time::OffsetDateTime;
 use tracing::debug;
@@ -84,6 +84,10 @@ impl ApiClient {
             FromReqwestResponse::from_response(response).await
         } else {
             let resp_bytes = response.bytes().await?;
+
+            if status == StatusCode::UNAUTHORIZED {
+                return Err(ApiError::NotAuthorized);
+            }
 
             match serde_json::from_slice::<RawApiError>(&resp_bytes) {
                 Ok(raw_error) => Err(ApiError::Message {
@@ -154,12 +158,19 @@ impl ApiClient {
         storage_host_url: &Url,
         request: R,
     ) -> Result<Option<R::Response>, ApiError> {
-        let token = self.auth.storage_host_token(storage_host_url).await?;
+        let token = self.auth.storage_host_token(self, storage_host_url).await?;
 
         // todo(sstelfox): add a check on the returned result, if its not authorized we should clear it from
         // the storage auth's authenticated host list
 
-        self.request(storage_host_url, &token, request).await
+        match self.request(storage_host_url, &token, request).await {
+            Ok(resp) => Ok(resp),
+            Err(ApiError::NotAuthorized) => {
+                self.auth.clear_storage_host_auth(storage_host_url).await;
+                Err(ApiError::NotAuthorized)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     pub(crate) async fn storage_host_request_empty_response<R>(
@@ -208,9 +219,9 @@ impl PlatformToken {
         key: &Arc<SigningKey>,
     ) -> Result<String, PlatformTokenError> {
         // If we already have token and it's not expired, return it
-        if let Some(token) = &*self.0.read().await {
-            if !token.is_expired() {
-                return Ok(token.value());
+        if let Some(expiring_token) = &*self.0.read().await {
+            if let Some(token) = expiring_token.value() {
+                return Ok(token);
             }
         }
 
@@ -272,14 +283,14 @@ pub enum ApiError {
     #[error("response from API did not match our expectations: {0}")]
     MismatchedData(String),
 
+    #[error("the client was not authorized to make the request")]
+    NotAuthorized,
+
     #[error("failed to generate token for platform platform: {0}")]
     PlatformTokenError(#[from] PlatformTokenError),
 
     #[error("unable to reuse streaming requests")]
     RequestReused,
-
-    #[error("API request requires authentication but client is not authenticated")]
-    RequiresAuth,
 
     #[error("failed to during json (de)serialization: {0}")]
     Serde(#[from] serde_json::Error),
