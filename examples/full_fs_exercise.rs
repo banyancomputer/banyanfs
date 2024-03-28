@@ -1,9 +1,13 @@
-use tokio_util::compat::TokioAsyncReadCompatExt;
+#[cfg(target_arch = "wasm32")]
+fn main() {}
 
-use banyanfs::prelude::*;
-
+#[cfg(not(target_arch = "wasm32"))]
 #[tokio::main]
 async fn main() {
+    use tokio_util::compat::TokioAsyncReadCompatExt;
+
+    use banyanfs::prelude::*;
+
     println!("running banyanfs {}", full_version());
 
     let mut rng = banyanfs::utils::crypto_rng();
