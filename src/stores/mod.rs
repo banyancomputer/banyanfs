@@ -1,3 +1,10 @@
+//! # Stores
+//!
+//! BanyanFS on its own delegates the storing of the blocks representing file data to
+//! implementations of the [`DataStore`] trait. This allows for a wide variety of storage
+//! options from the official [Banyan Platform](https://banyan.computer), to local disk storage, or
+//! a custom block storage system.
+
 mod api_syncable_store;
 mod memory_data_store;
 mod memory_sync_tracker;

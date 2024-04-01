@@ -1,7 +1,5 @@
 #![warn(missing_docs)]
-
-// Note: wasm-pack test does not run any unit tests that are pub reachable from the root module, I
-// think this includes the test module itself
+#![doc = include_str!("../README.md")]
 
 #[cfg(feature = "banyan-api")]
 pub mod api;
@@ -19,6 +17,11 @@ pub mod wasm;
 // Re-export some of our dependencies for QoL, might want to expand this
 pub use async_trait;
 
+/// Prelude for the banyanfs library exporting the most commonly used types and traits.
+///
+/// ```rust
+/// use banyanfs::prelude::*;
+/// ```
 pub mod prelude {
     #[cfg(feature = "banyan-api")]
     pub use crate::api::*;
