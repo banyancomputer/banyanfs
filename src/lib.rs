@@ -1,3 +1,5 @@
+#![warn(missing_docs)]
+
 // Note: wasm-pack test does not run any unit tests that are pub reachable from the root module, I
 // think this includes the test module itself
 
