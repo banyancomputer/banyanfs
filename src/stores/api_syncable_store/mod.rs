@@ -12,12 +12,20 @@ use crate::api::ApiClient;
 use crate::codec::Cid;
 use crate::stores::{DataStore, DataStoreError, SyncTracker, SyncableDataStore};
 
+/// A wraper around other [`DataStore`] implementations that provides a periodic syncable and
+/// retryable interfaces over the Banyan storage platform.
 pub struct ApiSyncableStore<MS: DataStore, ST: SyncTracker> {
     client: ApiClient,
     inner: Arc<RwLock<ApiSyncableStoreInner<MS, ST>>>,
 }
 
 impl<MS: DataStore, ST: SyncTracker> ApiSyncableStore<MS, ST> {
+    /// Create a new instance of the [`ApiSyncableStore`] with the provided [`ApiClient`]. The
+    /// provided store will be used exclusively as the intermediate cache, only sending the stored
+    /// data to the configured remotes upon a sync operation.
+    ///
+    /// This is tied heaivly into the ApiClient and how Banyan's platforms are designed and will be
+    /// more decoupled in the future.
     pub fn new(client: ApiClient, cached_store: MS, sync_tracker: ST) -> Self {
         let inner = ApiSyncableStoreInner::new(cached_store, sync_tracker);
 
