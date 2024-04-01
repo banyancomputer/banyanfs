@@ -89,18 +89,32 @@ pub trait SyncableDataStore: DataStore + SyncTracker {
 /// it is heavily impacting the design of anyone implementing the SyncableDataStore.
 #[async_trait(?Send)]
 pub trait SyncTracker {
+    /// Clears the list of all blocks that have been indicated they've been deleted. Intended use
+    /// is for immediately after notifying a remote system that a set of blocks are no longer
+    /// needed.
     async fn clear_deleted(&mut self) -> Result<(), DataStoreError>;
 
+    /// Indicate the provide CID is no longer needed and can be removed from the store but does not
+    /// sync this information on its own.
     async fn delete(&mut self, cid: Cid) -> Result<(), DataStoreError>;
 
+    /// Returns he currently tracked list of CIDs that have been marked for deletion.
     async fn deleted_cids(&self) -> Result<Vec<Cid>, DataStoreError>;
 
+    /// Track a provided CID indicating that it still needs to be synced/persisted. The reported
+    /// size is used for needed storage calculations and can be accessed through the
+    /// [`tracked_size`] method.
     async fn track(&mut self, cid: Cid, size: u64) -> Result<(), DataStoreError>;
 
+    /// Returns all the CIDs that haven't currently been persisted.
     async fn tracked_cids(&self) -> Result<Vec<Cid>, DataStoreError>;
 
+    /// Returns the total size of all the tracked CIDs that have been marked for storage. Useful
+    /// when selecting where the data will be persisted.
     async fn tracked_size(&self) -> Result<u64, DataStoreError>;
 
+    /// Allows marking individual CIDs as no longer needing to be tracked. Useful for stores to to
+    /// perform incremental block-based synchronization that keeps track of its ongoing state.
     async fn untrack(&mut self, cid: Cid) -> Result<(), DataStoreError>;
 }
 
