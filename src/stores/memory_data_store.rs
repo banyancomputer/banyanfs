@@ -25,7 +25,7 @@ impl DataStore for MemoryDataStore {
         self.data
             .get(&cid)
             .cloned()
-            .ok_or(DataStoreError::UnknownBlock(cid))
+            .ok_or(DataStoreError::LookupFailure)
     }
 
     async fn store(
