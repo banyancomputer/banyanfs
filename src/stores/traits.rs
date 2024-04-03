@@ -103,7 +103,7 @@ pub trait SyncTracker {
 
     /// Track a provided CID indicating that it still needs to be synced/persisted. The reported
     /// size is used for needed storage calculations and can be accessed through the
-    /// [`tracked_size`] method.
+    /// [`SyncTracker::tracked_size`] method.
     async fn track(&mut self, cid: Cid, size: u64) -> Result<(), DataStoreError>;
 
     /// Returns all the CIDs that haven't currently been persisted.

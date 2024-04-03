@@ -1,3 +1,5 @@
+//! Common error modules for the BanyanFS library
+
 use std::fmt::{self, Display, Formatter};
 
 /// A common catch all minimal error type for the BanyanFS library. A more specific concrete set of

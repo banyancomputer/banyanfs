@@ -7,7 +7,7 @@ use crate::stores::traits::{DataStore, DataStoreError};
 
 /// Simple minimal implementation of the [`DataStore`] trait. Simply stores all the provided blocks
 /// in memory addressed by their CID. Currently used in our placeholder WASM implmentation before
-/// blocks are synced to remote hosts (It's being combined with our [`ApiSyncableStore`]).
+/// blocks are synced to remote hosts (It's being combined with our [`crate::stores::ApiSyncableStore`]).
 #[derive(Default)]
 pub struct MemoryDataStore {
     data: HashMap<Cid, Vec<u8>>,
