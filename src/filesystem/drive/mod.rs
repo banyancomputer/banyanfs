@@ -37,6 +37,11 @@ use crate::filesystem::nodes::{Node, NodeBuilderError};
 /// filesystem produce via [`Drive::encode`]. File data itself is not stored in the drive, but uses
 /// the provided [`crate::stores::DataStore`] to store the data blocks.
 ///
+/// Most of the operations on the drive itself are done through [`DirectoryHandle`] instances and
+/// [`DirectoryEntry`] instances, which are used to navigate the filesystem and access the both
+/// file and associated data directly. The [`Drive::root`] method allows grabbing a handle on the
+/// root directory of the filesystem to begin performing operations on them.
+///
 /// # Examples
 ///
 /// ```rust

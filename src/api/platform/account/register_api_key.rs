@@ -25,7 +25,7 @@ impl RegisterApiKey {
     }
 
     pub fn new(public_key: &VerifyingKey) -> Self {
-        let fingerprint = public_key.fingerprint().to_hex();
+        let fingerprint = public_key.fingerprint().as_hex();
         let public_key = public_key.to_spki().expect("valid key to be encodable");
 
         Self {
