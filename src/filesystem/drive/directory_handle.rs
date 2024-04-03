@@ -32,7 +32,9 @@ pub struct DirectoryHandle {
 }
 
 impl DirectoryHandle {
-    /// Allows traversing the filesystem both up and down.
+    /// Allows traversing the filesystem both up and down. Does not allow invalid character in any
+    /// of the path elements (primarily "/"). Will report an error if you attempt to traverse above
+    /// the root of the filesystem or into/through an invalid node type.
     #[instrument(level = Level::DEBUG, skip(self))]
     pub async fn cd(&self, path: &[&str]) -> Result<DirectoryHandle, OperationError> {
         trace!(cwd_id = self.cwd_id, "directory::cd");
@@ -55,6 +57,8 @@ impl DirectoryHandle {
         Ok(directory)
     }
 
+    /// Changes the permission on the target node. Currently not implemented and changes are
+    /// expected to combine the [`FilePermissions`] with the [`DirectoryPermissions`] all at once.
     pub async fn chmod(
         &self,
         _path: &[&str],
