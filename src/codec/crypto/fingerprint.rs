@@ -10,18 +10,18 @@ const FINGERPRINT_SIZE: usize = 32;
 pub struct Fingerprint([u8; FINGERPRINT_SIZE]);
 
 impl Fingerprint {
+    pub(crate) fn as_hex(self) -> String {
+        self.0
+            .iter()
+            .fold(String::new(), |acc, &b| format!("{acc}{:02x}", b))
+    }
+
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
     ) -> std::io::Result<usize> {
         writer.write_all(&self.0).await?;
         Ok(self.0.len())
-    }
-
-    pub(crate) fn to_hex(&self) -> String {
-        self.0
-            .iter()
-            .fold(String::new(), |acc, &b| format!("{acc}{:02x}", b))
     }
 
     pub fn key_id(&self) -> KeyId {
@@ -46,7 +46,7 @@ impl Fingerprint {
 
 impl std::fmt::Debug for Fingerprint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{{0x{}}}", self.to_hex())
+        write!(f, "0x{}", self.as_hex())
     }
 }
 
@@ -80,7 +80,7 @@ pub mod tests {
 
         assert_eq!(
             fmt_str,
-            "{0x5555555555555555616161616161616155555555555555556161616161616161}"
+            "0x5555555555555555616161616161616155555555555555556161616161616161"
         );
     }
 

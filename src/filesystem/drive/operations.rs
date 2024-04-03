@@ -1,6 +1,6 @@
 use crate::codec::meta::PermanentId;
 use crate::codec::Cid;
-use crate::filesystem::nodes::{NodeBuilderError, NodeError, NodeId, NodeNameError};
+use crate::filesystem::nodes::{NodeBuilderError, NodeDataError, NodeId, NodeNameError};
 use crate::filesystem::FileContentError;
 use crate::stores::DataStoreError;
 
@@ -38,7 +38,7 @@ pub enum OperationError {
     MissingPermanentId(PermanentId),
 
     #[error("node operation failed: {0}")]
-    NodeFailure(#[from] NodeError),
+    NodeFailure(#[from] NodeDataError),
 
     #[error("the requested content hasn't been uploaded and recorded yet")]
     NotAvailable,

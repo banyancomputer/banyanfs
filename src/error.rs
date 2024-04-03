@@ -1,5 +1,10 @@
+//! Common error modules for the BanyanFS library
+
 use std::fmt::{self, Display, Formatter};
 
+/// A common catch all minimal error type for the BanyanFS library. A more specific concrete set of
+/// errors will be added in the future now that the primary interfaces and operations have been
+/// defined. The specific error text must be referred to identity what failure occurred.
 #[derive(Debug)]
 pub struct BanyanFsError(pub(crate) String);
 
@@ -28,4 +33,5 @@ impl From<serde_json::Error> for BanyanFsError {
     }
 }
 
+/// Convenience type for any fallible method that can produce a [`BanyanFsError`].
 pub type BanyanFsResult<T> = Result<T, BanyanFsError>;

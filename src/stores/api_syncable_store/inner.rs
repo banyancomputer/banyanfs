@@ -35,12 +35,12 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
             .await
             .map_err(|err| {
                 tracing::error!("failed to locate block: {err}");
-                DataStoreError::UnknownBlock(cid.clone())
+                DataStoreError::LookupFailure
             })?;
 
         if locations.is_missing(&cid) {
             tracing::error!("remote API doesn't know about the block: {cid:?}");
-            return Err(DataStoreError::UnknownBlock(cid.clone()));
+            return Err(DataStoreError::LookupFailure);
         }
 
         if let Some(locs) = locations.storage_hosts_with_cid(&cid) {
@@ -99,17 +99,17 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
                     .await
                     .map_err(|err| {
                         tracing::error!("failed to locate block: {err}");
-                        DataStoreError::UnknownBlock(cid.clone())
+                        DataStoreError::LookupFailure
                     })?;
 
                 if locations.is_missing(&cid) {
                     tracing::error!("remote API doesn't know about the block: {cid:?}");
-                    return Err(DataStoreError::UnknownBlock(cid.clone()));
+                    return Err(DataStoreError::LookupFailure);
                 }
 
                 let hosts = locations.storage_hosts_with_cid(&cid).ok_or_else(|| {
                     tracing::error!("no storage hosts known for block: {cid:?}");
-                    DataStoreError::UnknownBlock(cid.clone())
+                    DataStoreError::LookupFailure
                 })?;
 
                 self.cid_map.insert(cid.clone(), hosts.clone());

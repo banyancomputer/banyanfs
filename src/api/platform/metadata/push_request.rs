@@ -109,7 +109,7 @@ impl ApiRequest for PushRequest {
         let mut form = Form::new();
 
         let metadata_cid = root_cid.clone();
-        let valid_keys = self.valid_keys.iter().map(|f| f.to_hex()).collect();
+        let valid_keys = self.valid_keys.iter().map(|f| f.as_hex()).collect();
         let deleted_block_cids = self
             .deleted_block_cids
             .iter()

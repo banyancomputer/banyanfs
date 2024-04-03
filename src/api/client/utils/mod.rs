@@ -10,7 +10,8 @@ use crate::codec::crypto::VerifyingKey;
 
 const FINGERPRINT_SIZE: usize = 20;
 
-/// The API uses a truncated blake3 hash for key identification.
+/// The API uses a truncated blake3 hash for key identification. This provides a convenient method
+/// to generate matching one from a public key.
 ///
 /// todo(sstelfox): This needs to be reverted back to a standard size
 pub(crate) fn api_fingerprint_key(key: &VerifyingKey) -> String {

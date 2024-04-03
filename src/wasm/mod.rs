@@ -1,3 +1,11 @@
+//! This module contains a thin wrapper around the BanyanFS library to expose the functionality to
+//! browsers. The current content of this module is largely implemented in a way to drop into the
+//! BanyanFS platform with minimal changes relative to how the prior filesystem format was
+//! integrated and should all be considered deprecated.
+//!
+//! A more idiomatic and consistent API for browser clients is in the works but hasn't been
+//! released.
+
 use tracing::Level;
 use tracing_wasm::{ConsoleConfig, WASMLayerConfigBuilder};
 use wasm_bindgen::prelude::*;
@@ -25,6 +33,8 @@ use tracing::info;
 //   Fetch requests, the streaming bodies will need some JS fiddling. We can probably get streaming
 //   uploads working by switching off of it as well (that would be a JS API breaking change).
 
+/// Performs first time setup to the WASM environment once this library is loaded. This primarily
+/// sets up logging.
 #[wasm_bindgen(start)]
 pub fn wasm_init() -> Result<(), JsValue> {
     // Only run this in debug mode, in release mode this bloats up the library quite a bit

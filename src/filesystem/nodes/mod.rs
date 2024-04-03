@@ -1,3 +1,17 @@
+//! # Nodes
+//!
+//! Somewhere between on disk storage format, and objects being operated on within the filesystem,
+//! a [`Node`] is an entry within the filesystem itself. Any component or type that are core to a
+//! node's operations belong within this module while simple data structures should exist within
+//! the [`crate::codec`] module.
+//!
+//! There are some unsorted data structures that still need to be organized elsewhere.
+//!
+//! Generally this module represents internal operations and the details shouldn't be exposed to
+//! consumers of the library. The inner workings can be useful for advanced users but these APIs
+//! are not considered part of our public API for the purpose of breaking changes (we won't
+//! guarantee the major version will be increased when a breaking change is made).
+
 mod cid_cache;
 mod node_builder;
 mod node_data;
@@ -24,6 +38,9 @@ use crate::filesystem::drive::OperationError;
 
 pub(crate) type NodeId = usize;
 
+/// The core structure that represents a node within the filesystem. This structure represents a
+/// wrapper over any kind of filesystem metadata, structure, or associated data contained within
+/// the BanyanFS structures.
 pub struct Node {
     id: NodeId,
     parent_id: Option<PermanentId>,
@@ -47,7 +64,7 @@ impl Node {
         &mut self,
         name: NodeName,
         child_id: PermanentId,
-    ) -> Result<(), NodeError> {
+    ) -> Result<(), NodeDataError> {
         self.inner.add_child(name, child_id)?;
         self.notify_of_change().await;
 
@@ -318,7 +335,10 @@ impl Node {
     }
 
     #[allow(dead_code)]
-    pub(crate) async fn remove_child(&mut self, child_name: &NodeName) -> Result<(), NodeError> {
+    pub(crate) async fn remove_child(
+        &mut self,
+        child_name: &NodeName,
+    ) -> Result<(), NodeDataError> {
         self.inner.remove_child(child_name)?;
         self.notify_of_change().await;
 
@@ -328,7 +348,7 @@ impl Node {
     pub(crate) async fn remove_permanent_id(
         &mut self,
         child_id: &PermanentId,
-    ) -> Result<(), NodeError> {
+    ) -> Result<(), NodeDataError> {
         self.inner.remove_permanent_id(child_id)?;
         self.notify_of_change().await;
 
@@ -385,13 +405,4 @@ impl std::fmt::Debug for Node {
                 .finish(),
         }
     }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum NodeError {
-    #[error("failed manipulating inner node data: {0}")]
-    NodeDataError(#[from] NodeDataError),
-
-    #[error("attempted to perform a child operation on a node without children")]
-    HasNoChildren,
 }
