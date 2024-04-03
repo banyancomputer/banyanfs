@@ -45,8 +45,10 @@ use crate::filesystem::nodes::{Node, NodeBuilderError};
 /// # Examples
 ///
 /// ```rust
+/// use std::sync::Arc;
+/// use banyanfs::prelude::*;
 /// # let mut rng = rand::thread_rng();
-/// let signing_key = SigningKey::generate();
+/// let signing_key = Arc::new(SigningKey::generate(&mut rng));
 /// let new_drive = Drive::initialize_private(&mut rng, signing_key);
 /// ```
 #[derive(Clone)]
