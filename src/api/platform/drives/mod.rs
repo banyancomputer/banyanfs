@@ -12,23 +12,19 @@ use update_request::UpdateRequest;
 
 use crate::api::client::{ApiClient, ApiError};
 use crate::api::platform::{ApiDrive, ApiDriveId, DriveKind, StorageClass};
-use crate::codec::crypto::VerifyingKey;
+use crate::codec::crypto::{Fingerprint, VerifyingKey};
 use crate::prelude::platform::ApiDriveUpdateAttributes;
 
 pub async fn create(
     client: &ApiClient,
     name: &str,
-    owner_key: &VerifyingKey,
+    fingerprint: &Fingerprint,
 ) -> Result<ApiDriveId, ApiError> {
-    let owner_key_spki = owner_key
-        .to_spki()
-        .map_err(|e| ApiError::InvalidData(e.to_string()))?;
-
     let request = CreateRequest {
         name: name.to_string(),
         kind: DriveKind::Interactive,
         storage_class: StorageClass::Hot,
-        owner_key: owner_key_spki,
+        fingerprint: fingerprint.as_hex(),
     };
 
     let created_drive = client.platform_request_full(request).await?;

@@ -132,7 +132,7 @@ impl TombCompat {
             return Err("only interactive buckets are allowed to be created".into());
         }
 
-        let id = platform::drives::create(&self.client, &name, &public_key).await?;
+        let id = platform::drives::create(&self.client, &name, &public_key.fingerprint()).await?;
 
         let wasm_bucket = WasmBucket(TombBucket::from_components(id.clone(), name, sc, dk));
         let wasm_mount =

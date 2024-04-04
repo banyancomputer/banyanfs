@@ -8,14 +8,10 @@ use crate::api::platform::{ApiDrive, DriveKind, StorageClass};
 #[derive(Serialize)]
 pub(crate) struct CreateRequest {
     pub(crate) name: String,
-
     #[serde(rename = "type")]
     pub(crate) kind: DriveKind,
-
     pub(crate) storage_class: StorageClass,
-
-    #[serde(rename = "initial_bucket_key_pem")]
-    pub(crate) owner_key: String,
+    pub(crate) fingerprint: String,
 }
 
 #[async_trait(?Send)]
