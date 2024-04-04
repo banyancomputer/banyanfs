@@ -37,6 +37,10 @@ impl Signature {
 
         Ok((remaining, signature))
     }
+
+    pub fn to_vec(&self) -> Vec<u8> {
+        self.inner.to_vec()
+    }
 }
 
 impl From<ecdsa::Signature<NistP384>> for Signature {
