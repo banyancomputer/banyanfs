@@ -5,7 +5,6 @@ use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::AsyncWrite;
 use winnow::error::Needed;
 use winnow::multi::count;
-use winnow::sequence::tuple;
 
 use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, KeyId, SigningKey};
 use crate::codec::header::KeyCount;
@@ -52,7 +51,7 @@ impl MetaKey {
         signing_key: &SigningKey,
     ) -> ParserResult<'a, Option<Self>> {
         let mut asym_parser = count(
-            tuple((KeyId::parse, AsymLockedAccessKey::parse)),
+            (KeyId::parse, AsymLockedAccessKey::parse),
             key_count as usize,
         );
 
