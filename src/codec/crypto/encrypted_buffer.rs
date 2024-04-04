@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
+use winnow::bytes::streaming::take;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
 use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce};
@@ -28,8 +28,8 @@ impl EncryptedBuffer {
 
         if let Err(err) = access_key.decrypt_buffer(nonce, authenticated_data, &mut buffer, tag) {
             tracing::error!("failed to decrypt permission buffer: {err}");
-            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-            return Err(nom::Err::Failure(err));
+            let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
+            return Err(winnow::Err::Cut(err));
         }
 
         Ok((input, buffer))

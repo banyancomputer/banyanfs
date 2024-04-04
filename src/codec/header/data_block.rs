@@ -1,7 +1,7 @@
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::{tag, take};
-use nom::number::streaming::{le_u64, le_u8};
+use winnow::bytes::streaming::{tag, take};
+use winnow::number::streaming::{le_u64, le_u8};
 use rand::Rng;
 
 use crate::codec::crypto::{
@@ -197,8 +197,8 @@ impl DataBlock {
         let (input, version) = le_u8(input)?;
 
         if version != 0x01 {
-            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-            return Err(nom::Err::Failure(err));
+            let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
+            return Err(winnow::Err::Cut(err));
         }
 
         let (input, cid) = Cid::parse(input)?;
@@ -233,20 +233,20 @@ impl DataBlock {
             let mut plaintext_data = data.to_vec();
             if let Err(err) = access_key.decrypt_buffer(nonce, &[], &mut plaintext_data, tag) {
                 tracing::error!("failed to decrypt chunk: {err}");
-                let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-                return Err(nom::Err::Failure(err));
+                let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
+                return Err(winnow::Err::Cut(err));
             }
 
             let data_length =
-                match le_u64::<&[u8], nom::error::VerboseError<_>>(plaintext_data.as_slice()) {
+                match le_u64::<&[u8], winnow::error::VerboseError<_>>(plaintext_data.as_slice()) {
                     Ok((_, length)) => length,
                     Err(err) => {
                         tracing::error!("failed to read inner length: {err:?}");
 
                         let empty_static: &'static [u8] = &[];
-                        return Err(nom::Err::Failure(nom::error::make_error(
+                        return Err(winnow::Err::Cut(winnow::error::make_error(
                             empty_static,
-                            nom::error::ErrorKind::Verify,
+                            winnow::error::ErrorKind::Verify,
                         )));
                     }
                 };

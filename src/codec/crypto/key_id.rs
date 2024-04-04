@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::number::streaming::le_u16;
+use winnow::number::streaming::le_u16;
 
 use crate::codec::ParserResult;
 

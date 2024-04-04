@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use chacha20poly1305::XNonce as ChaChaNonce;
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
+use winnow::bytes::streaming::take;
 use rand::Rng;
 
 use crate::codec::ParserResult;
@@ -74,6 +74,6 @@ mod tests {
     async fn test_nonce_parsing_stream_too_short() {
         let input = [0u8; NONCE_LENGTH - 1];
         let result = Nonce::parse(&input);
-        assert!(matches!(result, Err(nom::Err::Incomplete(_))));
+        assert!(matches!(result, Err(winnow::Err::Incomplete(_))));
     }
 }

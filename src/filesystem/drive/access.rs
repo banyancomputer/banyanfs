@@ -53,12 +53,12 @@ impl DriveAccess {
 
         for _ in 0..key_count {
             let (i, key_id) = KeyId::parse(buf_slice).map_err(|_| {
-                nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
+                winnow::Err::Cut(winnow::error::make_error(input, winnow::error::ErrorKind::Verify))
             })?;
             buf_slice = i;
 
             let (i, settings) = ActorSettings::parse_private(buf_slice).map_err(|_| {
-                nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
+                winnow::Err::Cut(winnow::error::make_error(input, winnow::error::ErrorKind::Verify))
             })?;
             buf_slice = i;
 

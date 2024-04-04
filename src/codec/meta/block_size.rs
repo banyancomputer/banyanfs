@@ -1,4 +1,4 @@
-use nom::number::streaming::le_u8;
+use winnow::number::streaming::le_u8;
 
 use crate::codec::ParserResult;
 use futures::{AsyncWrite, AsyncWriteExt};

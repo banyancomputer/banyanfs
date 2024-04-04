@@ -1,6 +1,6 @@
 use futures::io::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
-use nom::number::streaming::le_u8;
+use winnow::bytes::streaming::take;
+use winnow::number::streaming::le_u8;
 
 use crate::codec::crypto::VerifyingKey;
 use crate::codec::header::KeyAccessSettings;

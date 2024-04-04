@@ -1,5 +1,5 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::number::streaming::le_u8;
+use winnow::number::streaming::le_u8;
 
 use crate::codec::ParserResult;
 
@@ -70,8 +70,8 @@ impl ContentOptions {
         let (input, byte) = le_u8(input)?;
 
         if cfg!(feature = "strict") && byte & CONTENT_OPTIONS_RESERVED_MASK != 0 {
-            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-            return Err(nom::Err::Failure(err));
+            let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
+            return Err(winnow::Err::Cut(err));
         }
 
         let filesystem = byte & CONTENT_OPTIONS_FILESYSTEM_BIT != 0;

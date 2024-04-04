@@ -1,6 +1,6 @@
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
+use winnow::bytes::streaming::take;
 use uuid::{NoContext, Timestamp, Uuid};
 
 use crate::codec::ParserResult;
@@ -34,8 +34,8 @@ impl FilesystemId {
         if cfg!(feature = "strict")
             && (id_bytes.iter().all(|&b| b == 0x00) || id_bytes.iter().all(|&b| b == 0xff))
         {
-            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-            return Err(nom::Err::Failure(err));
+            let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
+            return Err(winnow::Err::Cut(err));
         }
 
         // todo(sstelfox): parse into an actually UUID, validate the version, probably store the

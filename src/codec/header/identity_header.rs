@@ -1,5 +1,5 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::{tag, take};
+use winnow::bytes::streaming::{tag, take};
 
 use crate::codec::header::BANYAN_FS_MAGIC;
 use crate::codec::ParserResult;
@@ -24,8 +24,8 @@ impl IdentityHeader {
 
         // Only version one is valid
         if version != 0x01 {
-            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-            return Err(nom::Err::Failure(err));
+            let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
+            return Err(winnow::Err::Cut(err));
         }
 
         Ok((input, Self))
@@ -44,8 +44,8 @@ fn version_field(input: &[u8]) -> ParserResult<u8> {
     // library to enable a stricter parsing mode.
     let reserved = (version_byte & 0x80) >> 7;
     if cfg!(feature = "strict") && reserved != 0 {
-        let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-        return Err(nom::Err::Failure(err));
+        let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
+        return Err(winnow::Err::Cut(err));
     }
 
     let version = version_byte & 0x7f;

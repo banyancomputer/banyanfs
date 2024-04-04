@@ -1,5 +1,5 @@
 use futures::AsyncWrite;
-use nom::sequence::tuple;
+use winnow::sequence::tuple;
 
 use crate::codec::ParserResult;
 

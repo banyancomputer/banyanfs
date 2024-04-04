@@ -272,7 +272,6 @@ dependencies = [
  "getrandom",
  "js-sys",
  "jwt-simple",
- "nom",
  "p384",
  "rand",
  "rand_chacha",
@@ -2846,9 +2845,9 @@ checksum = "32b752e52a2da0ddfbdbcc6fceadfeede4c939ed16d13e648833a61dfb611ed8"
 
 [[package]]
 name = "winnow"
-version = "0.6.5"
+version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dffa400e67ed5a4dd237983829e66475f0a4a26938c4b04c21baede6262215b8"
+checksum = "da01e24d23aeb852fb05609f2701ce4da9f73d58857239ed3853667cf178f204"
 dependencies = [
  "memchr",
 ]

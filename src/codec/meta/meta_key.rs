@@ -3,9 +3,9 @@ use std::ops::Deref;
 
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::AsyncWrite;
-use nom::multi::count;
-use nom::sequence::tuple;
-use nom::Needed;
+use winnow::error::Needed;
+use winnow::multi::count;
+use winnow::sequence::tuple;
 
 use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, KeyId, SigningKey};
 use crate::codec::header::KeyCount;
@@ -56,13 +56,15 @@ impl MetaKey {
             key_count as usize,
         );
 
-        let (input, locked_keys) = match asym_parser(input) {
+        let (input, locked_keys): (_, Vec<_>) = match asym_parser(input) {
             Ok(res) => res,
-            Err(nom::Err::Incomplete(Needed::Size(_))) => {
+            Err(winnow::Err::Incomplete(Needed::Size(_))) => {
                 let record_size = KeyId::size() + AsymLockedAccessKey::size();
                 let total_size = key_count as usize * record_size;
 
-                return Err(nom::Err::Incomplete(Needed::new(total_size - input.len())));
+                return Err(winnow::Err::Incomplete(Needed::new(
+                    total_size - input.len(),
+                )));
             }
             Err(err) => return Err(err),
         };

@@ -1,6 +1,6 @@
 use chacha20poly1305::{AeadInPlace, KeyInit, XChaCha20Poly1305};
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
+use winnow::bytes::streaming::take;
 
 use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce};
 use crate::codec::ParserResult;
@@ -69,7 +69,7 @@ pub enum SymLockedAccessKeyError<I> {
     CryptoFailure(String),
 
     #[error("decoding data failed: {0}")]
-    FormatFailure(#[from] nom::Err<nom::error::Error<I>>),
+    FormatFailure(#[from] winnow::Err<winnow::error::Error<I>>),
 
     #[error("validation failed most likely due to the use of an incorrect key")]
     IncorrectKey,

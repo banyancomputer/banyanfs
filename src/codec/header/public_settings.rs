@@ -1,5 +1,5 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
+use winnow::bytes::streaming::take;
 
 use crate::codec::ParserResult;
 
@@ -51,8 +51,8 @@ impl PublicSettings {
         let settings_byte = settings_byte[0];
 
         if cfg!(feature = "strict") && (settings_byte & RESERVED_BITS) != 0 {
-            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-            return Err(nom::Err::Failure(err));
+            let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
+            return Err(winnow::Err::Cut(err));
         }
 
         let ecc_present = (settings_byte & ECC_PRESENT_BIT) == ECC_PRESENT_BIT;

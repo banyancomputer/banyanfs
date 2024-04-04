@@ -1,5 +1,5 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::number::streaming::{le_u64, le_u8};
+use winnow::number::streaming::{le_u64, le_u8};
 
 use crate::codec::ParserResult;
 
@@ -47,8 +47,8 @@ impl BlockKind {
                 Ok((input, Self::IndirectReference { total_size }))
             }
             _ => {
-                let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-                Err(nom::Err::Failure(err))
+                let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
+                Err(winnow::Err::Cut(err))
             }
         }
     }

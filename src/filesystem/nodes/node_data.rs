@@ -2,7 +2,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::number::streaming::{le_u16, le_u64};
+use winnow::number::streaming::{le_u16, le_u64};
 
 use crate::codec::filesystem::{DirectoryPermissions, FilePermissions};
 use crate::codec::{Cid, ParserResult, PermanentId};

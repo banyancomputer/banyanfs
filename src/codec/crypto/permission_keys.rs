@@ -1,7 +1,7 @@
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
-use nom::number::streaming::le_u8;
+use winnow::bytes::streaming::take;
+use winnow::number::streaming::le_u8;
 
 use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, SigningKey, VerifyingKey};
 use crate::codec::header::KeyAccessSettings;
@@ -72,7 +72,7 @@ impl PermissionKeys {
             .map(|key| key.unlock(unlock_key))
             .transpose()
             .map_err(|_| {
-                nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
+                winnow::Err::Cut(winnow::error::make_error(input, winnow::error::ErrorKind::Verify))
             })?;
 
         let (input, data) = maybe_parse_key(input)?;
@@ -80,7 +80,7 @@ impl PermissionKeys {
             .map(|key| key.unlock(unlock_key))
             .transpose()
             .map_err(|_| {
-                nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
+                winnow::Err::Cut(winnow::error::make_error(input, winnow::error::ErrorKind::Verify))
             })?;
 
         let (input, maintenance) = maybe_parse_key(input)?;
@@ -88,7 +88,7 @@ impl PermissionKeys {
             .map(|key| key.unlock(unlock_key))
             .transpose()
             .map_err(|_| {
-                nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
+                winnow::Err::Cut(winnow::error::make_error(input, winnow::error::ErrorKind::Verify))
             })?;
 
         let permission_keys = Self {

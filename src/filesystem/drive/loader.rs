@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use async_std::sync::RwLock;
 use futures::{AsyncRead, AsyncReadExt};
-use nom::number::streaming::le_u64;
 use tracing::{debug, trace};
+use winnow::number::streaming::le_u64;
 
 use crate::codec::crypto::{AuthenticationTag, EncryptedBuffer, Nonce, SigningKey};
 use crate::codec::header::{ContentOptions, IdentityHeader, KeyCount, PublicSettings};
@@ -302,13 +302,13 @@ impl StateError for DriveLoaderError {
     }
 }
 
-impl<E: std::fmt::Debug> From<nom::Err<E>> for DriveLoaderError {
-    fn from(err: nom::Err<E>) -> Self {
+impl<E: std::fmt::Debug> From<winnow::Err<E>> for DriveLoaderError {
+    fn from(err: winnow::Err<E>) -> Self {
         match err {
-            nom::Err::Incomplete(nom::Needed::Size(n)) => {
+            winnow::Err::Incomplete(winnow::error::Needed::Size(n)) => {
                 DriveLoaderError::Incomplete(Some(n.get()))
             }
-            nom::Err::Incomplete(_) => DriveLoaderError::Incomplete(None),
+            winnow::Err::Incomplete(_) => DriveLoaderError::Incomplete(None),
             err => {
                 let err_msg = format!("parse verification detected failure: {:?}", err);
                 DriveLoaderError::ParserFailure(err_msg)

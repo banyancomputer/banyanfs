@@ -1,5 +1,5 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::number::streaming::{le_u64, le_u8};
+use winnow::number::streaming::{le_u64, le_u8};
 
 use crate::codec::crypto::SymLockedAccessKey;
 use crate::codec::{Cid, ParserResult};
@@ -189,8 +189,8 @@ impl FileContent {
                 (input, data)
             }
             _ => {
-                let err = nom::error::make_error(input, nom::error::ErrorKind::Tag);
-                return Err(nom::Err::Failure(err));
+                let err = winnow::error::make_error(input, winnow::error::ErrorKind::Tag);
+                return Err(winnow::Err::Cut(err));
             }
         };
 

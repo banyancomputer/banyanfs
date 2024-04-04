@@ -1,5 +1,5 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
+use winnow::bytes::streaming::take;
 use p384::NistP384;
 
 use crate::codec::ParserResult;
@@ -30,8 +30,8 @@ impl Signature {
         let signature = match Signature::from_slice(signature_bytes) {
             Ok(signature) => signature,
             Err(_) => {
-                let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-                return Err(nom::Err::Failure(err));
+                let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
+                return Err(winnow::Err::Cut(err));
             }
         };
 

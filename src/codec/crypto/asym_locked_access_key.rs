@@ -1,7 +1,7 @@
 use chacha20poly1305::{AeadInPlace, KeyInit, XChaCha20Poly1305};
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
-use nom::sequence::tuple;
+use winnow::bytes::streaming::take;
+use winnow::sequence::tuple;
 
 use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce, SigningKey, VerifyingKey};
 use crate::codec::ParserResult;

@@ -13,8 +13,8 @@ use std::collections::HashMap;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
-use nom::number::streaming::{le_i64, le_u32, le_u8};
+use winnow::bytes::streaming::take;
+use winnow::number::streaming::{le_i64, le_u32, le_u8};
 
 use crate::codec::crypto::AccessKey;
 use crate::codec::filesystem::NodeKind;
@@ -266,8 +266,8 @@ impl Node {
                 (node_data_buf, Some(pid))
             }
             _ => {
-                let err = nom::error::make_error(input, nom::error::ErrorKind::Switch);
-                return Err(nom::Err::Failure(err));
+                let err = winnow::error::make_error(input, winnow::error::ErrorKind::Switch);
+                return Err(winnow::Err::Cut(err));
             }
         };
 
@@ -282,7 +282,7 @@ impl Node {
             let (meta_buf, key_len) = le_u8(node_data_buf)?;
             let (meta_buf, key) = take(key_len)(meta_buf)?;
             let key_str = String::from_utf8(key.to_vec()).map_err(|_| {
-                nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Char))
+                winnow::Err::Cut(winnow::error::make_error(input, winnow::error::ErrorKind::Char))
             })?;
 
             let (meta_buf, val_len) = le_u8(meta_buf)?;

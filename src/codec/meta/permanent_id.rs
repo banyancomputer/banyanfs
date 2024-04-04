@@ -1,6 +1,6 @@
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
+use winnow::bytes::streaming::take;
 use rand::Rng;
 
 use crate::codec::ParserResult;

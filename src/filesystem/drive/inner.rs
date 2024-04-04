@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
-use nom::number::streaming::le_u64;
+use winnow::number::streaming::le_u64;
 use slab::Slab;
 use tracing::instrument;
 
@@ -274,9 +274,9 @@ impl InnerDrive {
                 if !permanent_id_map.contains_key(&pid) {
                     tracing::warn!(?permanent_id, child_pid = ?pid, "encountered child PID before parent");
 
-                    //return Err(nom::Err::Failure(nom::error::make_error(
+                    //return Err(winnow::Err::Cut(winnow::error::make_error(
                     //    node_input,
-                    //    nom::error::ErrorKind::Verify,
+                    //    winnow::error::ErrorKind::Verify,
                     //)));
                 }
             }
@@ -287,9 +287,9 @@ impl InnerDrive {
         }
 
         let root_node_id = *permanent_id_map.get(&root_pid).ok_or_else(|| {
-            nom::Err::Failure(nom::error::make_error(
+            winnow::Err::Cut(winnow::error::make_error(
                 node_input,
-                nom::error::ErrorKind::Verify,
+                winnow::error::ErrorKind::Verify,
             ))
         })?;
 

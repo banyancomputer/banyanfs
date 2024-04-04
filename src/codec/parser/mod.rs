@@ -9,10 +9,10 @@ pub(crate) use segment_streamer::SegmentStreamer;
 pub use state_error::StateError;
 
 #[cfg(debug_assertions)]
-pub type ParserResult<'a, T> = nom::IResult<&'a [u8], T, nom::error::VerboseError<&'a [u8]>>;
+pub type ParserResult<'a, T> = winnow::IResult<&'a [u8], T, winnow::error::VerboseError<&'a [u8]>>;
 
 #[cfg(not(debug_assertions))]
-pub type ParserResult<'a, T> = nom::IResult<&'a [u8], T>;
+pub type ParserResult<'a, T> = winnow::IResult<&'a [u8], T>;
 
 pub type StateResult<T, E> = Result<ProgressType<T>, E>;
 
@@ -21,7 +21,7 @@ pub type StateResult<T, E> = Result<ProgressType<T>, E>;
 //    async fn next(input: &'a [u8], ctx: &'a Self::Context) -> ParserResult<'a, Option<Self>> {
 //        match Self::parse(input, ctx) {
 //            Ok((remaining, parsed)) => Ok((remaining, Some(parsed))),
-//            Err(nom::Err::Incomplete(_)) => Ok((input, None)),
+//            Err(winnow::Err::Incomplete(_)) => Ok((input, None)),
 //            Err(err) => Err(err),
 //        }
 //    }

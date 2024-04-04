@@ -1,7 +1,7 @@
 use chacha20poly1305::{AeadInPlace, Key as ChaChaKey, KeyInit, XChaCha20Poly1305};
 use ecdsa::signature::rand_core::CryptoRngCore;
-use nom::AsBytes;
 use rand::Rng;
+use winnow::stream::AsBytes;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::codec::crypto::{
@@ -42,7 +42,7 @@ impl AccessKey {
         let raw_tag = cipher.encrypt_in_place_detached(&nonce, authenticated_data, buffer)?;
 
         let mut tag_bytes = [0u8; AuthenticationTag::size()];
-        tag_bytes.copy_from_slice(raw_tag.as_bytes());
+        tag_bytes.copy_from_slice(raw_tag.as_slice());
         let tag = AuthenticationTag::from(tag_bytes);
 
         Ok((nonce, tag))
@@ -110,7 +110,7 @@ impl From<[u8; ACCESS_KEY_LENGTH]> for AccessKey {
 #[derive(Debug, thiserror::Error)]
 pub enum AccessKeyError<I> {
     #[error("decoding data failed: {0}")]
-    FormatFailure(#[from] nom::Err<nom::error::Error<I>>),
+    FormatFailure(#[from] winnow::Err<winnow::error::Error<I>>),
 
     #[error("unspecified crypto error")]
     CryptoFailure,

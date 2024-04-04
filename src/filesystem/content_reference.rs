@@ -1,6 +1,6 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::multi::count;
-use nom::number::streaming::{le_u16, le_u64};
+use winnow::multi::count;
+use winnow::number::streaming::{le_u16, le_u64};
 
 use crate::codec::filesystem::BlockKind;
 use crate::codec::{BlockSize, Cid, ParserResult};

@@ -3,7 +3,7 @@ use std::ops::Deref;
 use ecdsa::signature::rand_core::CryptoRngCore;
 use elliptic_curve::pkcs8::EncodePublicKey;
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
+use winnow::bytes::streaming::take;
 use p384::ecdh::EphemeralSecret;
 use p384::{NistP384, PublicKey};
 
@@ -94,8 +94,8 @@ impl VerifyingKey {
             Ok(key) => key,
             Err(err) => {
                 tracing::error!("failed to decode ECDSA key: {err}");
-                let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-                return Err(nom::Err::Failure(err));
+                let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
+                return Err(winnow::Err::Cut(err));
             }
         };
 
