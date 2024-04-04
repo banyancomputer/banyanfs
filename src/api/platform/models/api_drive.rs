@@ -23,16 +23,24 @@ pub struct ApiDrive {
     _updated_at: Option<String>,
 
     // Only present in the response to bucket creation
-    #[serde(rename = "initial_bucket_key", skip_serializing_if = "Option::is_none")]
-    _unused_key: Option<InitialBucketKey>,
+    #[serde(rename = "access", skip_serializing_if = "Option::is_none")]
+    _access: Option<InitialBucketAccess>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
-struct InitialBucketKey {
-    id: String,
-    approved: bool,
+struct InitialBucketAccess {
+    user_key_id: String,
     fingerprint: String,
+    state: BucketAccessState,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BucketAccessState {
+    Pending,
+    Approved,
+    Revoked,
 }
 
 #[derive(Debug, Default, Serialize)]
