@@ -48,7 +48,7 @@ impl BlockKind {
             }
             _ => {
                 let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
-                Err(winnow::Err::Cut(err))
+                Err(winnow::error::ErrMode::Cut(err))
             }
         }
     }

@@ -25,7 +25,7 @@ impl IdentityHeader {
         // Only version one is valid
         if version != 0x01 {
             let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
-            return Err(winnow::Err::Cut(err));
+            return Err(winnow::error::ErrMode::Cut(err));
         }
 
         Ok((input, Self))
@@ -45,7 +45,7 @@ fn version_field(input: &[u8]) -> ParserResult<u8> {
     let reserved = (version_byte & 0x80) >> 7;
     if cfg!(feature = "strict") && reserved != 0 {
         let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
-        return Err(winnow::Err::Cut(err));
+        return Err(winnow::error::ErrMode::Cut(err));
     }
 
     let version = version_byte & 0x7f;

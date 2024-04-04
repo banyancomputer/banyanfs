@@ -302,13 +302,13 @@ impl StateError for DriveLoaderError {
     }
 }
 
-impl<E: std::fmt::Debug> From<winnow::Err<E>> for DriveLoaderError {
-    fn from(err: winnow::Err<E>) -> Self {
+impl<E: std::fmt::Debug> From<winnow::error::ErrMode<E>> for DriveLoaderError {
+    fn from(err: winnow::error::ErrMode<E>) -> Self {
         match err {
-            winnow::Err::Incomplete(winnow::error::Needed::Size(n)) => {
+            winnow::error::ErrMode::Incomplete(winnow::error::Needed::Size(n)) => {
                 DriveLoaderError::Incomplete(Some(n.get()))
             }
-            winnow::Err::Incomplete(_) => DriveLoaderError::Incomplete(None),
+            winnow::error::ErrMode::Incomplete(_) => DriveLoaderError::Incomplete(None),
             err => {
                 let err_msg = format!("parse verification detected failure: {:?}", err);
                 DriveLoaderError::ParserFailure(err_msg)

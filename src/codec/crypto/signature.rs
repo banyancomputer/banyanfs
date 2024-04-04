@@ -31,7 +31,7 @@ impl Signature {
             Ok(signature) => signature,
             Err(_) => {
                 let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
-                return Err(winnow::Err::Cut(err));
+                return Err(winnow::error::ErrMode::Cut(err));
             }
         };
 

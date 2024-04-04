@@ -71,7 +71,7 @@ impl ContentOptions {
 
         if cfg!(feature = "strict") && byte & CONTENT_OPTIONS_RESERVED_MASK != 0 {
             let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
-            return Err(winnow::Err::Cut(err));
+            return Err(winnow::error::ErrMode::Cut(err));
         }
 
         let filesystem = byte & CONTENT_OPTIONS_FILESYSTEM_BIT != 0;

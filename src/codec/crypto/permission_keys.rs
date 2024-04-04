@@ -72,7 +72,7 @@ impl PermissionKeys {
             .map(|key| key.unlock(unlock_key))
             .transpose()
             .map_err(|_| {
-                winnow::Err::Cut(winnow::error::make_error(input, winnow::error::ErrorKind::Verify))
+                winnow::error::ErrMode::Cut(winnow::error::make_error(input, winnow::error::ErrorKind::Verify))
             })?;
 
         let (input, data) = maybe_parse_key(input)?;
@@ -80,7 +80,7 @@ impl PermissionKeys {
             .map(|key| key.unlock(unlock_key))
             .transpose()
             .map_err(|_| {
-                winnow::Err::Cut(winnow::error::make_error(input, winnow::error::ErrorKind::Verify))
+                winnow::error::ErrMode::Cut(winnow::error::make_error(input, winnow::error::ErrorKind::Verify))
             })?;
 
         let (input, maintenance) = maybe_parse_key(input)?;
@@ -88,7 +88,7 @@ impl PermissionKeys {
             .map(|key| key.unlock(unlock_key))
             .transpose()
             .map_err(|_| {
-                winnow::Err::Cut(winnow::error::make_error(input, winnow::error::ErrorKind::Verify))
+                winnow::error::ErrMode::Cut(winnow::error::make_error(input, winnow::error::ErrorKind::Verify))
             })?;
 
         let permission_keys = Self {

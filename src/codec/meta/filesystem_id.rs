@@ -35,7 +35,7 @@ impl FilesystemId {
             && (id_bytes.iter().all(|&b| b == 0x00) || id_bytes.iter().all(|&b| b == 0xff))
         {
             let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
-            return Err(winnow::Err::Cut(err));
+            return Err(winnow::error::ErrMode::Cut(err));
         }
 
         // todo(sstelfox): parse into an actually UUID, validate the version, probably store the

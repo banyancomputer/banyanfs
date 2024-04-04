@@ -95,7 +95,7 @@ impl VerifyingKey {
             Err(err) => {
                 tracing::error!("failed to decode ECDSA key: {err}");
                 let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
-                return Err(winnow::Err::Cut(err));
+                return Err(winnow::error::ErrMode::Cut(err));
             }
         };
 

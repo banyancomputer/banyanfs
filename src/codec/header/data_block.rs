@@ -198,7 +198,7 @@ impl DataBlock {
 
         if version != 0x01 {
             let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
-            return Err(winnow::Err::Cut(err));
+            return Err(winnow::error::ErrMode::Cut(err));
         }
 
         let (input, cid) = Cid::parse(input)?;
@@ -234,7 +234,7 @@ impl DataBlock {
             if let Err(err) = access_key.decrypt_buffer(nonce, &[], &mut plaintext_data, tag) {
                 tracing::error!("failed to decrypt chunk: {err}");
                 let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
-                return Err(winnow::Err::Cut(err));
+                return Err(winnow::error::ErrMode::Cut(err));
             }
 
             let data_length =
@@ -244,7 +244,7 @@ impl DataBlock {
                         tracing::error!("failed to read inner length: {err:?}");
 
                         let empty_static: &'static [u8] = &[];
-                        return Err(winnow::Err::Cut(winnow::error::make_error(
+                        return Err(winnow::error::ErrMode::Cut(winnow::error::make_error(
                             empty_static,
                             winnow::error::ErrorKind::Verify,
                         )));

@@ -29,7 +29,7 @@ impl EncryptedBuffer {
         if let Err(err) = access_key.decrypt_buffer(nonce, authenticated_data, &mut buffer, tag) {
             tracing::error!("failed to decrypt permission buffer: {err}");
             let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
-            return Err(winnow::Err::Cut(err));
+            return Err(winnow::error::ErrMode::Cut(err));
         }
 
         Ok((input, buffer))

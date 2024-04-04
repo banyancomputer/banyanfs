@@ -1,7 +1,6 @@
 use chacha20poly1305::{AeadInPlace, Key as ChaChaKey, KeyInit, XChaCha20Poly1305};
 use ecdsa::signature::rand_core::CryptoRngCore;
 use rand::Rng;
-use winnow::stream::AsBytes;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::codec::crypto::{
@@ -110,7 +109,7 @@ impl From<[u8; ACCESS_KEY_LENGTH]> for AccessKey {
 #[derive(Debug, thiserror::Error)]
 pub enum AccessKeyError<I> {
     #[error("decoding data failed: {0}")]
-    FormatFailure(#[from] winnow::Err<winnow::error::Error<I>>),
+    FormatFailure(#[from] winnow::error::ErrMode<winnow::error::Error<I>>),
 
     #[error("unspecified crypto error")]
     CryptoFailure,

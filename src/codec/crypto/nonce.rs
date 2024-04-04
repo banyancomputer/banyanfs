@@ -74,6 +74,6 @@ mod tests {
     async fn test_nonce_parsing_stream_too_short() {
         let input = [0u8; NONCE_LENGTH - 1];
         let result = Nonce::parse(&input);
-        assert!(matches!(result, Err(winnow::Err::Incomplete(_))));
+        assert!(matches!(result, Err(winnow::error::ErrMode::Incomplete(_))));
     }
 }

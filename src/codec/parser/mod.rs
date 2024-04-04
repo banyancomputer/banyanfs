@@ -21,7 +21,7 @@ pub type StateResult<T, E> = Result<ProgressType<T>, E>;
 //    async fn next(input: &'a [u8], ctx: &'a Self::Context) -> ParserResult<'a, Option<Self>> {
 //        match Self::parse(input, ctx) {
 //            Ok((remaining, parsed)) => Ok((remaining, Some(parsed))),
-//            Err(winnow::Err::Incomplete(_)) => Ok((input, None)),
+//            Err(winnow::error::ErrMode::Incomplete(_)) => Ok((input, None)),
 //            Err(err) => Err(err),
 //        }
 //    }

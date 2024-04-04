@@ -52,7 +52,7 @@ impl PublicSettings {
 
         if cfg!(feature = "strict") && (settings_byte & RESERVED_BITS) != 0 {
             let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
-            return Err(winnow::Err::Cut(err));
+            return Err(winnow::error::ErrMode::Cut(err));
         }
 
         let ecc_present = (settings_byte & ECC_PRESENT_BIT) == ECC_PRESENT_BIT;

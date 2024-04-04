@@ -69,7 +69,7 @@ pub enum SymLockedAccessKeyError<I> {
     CryptoFailure(String),
 
     #[error("decoding data failed: {0}")]
-    FormatFailure(#[from] winnow::Err<winnow::error::Error<I>>),
+    FormatFailure(#[from] winnow::error::ErrMode<winnow::error::Error<I>>),
 
     #[error("validation failed most likely due to the use of an incorrect key")]
     IncorrectKey,

@@ -58,11 +58,11 @@ impl MetaKey {
 
         let (input, locked_keys): (_, Vec<_>) = match asym_parser(input) {
             Ok(res) => res,
-            Err(winnow::Err::Incomplete(Needed::Size(_))) => {
+            Err(winnow::error::ErrMode::Incomplete(Needed::Size(_))) => {
                 let record_size = KeyId::size() + AsymLockedAccessKey::size();
                 let total_size = key_count as usize * record_size;
 
-                return Err(winnow::Err::Incomplete(Needed::new(
+                return Err(winnow::error::ErrMode::Incomplete(Needed::new(
                     total_size - input.len(),
                 )));
             }

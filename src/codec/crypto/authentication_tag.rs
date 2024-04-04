@@ -77,6 +77,6 @@ mod tests {
     async fn test_authentication_tag_parsing_stream_too_short() {
         let input = [0u8; TAG_LENGTH - 1];
         let result = AuthenticationTag::parse(&input);
-        assert!(matches!(result, Err(winnow::Err::Incomplete(_))));
+        assert!(matches!(result, Err(winnow::error::ErrMode::Incomplete(_))));
     }
 }
