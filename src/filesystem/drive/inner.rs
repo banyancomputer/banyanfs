@@ -274,7 +274,7 @@ impl InnerDrive {
                 if !permanent_id_map.contains_key(&pid) {
                     tracing::warn!(?permanent_id, child_pid = ?pid, "encountered child PID before parent");
 
-                    //return Err(winnow::error::ErrMode::Cut(winnow::error::make_error(
+                    //return Err(winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(
                     //    node_input,
                     //    winnow::error::ErrorKind::Verify,
                     //)));
@@ -287,7 +287,7 @@ impl InnerDrive {
         }
 
         let root_node_id = *permanent_id_map.get(&root_pid).ok_or_else(|| {
-            winnow::error::ErrMode::Cut(winnow::error::make_error(
+            winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(
                 node_input,
                 winnow::error::ErrorKind::Verify,
             ))

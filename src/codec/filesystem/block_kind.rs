@@ -47,7 +47,7 @@ impl BlockKind {
                 Ok((input, Self::IndirectReference { total_size }))
             }
             _ => {
-                let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
+                let err = winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
                 Err(winnow::error::ErrMode::Cut(err))
             }
         }

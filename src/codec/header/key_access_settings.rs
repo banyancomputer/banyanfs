@@ -222,7 +222,7 @@ impl KeyAccessSettings {
         let (input, byte) = le_u8(input)?;
 
         if cfg!(feature = "strict") && byte & PRIVATE_RESERVED_MASK != 0 {
-            let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
+            let err = winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
             return Err(winnow::error::ErrMode::Cut(err));
         }
 
@@ -251,7 +251,7 @@ impl KeyAccessSettings {
         let (input, byte) = le_u8(input)?;
 
         if cfg!(feature = "strict") && byte & PUBLIC_RESERVED_MASK != 0 {
-            let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
+            let err = winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
             return Err(winnow::error::ErrMode::Cut(err));
         }
 

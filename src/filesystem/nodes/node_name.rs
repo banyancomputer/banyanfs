@@ -97,12 +97,12 @@ impl NodeName {
                 let (input, name) = winnow::bytes::streaming::take(name_length as usize)(input)?;
 
                 let name = String::from_utf8(name.to_vec()).map_err(|_| {
-                    winnow::error::ErrMode::Cut(winnow::error::make_error(input, winnow::error::ErrorKind::Verify))
+                    winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify))
                 })?;
                 Ok((input, Self::Named(name)))
             }
             _ => {
-                let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
+                let err = winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
                 Err(winnow::error::ErrMode::Cut(err))
             }
         }

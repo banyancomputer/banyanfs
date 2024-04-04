@@ -46,7 +46,7 @@ impl DirectoryPermissions {
         let (input, byte) = le_u8(input)?;
 
         if cfg!(feature = "strict") && byte & DIRECTORY_PERMISSIONS_RESERVED_MASK != 0 {
-            let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
+            let err = winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
             return Err(winnow::error::ErrMode::Cut(err));
         }
 

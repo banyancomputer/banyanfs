@@ -266,7 +266,7 @@ impl Node {
                 (node_data_buf, Some(pid))
             }
             _ => {
-                let err = winnow::error::make_error(input, winnow::error::ErrorKind::Switch);
+                let err = winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Switch);
                 return Err(winnow::error::ErrMode::Cut(err));
             }
         };
@@ -282,7 +282,7 @@ impl Node {
             let (meta_buf, key_len) = le_u8(node_data_buf)?;
             let (meta_buf, key) = take(key_len)(meta_buf)?;
             let key_str = String::from_utf8(key.to_vec()).map_err(|_| {
-                winnow::error::ErrMode::Cut(winnow::error::make_error(input, winnow::error::ErrorKind::Char))
+                winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Char))
             })?;
 
             let (meta_buf, val_len) = le_u8(meta_buf)?;

@@ -34,7 +34,7 @@ impl FilesystemId {
         if cfg!(feature = "strict")
             && (id_bytes.iter().all(|&b| b == 0x00) || id_bytes.iter().all(|&b| b == 0xff))
         {
-            let err = winnow::error::make_error(input, winnow::error::ErrorKind::Verify);
+            let err = winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
             return Err(winnow::error::ErrMode::Cut(err));
         }
 

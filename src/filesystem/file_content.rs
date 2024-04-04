@@ -189,7 +189,7 @@ impl FileContent {
                 (input, data)
             }
             _ => {
-                let err = winnow::error::make_error(input, winnow::error::ErrorKind::Tag);
+                let err = winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Tag);
                 return Err(winnow::error::ErrMode::Cut(err));
             }
         };
