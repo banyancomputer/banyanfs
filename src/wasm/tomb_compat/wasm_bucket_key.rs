@@ -13,6 +13,7 @@ impl WasmBucketAccess {
 
     // note(sstelfox): didn't have this
     #[wasm_bindgen(getter)]
+    #[wasm_bindgen(js_name = userKeyId)]
     pub fn user_key_id(&self) -> ApiKeyId {
         self.0.user_key_id().to_string()
     }
