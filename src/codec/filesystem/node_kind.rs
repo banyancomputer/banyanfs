@@ -1,7 +1,7 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::bytes::streaming::take;
+use winnow::bytes::take;
 
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum NodeKind {
@@ -32,7 +32,7 @@ impl NodeKind {
         Ok(1)
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, node_type) = take(1u8)(input)?;
         let node_type = node_type[0];
 
@@ -63,7 +63,7 @@ mod tests {
         let node_type = NodeKind::File;
         let source_bytes = [0x00];
 
-        let (remaining, parsed) = NodeKind::parse(&source_bytes).unwrap();
+        let (remaining, parsed) = NodeKind::parse(Stream::new(&source_bytes)).unwrap();
 
         assert!(remaining.is_empty());
         assert_eq!(node_type, parsed);

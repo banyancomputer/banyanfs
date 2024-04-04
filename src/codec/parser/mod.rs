@@ -7,12 +7,16 @@ pub use parser_state_machine::ParserStateMachine;
 pub use progress_type::ProgressType;
 pub(crate) use segment_streamer::SegmentStreamer;
 pub use state_error::StateError;
+use winnow::Partial;
+
+pub type Stream<'a> = Partial<&'a [u8]>;
 
 #[cfg(debug_assertions)]
-pub type ParserResult<'a, T> = winnow::IResult<&'a [u8], T, winnow::error::VerboseError<&'a [u8]>>;
+pub type ParserResult<'a, T> =
+    winnow::IResult<Stream<'a>, T, winnow::error::VerboseError<Stream<'a>>>;
 
 #[cfg(not(debug_assertions))]
-pub type ParserResult<'a, T> = winnow::IResult<&'a [u8], T>;
+pub type ParserResult<'a, T> = winnow::IResult<Stream<'a>, T>;
 
 pub type StateResult<T, E> = Result<ProgressType<T>, E>;
 
@@ -30,10 +34,10 @@ pub type StateResult<T, E> = Result<ProgressType<T>, E>;
 pub trait Parser: Sized {
     type Context: Send + Sync;
 
-    fn parse<'a>(input: &'a [u8], ctx: &'a Self::Context) -> ParserResult<'a, Self>;
+    fn parse<'a>(input: Stream<'a>, ctx: &'a Self::Context) -> ParserResult<'a, Self>;
 
     fn parse_many<'a>(
-        mut input: &'a [u8],
+        mut input: Stream<'a>,
         ctx: &'a Self::Context,
         count: usize,
     ) -> ParserResult<'a, Vec<Self>> {
