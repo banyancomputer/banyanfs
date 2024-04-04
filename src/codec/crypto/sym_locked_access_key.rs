@@ -1,9 +1,9 @@
 use chacha20poly1305::{AeadInPlace, KeyInit, XChaCha20Poly1305};
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::bytes::streaming::take;
+use winnow::bytes::take;
 
 use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce};
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 #[derive(Clone)]
 pub struct SymLockedAccessKey {
@@ -26,7 +26,7 @@ impl SymLockedAccessKey {
 
         Ok(written_bytes)
     }
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (remaining, nonce) = Nonce::parse(input)?;
 
         let (remaining, cipher_text) = take(AccessKey::size())(remaining)?;

@@ -8,7 +8,7 @@ use winnow::multi::count;
 
 use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, KeyId, SigningKey};
 use crate::codec::header::KeyCount;
-use crate::codec::{ActorSettings, ParserResult};
+use crate::codec::{ActorSettings, ParserResult, Stream};
 
 pub struct MetaKey(AccessKey);
 
@@ -46,7 +46,7 @@ impl MetaKey {
     }
 
     pub fn parse_escrow<'a>(
-        input: &'a [u8],
+        input: Stream<'a>,
         key_count: u8,
         signing_key: &SigningKey,
     ) -> ParserResult<'a, Option<Self>> {

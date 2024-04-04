@@ -1,9 +1,9 @@
 use std::ops::Deref;
 
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::bytes::streaming::take;
+use winnow::bytes::take;
 
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct KeyCount(u8);
@@ -16,7 +16,7 @@ impl KeyCount {
         writer.write_all(&[self.0]).await?;
         Ok(1)
     }
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, count) = take(1u8)(input)?;
         Ok((input, Self(count[0])))
     }

@@ -1,9 +1,9 @@
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::number::streaming::le_u8;
+use winnow::number::le_u8;
 
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum NodeName {
@@ -87,22 +87,28 @@ impl NodeName {
         matches!(self, Self::Root)
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, name_type) = le_u8(input)?;
 
         match name_type {
             NAME_TYPE_ROOT_ID => Ok((input, Self::Root)),
             NAME_TYPE_NAMED_ID => {
                 let (input, name_length) = le_u8(input)?;
-                let (input, name) = winnow::bytes::streaming::take(name_length as usize)(input)?;
+                let (input, name) = winnow::bytes::take(name_length as usize)(input)?;
 
                 let name = String::from_utf8(name.to_vec()).map_err(|_| {
-                    winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify))
+                    winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(
+                        input,
+                        winnow::error::ErrorKind::Verify,
+                    ))
                 })?;
                 Ok((input, Self::Named(name)))
             }
             _ => {
-                let err = winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
+                let err = winnow::error::ParseError::from_error_kind(
+                    input,
+                    winnow::error::ErrorKind::Verify,
+                );
                 Err(winnow::error::ErrMode::Cut(err))
             }
         }
@@ -162,7 +168,7 @@ mod tests {
         original.encode(&mut buffer).await.unwrap();
         assert_eq!(buffer, &[0x00]);
 
-        let (remaining, parsed) = NodeName::parse(&buffer).unwrap();
+        let (remaining, parsed) = NodeName::parse(Stream::new(&buffer)).unwrap();
         let remaining: Vec<u8> = remaining.to_vec();
         assert_eq!(Vec::<u8>::new(), remaining);
         assert_eq!(original, parsed);
@@ -177,7 +183,7 @@ mod tests {
         original.encode(&mut buffer).await.unwrap();
         assert_eq!(buffer, &[0x01, 0x05, b'h', b'e', b'l', b'l', b'o']);
 
-        let (remaining, parsed) = NodeName::parse(&buffer).unwrap();
+        let (remaining, parsed) = NodeName::parse(Stream::new(&buffer)).unwrap();
         let remaining: Vec<u8> = remaining.to_vec();
         assert_eq!(Vec::<u8>::new(), remaining);
         assert_eq!(original, parsed);

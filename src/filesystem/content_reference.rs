@@ -1,9 +1,9 @@
 use futures::{AsyncWrite, AsyncWriteExt};
 use winnow::multi::count;
-use winnow::number::streaming::{le_u16, le_u64};
+use winnow::number::{le_u16, le_u64};
 
 use crate::codec::filesystem::BlockKind;
-use crate::codec::{BlockSize, Cid, ParserResult};
+use crate::codec::{BlockSize, Cid, ParserResult, Stream};
 
 #[derive(Clone, Debug)]
 pub struct ContentReference {
@@ -60,7 +60,7 @@ impl ContentReference {
         Ok(written_bytes)
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, data_block_cid) = Cid::parse(input)?;
         let (input, block_size) = BlockSize::parse(input)?;
 
@@ -76,7 +76,7 @@ impl ContentReference {
         Ok((input, content_ref))
     }
 
-    pub fn parse_many(input: &[u8], ref_count: u8) -> ParserResult<Vec<Self>> {
+    pub fn parse_many(input: Stream, ref_count: u8) -> ParserResult<Vec<Self>> {
         count(Self::parse, ref_count as usize)(input)
     }
 
@@ -130,7 +130,7 @@ impl ContentLocation {
         Ok(written_bytes)
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, block_kind) = BlockKind::parse(input)?;
         let (input, content_cid) = Cid::parse(input)?;
         let (input, block_index) = le_u64(input)?;
@@ -144,7 +144,7 @@ impl ContentLocation {
         Ok((input, location))
     }
 
-    pub fn parse_many(input: &[u8], ref_count: u16) -> ParserResult<Vec<Self>> {
+    pub fn parse_many(input: Stream, ref_count: u16) -> ParserResult<Vec<Self>> {
         count(Self::parse, ref_count as usize)(input)
     }
 

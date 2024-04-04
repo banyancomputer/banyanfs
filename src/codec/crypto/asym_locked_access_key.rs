@@ -1,10 +1,10 @@
 use chacha20poly1305::{AeadInPlace, KeyInit, XChaCha20Poly1305};
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::bytes::streaming::take;
+use winnow::bytes::take;
 use winnow::Parser;
 
 use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce, SigningKey, VerifyingKey};
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 pub struct AsymLockedAccessKey {
     pub(crate) dh_exchange_key: VerifyingKey,
@@ -30,7 +30,7 @@ impl AsymLockedAccessKey {
 
         Ok(written_bytes)
     }
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, (dh_exchange_key, nonce, raw_cipher_text, tag)) = (
             VerifyingKey::parse,
             Nonce::parse,

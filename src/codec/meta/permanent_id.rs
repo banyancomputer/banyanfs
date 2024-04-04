@@ -1,9 +1,9 @@
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
-use winnow::bytes::streaming::take;
 use rand::Rng;
+use winnow::bytes::take;
 
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 const PERMANENT_ID_SIZE: usize = 8;
 
@@ -27,7 +27,7 @@ impl PermanentId {
         Self(rng.gen())
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (remaining, id_bytes) = take(PERMANENT_ID_SIZE)(input)?;
 
         let mut bytes = [0u8; PERMANENT_ID_SIZE];

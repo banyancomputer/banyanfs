@@ -1,8 +1,8 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::number::streaming::{le_u64, le_u8};
+use winnow::number::{le_u64, le_u8};
 
 use crate::codec::crypto::SymLockedAccessKey;
-use crate::codec::{Cid, ParserResult};
+use crate::codec::{Cid, ParserResult, Stream};
 use crate::filesystem::ContentReference;
 
 const FILE_CONTENT_TYPE_STUB: u8 = 0x01;
@@ -148,7 +148,7 @@ impl FileContent {
         matches!(self, Self::Stub { .. })
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, content_type) = le_u8(input)?;
 
         let parsed = match content_type {
@@ -189,7 +189,10 @@ impl FileContent {
                 (input, data)
             }
             _ => {
-                let err = winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Tag);
+                let err = winnow::error::ParseError::from_error_kind(
+                    input,
+                    winnow::error::ErrorKind::Tag,
+                );
                 return Err(winnow::error::ErrMode::Cut(err));
             }
         };

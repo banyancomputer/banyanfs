@@ -1,15 +1,15 @@
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::bytes::streaming::{tag, take};
-use winnow::number::streaming::{le_u64, le_u8};
 use rand::Rng;
+use winnow::bytes::{tag, take};
+use winnow::number::{le_u64, le_u8};
 
 use crate::codec::crypto::{
     AccessKey, AuthenticationTag, Nonce, Signature, SigningKey, VerifyingKey,
 };
 use crate::codec::header::BANYAN_DATA_MAGIC;
 use crate::codec::meta::{BlockSize, BlockSizeError};
-use crate::codec::{Cid, ParserResult};
+use crate::codec::{Cid, ParserResult, Stream};
 use crate::utils::std_io_err;
 
 const ENCRYPTED_BIT: u8 = 0b1000_0000;
@@ -190,14 +190,15 @@ impl DataBlock {
     }
 
     pub fn parse<'a>(
-        input: &'a [u8],
+        input: Stream<'a>,
         access_key: &AccessKey,
         _verifying_key: &VerifyingKey,
     ) -> ParserResult<'a, Self> {
         let (input, version) = le_u8(input)?;
 
         if version != 0x01 {
-            let err = winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
+            let err =
+                winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
             return Err(winnow::error::ErrMode::Cut(err));
         }
 
@@ -233,7 +234,10 @@ impl DataBlock {
             let mut plaintext_data = data.to_vec();
             if let Err(err) = access_key.decrypt_buffer(nonce, &[], &mut plaintext_data, tag) {
                 tracing::error!("failed to decrypt chunk: {err}");
-                let err = winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
+                let err = winnow::error::ParseError::from_error_kind(
+                    input,
+                    winnow::error::ErrorKind::Verify,
+                );
                 return Err(winnow::error::ErrMode::Cut(err));
             }
 
@@ -244,10 +248,12 @@ impl DataBlock {
                         tracing::error!("failed to read inner length: {err:?}");
 
                         let empty_static: &'static [u8] = &[];
-                        return Err(winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(
-                            empty_static,
-                            winnow::error::ErrorKind::Verify,
-                        )));
+                        return Err(winnow::error::ErrMode::Cut(
+                            winnow::error::ParseError::from_error_kind(
+                                empty_static,
+                                winnow::error::ErrorKind::Verify,
+                            ),
+                        ));
                     }
                 };
             let plaintext_data: Vec<u8> = plaintext_data
@@ -404,7 +410,7 @@ impl DataOptions {
         self.encrypted
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, version_byte) = take(1u8)(input)?;
         let option_byte = version_byte[0];
 

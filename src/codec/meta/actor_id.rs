@@ -1,7 +1,7 @@
 use futures::AsyncWrite;
 
 use crate::codec::crypto::{Fingerprint, KeyId};
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct ActorId(Fingerprint);
@@ -18,7 +18,7 @@ impl ActorId {
         self.0.key_id()
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (remaining, fingerprint) = Fingerprint::parse(input)?;
         Ok((remaining, ActorId(fingerprint)))
     }

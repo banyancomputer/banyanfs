@@ -2,9 +2,9 @@ use std::collections::{HashMap, HashSet};
 
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
-use winnow::number::streaming::le_u64;
 use slab::Slab;
 use tracing::instrument;
+use winnow::number::le_u64;
 
 use crate::codec::crypto::AccessKey;
 use crate::codec::*;
@@ -242,7 +242,7 @@ impl InnerDrive {
     }
 
     pub(crate) fn parse<'a>(
-        input: &'a [u8],
+        input: Stream<'a>,
         drive_access: DriveAccess,
         journal_start: JournalCheckpoint,
         data_key: Option<&AccessKey>,

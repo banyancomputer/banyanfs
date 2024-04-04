@@ -13,13 +13,13 @@ use std::collections::HashMap;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::bytes::streaming::take;
-use winnow::number::streaming::{le_i64, le_u32, le_u8};
+use winnow::bytes::take;
+use winnow::number::{le_i64, le_u32, le_u8};
 
 use crate::codec::crypto::AccessKey;
 use crate::codec::filesystem::NodeKind;
 use crate::codec::meta::{ActorId, Cid, PermanentId};
-use crate::codec::{ParserResult, VectorClock};
+use crate::codec::{ParserResult, Stream, VectorClock};
 use crate::filesystem::drive::OperationError;
 
 pub(crate) type NodeId = usize;
@@ -243,7 +243,7 @@ impl Node {
 
     #[tracing::instrument(skip(input))]
     pub(crate) fn parse<'a>(
-        input: &'a [u8],
+        input: Stream<'a>,
         allocated_id: NodeId,
         data_key: Option<&AccessKey>,
     ) -> ParserResult<'a, Self> {
@@ -266,7 +266,10 @@ impl Node {
                 (node_data_buf, Some(pid))
             }
             _ => {
-                let err = winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Switch);
+                let err = winnow::error::ParseError::from_error_kind(
+                    input,
+                    winnow::error::ErrorKind::Switch,
+                );
                 return Err(winnow::error::ErrMode::Cut(err));
             }
         };
@@ -282,7 +285,10 @@ impl Node {
             let (meta_buf, key_len) = le_u8(node_data_buf)?;
             let (meta_buf, key) = take(key_len)(meta_buf)?;
             let key_str = String::from_utf8(key.to_vec()).map_err(|_| {
-                winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Char))
+                winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(
+                    input,
+                    winnow::error::ErrorKind::Char,
+                ))
             })?;
 
             let (meta_buf, val_len) = le_u8(meta_buf)?;

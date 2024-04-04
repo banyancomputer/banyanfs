@@ -1,9 +1,9 @@
 use std::ops::Deref;
 
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::number::streaming::le_u16;
+use winnow::number::le_u16;
 
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 #[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
 pub struct KeyId(u16);
@@ -18,7 +18,7 @@ impl KeyId {
         Ok(key_id_bytes.len())
     }
 
-    pub(crate) fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub(crate) fn parse(input: Stream) -> ParserResult<Self> {
         let (input, key_id) = le_u16(input)?;
         Ok((input, Self(key_id)))
     }

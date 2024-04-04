@@ -1,7 +1,7 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::number::streaming::le_u8;
+use winnow::number::le_u8;
 
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 const CONTENT_OPTIONS_RESERVED_MASK: u8 = 0b1111_1000;
 
@@ -66,11 +66,12 @@ impl ContentOptions {
         Ok(1)
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, byte) = le_u8(input)?;
 
         if cfg!(feature = "strict") && byte & CONTENT_OPTIONS_RESERVED_MASK != 0 {
-            let err = winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
+            let err =
+                winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
             return Err(winnow::error::ErrMode::Cut(err));
         }
 

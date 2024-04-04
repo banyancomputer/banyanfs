@@ -1,7 +1,7 @@
 use futures::AsyncWrite;
 use winnow::Parser;
 
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 use crate::codec::header::{IdentityHeader, PublicSettings};
 use crate::codec::FilesystemId;
@@ -29,7 +29,7 @@ impl FormatHeader {
         Ok(written_bytes)
     }
 
-    pub fn parse_with_magic(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse_with_magic(input: Stream) -> ParserResult<Self> {
         let mut header_parser = (
             IdentityHeader::parse_with_magic,
             FilesystemId::parse,
@@ -74,7 +74,7 @@ mod tests {
         // A public non-ECC header
         source.extend(&[0x00]);
 
-        let (remaining, parsed) = FormatHeader::parse_with_magic(&source).unwrap();
+        let (remaining, parsed) = FormatHeader::parse_with_magic(Stream::new(&source)).unwrap();
         assert!(remaining.is_empty());
         assert_eq!(
             parsed,

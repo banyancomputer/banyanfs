@@ -2,11 +2,11 @@ use std::ops::{Deref, DerefMut};
 
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
-use winnow::bytes::streaming::take;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
+use winnow::bytes::take;
 
 use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce};
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 #[derive(Default)]
 pub(crate) struct EncryptedBuffer {
@@ -15,7 +15,7 @@ pub(crate) struct EncryptedBuffer {
 
 impl EncryptedBuffer {
     pub fn parse_and_decrypt<'a>(
-        input: &'a [u8],
+        input: Stream<'a>,
         payload_size: usize,
         authenticated_data: &[u8],
         access_key: &AccessKey,
@@ -28,7 +28,8 @@ impl EncryptedBuffer {
 
         if let Err(err) = access_key.decrypt_buffer(nonce, authenticated_data, &mut buffer, tag) {
             tracing::error!("failed to decrypt permission buffer: {err}");
-            let err = winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
+            let err =
+                winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
             return Err(winnow::error::ErrMode::Cut(err));
         }
 

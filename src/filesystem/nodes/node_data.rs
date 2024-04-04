@@ -2,10 +2,10 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::number::streaming::{le_u16, le_u64};
+use winnow::number::{le_u16, le_u64};
 
 use crate::codec::filesystem::{DirectoryPermissions, FilePermissions};
-use crate::codec::{Cid, ParserResult, PermanentId};
+use crate::codec::{Cid, ParserResult, PermanentId, Stream};
 use crate::filesystem::nodes::{NodeKind, NodeName};
 use crate::filesystem::FileContent;
 
@@ -129,7 +129,7 @@ impl NodeData {
         }
     }
 
-    pub(crate) fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub(crate) fn parse(input: Stream) -> ParserResult<Self> {
         let (input, kind) = NodeKind::parse(input)?;
 
         match kind {
@@ -281,7 +281,7 @@ async fn encode_children<W: AsyncWrite + Unpin + Send>(
     Ok(written_bytes)
 }
 
-fn parse_children(input: &[u8]) -> ParserResult<HashMap<NodeName, PermanentId>> {
+fn parse_children(input: Stream) -> ParserResult<HashMap<NodeName, PermanentId>> {
     let (data_buf, children_count) = le_u16(input)?;
 
     let mut children = HashMap::new();

@@ -11,6 +11,7 @@ use crate::codec::meta::{FilesystemId, JournalCheckpoint, MetaKey};
 use crate::codec::parser::{
     ParserResult, ParserStateMachine, ProgressType, SegmentStreamer, StateError, StateResult,
 };
+use crate::codec::Stream;
 use crate::filesystem::{Drive, DriveAccess, InnerDrive};
 
 pub struct DriveLoader<'a> {
@@ -66,7 +67,7 @@ impl<'a> DriveLoader<'a> {
 impl ParserStateMachine<Drive> for DriveLoader<'_> {
     type Error = DriveLoaderError;
 
-    fn parse(&mut self, buffer: &[u8]) -> StateResult<Drive, Self::Error> {
+    fn parse(&mut self, buffer: Stream) -> StateResult<Drive, Self::Error> {
         match &self.state {
             DriveLoaderState::IdentityHeader => {
                 let (input, id_header) = IdentityHeader::parse_with_magic(buffer)?;
@@ -155,7 +156,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                     "drive_loader::encrypted_header"
                 );
 
-                let mut header = header_buffer.as_ref();
+                let mut header = header_buffer.as_slice();
 
                 let (remaining, drive_access) =
                     DriveAccess::parse(header, **key_count, self.signing_key)?;

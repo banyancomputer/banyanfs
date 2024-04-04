@@ -2,9 +2,9 @@ use std::ops::Deref;
 
 use chacha20poly1305::Tag as ChaChaTag;
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::bytes::streaming::take;
+use winnow::bytes::take;
 
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 const TAG_LENGTH: usize = 16;
 
@@ -24,7 +24,7 @@ impl AuthenticationTag {
         Ok(self.0.len())
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (remaining, slice) = take(TAG_LENGTH)(input)?;
 
         let mut bytes = [0u8; TAG_LENGTH];
@@ -66,9 +66,9 @@ mod tests {
     async fn test_authentication_tag_parsing() {
         let mut rng = rand::thread_rng();
         let input: [u8; TAG_LENGTH + 4] = rng.gen();
-        let (remaining, tag) = AuthenticationTag::parse(&input).unwrap();
+        let (remaining, tag) = AuthenticationTag::parse(Stream::new(&input)).unwrap();
 
-        assert_eq!(remaining, &input[TAG_LENGTH..]);
+        assert_eq!(remaining.into_inner(), &input[TAG_LENGTH..]);
         assert_eq!(tag.as_bytes(), &input[..TAG_LENGTH]);
     }
 
@@ -76,7 +76,7 @@ mod tests {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_authentication_tag_parsing_stream_too_short() {
         let input = [0u8; TAG_LENGTH - 1];
-        let result = AuthenticationTag::parse(&input);
+        let result = AuthenticationTag::parse(Stream::new(&input));
         assert!(matches!(result, Err(winnow::error::ErrMode::Incomplete(_))));
     }
 }

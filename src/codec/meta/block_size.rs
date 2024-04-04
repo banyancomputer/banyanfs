@@ -1,6 +1,6 @@
-use winnow::number::streaming::le_u8;
+use winnow::number::le_u8;
 
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 use futures::{AsyncWrite, AsyncWriteExt};
 
 #[derive(Debug, Clone, Copy)]
@@ -46,7 +46,7 @@ impl BlockSize {
         })
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, total_space) = le_u8(input)?;
         let (input, chunk_size) = le_u8(input)?;
 

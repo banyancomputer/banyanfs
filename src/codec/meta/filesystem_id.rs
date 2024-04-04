@@ -1,9 +1,9 @@
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::bytes::streaming::take;
 use uuid::{NoContext, Timestamp, Uuid};
+use winnow::bytes::take;
 
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 const ID_LENGTH: usize = 16;
 
@@ -26,7 +26,7 @@ impl FilesystemId {
         Self(uuid.to_bytes_le())
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (remaining, id_bytes) = take(ID_LENGTH)(input)?;
 
         // All zeros and all ones are disallowed, this isn't actually harmful though so we'll only
@@ -34,7 +34,8 @@ impl FilesystemId {
         if cfg!(feature = "strict")
             && (id_bytes.iter().all(|&b| b == 0x00) || id_bytes.iter().all(|&b| b == 0xff))
         {
-            let err = winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
+            let err =
+                winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
             return Err(winnow::error::ErrMode::Cut(err));
         }
 
@@ -90,7 +91,7 @@ mod tests {
         filesystem_id.encode(&mut encoded).await.unwrap();
         assert_eq!(raw_id, encoded.as_slice());
 
-        let (remaining, parsed) = FilesystemId::parse(&encoded).unwrap();
+        let (remaining, parsed) = FilesystemId::parse(Stream::new(&encoded)).unwrap();
         assert!(remaining.is_empty());
         assert_eq!(filesystem_id, parsed);
     }

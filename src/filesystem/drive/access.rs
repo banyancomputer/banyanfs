@@ -6,7 +6,7 @@ use futures::io::AsyncWrite;
 
 use crate::codec::crypto::{KeyId, PermissionKeys, SigningKey, VerifyingKey};
 use crate::codec::header::KeyAccessSettings;
-use crate::codec::{ActorId, ActorSettings, ParserResult};
+use crate::codec::{ActorId, ActorSettings, ParserResult, Stream};
 
 #[derive(Clone, Debug)]
 pub struct DriveAccess {
@@ -42,7 +42,7 @@ impl DriveAccess {
     }
 
     pub fn parse<'a>(
-        input: &'a [u8],
+        input: Stream<'a>,
         key_count: u8,
         signing_key: &SigningKey,
     ) -> ParserResult<'a, Self> {
@@ -53,12 +53,18 @@ impl DriveAccess {
 
         for _ in 0..key_count {
             let (i, key_id) = KeyId::parse(buf_slice).map_err(|_| {
-                winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify))
+                winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(
+                    input,
+                    winnow::error::ErrorKind::Verify,
+                ))
             })?;
             buf_slice = i;
 
             let (i, settings) = ActorSettings::parse_private(buf_slice).map_err(|_| {
-                winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify))
+                winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(
+                    input,
+                    winnow::error::ErrorKind::Verify,
+                ))
             })?;
             buf_slice = i;
 
