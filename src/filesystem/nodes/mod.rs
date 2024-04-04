@@ -8,6 +8,7 @@ pub(crate) use node_builder::{NodeBuilder, NodeBuilderError};
 
 pub use node_data::{NodeData, NodeDataError};
 pub use node_name::{NodeName, NodeNameError};
+use winnow::Parser;
 
 use std::collections::HashMap;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
@@ -253,12 +254,15 @@ impl Node {
         let (input, node_data_len) = le_u32(input)?;
         tracing::trace!(node_data_len, ?cid, "cid/node_data_len");
 
-        let (input, node_data_buf) = take(node_data_len)(input)?;
+        // let (input, node_data_buf) = take(node_data_len)(input)?;
 
-        let (node_data_buf, permanent_id) = PermanentId::parse(node_data_buf)?;
-        let (node_data_buf, vector_clock) = VectorClock::parse(node_data_buf)?;
+        let (input, (permanent_id, vector_clock, parent_present)) =
+            (PermanentId::parse, VectorClock::parse, take(1u8)).parse_next(input)?;
 
-        let (node_data_buf, parent_present) = take(1u8)(node_data_buf)?;
+        // let (node_data_buf, permanent_id) = PermanentId::parse(node_data_buf)?;
+        // let (node_data_buf, vector_clock) = VectorClock::parse(node_data_buf)?;
+
+        // let (node_data_buf, parent_present) = take(1u8)(node_data_buf)?;
         let (node_data_buf, parent_id) = match parent_present[0] {
             0x00 => (node_data_buf, None),
             0x01 => {

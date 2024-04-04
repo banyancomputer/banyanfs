@@ -3,6 +3,7 @@ use futures::{AsyncWrite, AsyncWriteExt};
 use rand::Rng;
 use winnow::bytes::{tag, take};
 use winnow::number::{le_u64, le_u8};
+use winnow::stream::Offset;
 
 use crate::codec::crypto::{
     AccessKey, AuthenticationTag, Nonce, Signature, SigningKey, VerifyingKey,
@@ -223,13 +224,17 @@ impl DataBlock {
 
         let mut contents = Vec::with_capacity(chunk_count);
         for _ in 0..chunk_count {
-            let (input, chunk_data) = take(base_chunk_size)(input)?;
+            //let (input, chunk_data) = take(base_chunk_size)(input)?;
+            let chunk_start = input;
 
-            let (chunk_data, nonce) = Nonce::parse(chunk_data)?;
-            let (chunk_data, data) = take(encrypted_chunk_size)(chunk_data)?;
-            let (chunk_data, tag) = AuthenticationTag::parse(chunk_data)?;
+            let (input, nonce) = Nonce::parse(input)?;
+            let (input, data) = take(encrypted_chunk_size)(input)?;
+            let (input, tag) = AuthenticationTag::parse(input)?;
 
-            debug_assert!(chunk_data.is_empty(), "chunk should be fully read");
+            debug_assert!(
+                chunk_start.offset_to(&input) == base_chunk_size,
+                "chunk should be fully read"
+            );
 
             let mut plaintext_data = data.to_vec();
             if let Err(err) = access_key.decrypt_buffer(nonce, &[], &mut plaintext_data, tag) {
@@ -250,7 +255,7 @@ impl DataBlock {
                         let empty_static: &'static [u8] = &[];
                         return Err(winnow::error::ErrMode::Cut(
                             winnow::error::ParseError::from_error_kind(
-                                empty_static,
+                                Stream::new(empty_static),
                                 winnow::error::ErrorKind::Verify,
                             ),
                         ));
@@ -283,7 +288,7 @@ impl DataBlock {
     }
 
     pub fn parse_with_magic<'a>(
-        input: &'a [u8],
+        input: Stream<'a>,
         access_key: &AccessKey,
         verifying_key: &VerifyingKey,
     ) -> ParserResult<'a, Self> {
@@ -432,6 +437,6 @@ impl DataOptions {
     }
 }
 
-fn banyan_data_magic_tag(input: &[u8]) -> ParserResult<&[u8]> {
+fn banyan_data_magic_tag(input: Stream) -> ParserResult<&[u8]> {
     tag(BANYAN_DATA_MAGIC)(input)
 }
