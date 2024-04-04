@@ -10,7 +10,7 @@ mod wasm_shared_file;
 mod wasm_snapshot;
 
 pub use wasm_bucket::WasmBucket;
-pub use wasm_bucket_key::WasmBucketKey;
+pub use wasm_bucket_key::WasmBucketAccess;
 pub use wasm_bucket_metadata::WasmBucketMetadata;
 pub use wasm_bucket_mount::WasmBucketMount;
 pub use wasm_fs_metadata_entry::WasmFsMetadataEntry;
@@ -141,15 +141,6 @@ impl TombCompat {
         Ok(WasmBucketMount::new(wasm_bucket, wasm_mount))
     }
 
-    // checked, returns WasmBucketKey instance
-    #[wasm_bindgen(js_name = createBucketKey)]
-    pub async fn create_bucket_key(&mut self, _bucket_id: String) -> BanyanFsResult<WasmBucketKey> {
-        // I don't think this actually needs to be implemented... This definitely isn't the way we
-        // want to create them, they should only come in through by inclusion of a signed update of
-        // the bucket's metadata.
-        unimplemented!("shouldn't be used");
-    }
-
     // checked, no return
     #[wasm_bindgen(js_name = deleteBucket)]
     pub async fn delete_bucket(&mut self, bucket_id: String) -> BanyanFsResult<()> {
@@ -188,17 +179,17 @@ impl TombCompat {
     }
 
     // checked, returns list of WasmBucketKey instances
-    #[wasm_bindgen(js_name = listBucketKeys)]
-    pub async fn list_bucket_keys(&mut self, bucket_id: String) -> BanyanFsResult<js_sys::Array> {
-        let all_drive_keys = platform::drive_keys::get_all(&self.client, &bucket_id).await?;
+    #[wasm_bindgen(js_name = listBucketAccess)]
+    pub async fn list_bucket_access(&mut self, bucket_id: String) -> BanyanFsResult<js_sys::Array> {
+        let all_drive_access = platform::drive_access::get_all(&self.client, &bucket_id).await?;
 
-        let bucket_keys = all_drive_keys
+        let bucket_access = all_drive_access
             .into_iter()
-            .map(|dk| WasmBucketKey::from((bucket_id.clone(), dk)))
+            .map(|da| WasmBucketAccess::from(da))
             .map(JsValue::from)
             .collect::<js_sys::Array>();
 
-        Ok(bucket_keys)
+        Ok(bucket_access)
     }
 
     // checked, returns list of WasmSnapshot instances

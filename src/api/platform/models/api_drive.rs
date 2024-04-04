@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::api::platform::{DriveKind, StorageClass};
 
+use super::api_drive_access::ApiDriveAccess;
+
 pub type ApiDriveId = String;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -24,23 +26,7 @@ pub struct ApiDrive {
 
     // Only present in the response to bucket creation
     #[serde(rename = "access", skip_serializing_if = "Option::is_none")]
-    _access: Option<InitialBucketAccess>,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-#[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
-struct InitialBucketAccess {
-    user_key_id: String,
-    fingerprint: String,
-    state: BucketAccessState,
-}
-
-#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum BucketAccessState {
-    Pending,
-    Approved,
-    Revoked,
+    _access: Option<ApiDriveAccess>,
 }
 
 #[derive(Debug, Default, Serialize)]

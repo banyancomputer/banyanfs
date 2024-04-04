@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use crate::api::client::{ApiRequest, PlatformApiRequest};
-use crate::api::platform::ApiDriveKey;
+use crate::api::platform::ApiDriveAccess;
 
 pub(crate) struct GetAllRequest {
     bucket_id: String,
@@ -15,10 +15,10 @@ impl GetAllRequest {
 
 #[async_trait]
 impl ApiRequest for GetAllRequest {
-    type Response = Vec<ApiDriveKey>;
+    type Response = Vec<ApiDriveAccess>;
 
     fn path(&self) -> String {
-        format!("/api/v1/buckets/{}/keys", self.bucket_id)
+        format!("/api/v1/buckets/{}/access", self.bucket_id)
     }
 }
 

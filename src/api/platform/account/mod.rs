@@ -11,7 +11,7 @@ use register_api_key::RegisterApiKey;
 use url::Url;
 
 use crate::api::client::{ApiClient, ApiError};
-use crate::api::platform::ApiDriveKeyId;
+use crate::api::platform::ApiKeyId;
 use crate::codec::crypto::VerifyingKey;
 
 pub async fn current_usage(client: &ApiClient) -> Result<CurrentUsageResponse, ApiError> {
@@ -37,7 +37,7 @@ pub async fn get_storage_grant(
 pub async fn register_api_key(
     client: &ApiClient,
     public_key: &VerifyingKey,
-) -> Result<ApiDriveKeyId, ApiError> {
+) -> Result<ApiKeyId, ApiError> {
     let key_registration = RegisterApiKey::new(public_key);
     let fingerprint = key_registration.fingerprint().to_string();
 
