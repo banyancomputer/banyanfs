@@ -128,9 +128,10 @@ impl ApiClient {
         }
     }
 
-    /// Perform a request to the platform API. This is more restrictive than the [`request`]
-    /// method, limiting the request to only those that are explicitly implementing the marker
-    /// trait [`PlatformApiRequest`] but will handle the authentication for you.
+    /// Perform a request to the platform API. This is more restrictive than the
+    /// [`ApiClient::request`] method, limiting the request to only those that are explicitly
+    /// implementing the marker trait [`PlatformApiRequest`] but will handle the authentication for
+    /// you.
     pub(crate) async fn platform_request<R: PlatformApiRequest>(
         &self,
         request: R,

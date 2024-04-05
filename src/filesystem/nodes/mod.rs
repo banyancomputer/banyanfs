@@ -67,7 +67,7 @@ impl Node {
     /// hiearchy is directory -> (directory | file), file -> associated data.
     ///
     /// Calling this function will modify the CID of the node and as such will invalidate the
-    /// internal encoding cache if available from [`cached_encoding`].
+    /// internal encoding cache if available from [`Node::cached_encoding`].
     pub(crate) async fn add_child(
         &mut self,
         name: NodeName,
@@ -79,16 +79,16 @@ impl Node {
         Ok(())
     }
 
-    /// During the encoding process we first need the CID of the node (via [`cid`]) which requires
-    /// fully encoding the node to calculate. That method caches the result of that encoding if it
-    /// needed to generate it. This consumes that cached encoding if we have it and is mostly used
-    /// as an optimization that is described in the [`cid`] documentation.
+    /// During the encoding process we first need the CID of the node (via [`Node::cid`]) which
+    /// requires fully encoding the node to calculate. That method caches the result of that
+    /// encoding if it needed to generate it. This consumes that cached encoding if we have it and
+    /// is mostly used as an optimization that is described in the [`Node::cid`] documentation.
     pub(crate) async fn cached_encoding(&self) -> Option<Vec<u8>> {
         self.cid.take_cached().await
     }
 
     /// Returns the CID of the node. If the internal data has changed in anyway (as indicated by
-    /// and internal call to [`CidCcache::is_dirty`]), this will fully encode the node as it would
+    /// and internal call to CidCache::is_dirty), this will fully encode the node as it would
     /// appear on disk and calculates the CID over that data.
     ///
     /// As an optimization this cache's that encoding so we don't have to re-encode it when we're
