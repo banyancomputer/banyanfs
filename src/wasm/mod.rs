@@ -29,12 +29,9 @@ use tracing::info;
 // - Ensure all methods that need it return a result with an effective error message instead of
 //   panicing. Need to get all the unwraps() out but we need to maintain the type signatures for
 //   the time being.
-// - Switch off of using reqwest for the HTTP client, we should be using the web-sys bindings for
-//   Fetch requests, the streaming bodies will need some JS fiddling. We can probably get streaming
-//   uploads working by switching off of it as well (that would be a JS API breaking change).
 
 /// Performs first time setup to the WASM environment once this library is loaded. This primarily
-/// sets up logging.
+/// sets up logging and reports the library version.
 #[wasm_bindgen(start)]
 pub fn wasm_init() -> Result<(), JsValue> {
     // Only run this in debug mode, in release mode this bloats up the library quite a bit
@@ -56,6 +53,12 @@ pub fn wasm_init() -> Result<(), JsValue> {
     Ok(())
 }
 
+/// Sets up our default logging level and allows for in the field configuration for additional
+/// details by setting the "banaynfs.log_level" item in local storage to the desired log level.
+/// Valid values are "trace", "debug", "info", "warn", and "error". All other values are ignored.
+///
+/// This dynamic feature is very useful especially during active development but may be removed or
+/// become opt in in the future as it significantly increases the size of the WASM library.
 fn configured_log_level() -> Level {
     let default_level = if cfg!(debug_assertions) {
         Level::TRACE
