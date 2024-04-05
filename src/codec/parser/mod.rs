@@ -15,8 +15,13 @@ pub type Stream<'a> = Partial<&'a [u8]>;
 pub type ParserResult<'a, T> =
     winnow::IResult<Stream<'a>, T, winnow::error::VerboseError<Stream<'a>>>;
 
+pub type CompleteParserResult<'a, T> =
+    winnow::IResult<&'a [u8], T, winnow::error::VerboseError<&'a [u8]>>;
+
 #[cfg(not(debug_assertions))]
 pub type ParserResult<'a, T> = winnow::IResult<Stream<'a>, T>;
+#[cfg(not(debug_assertions))]
+pub type CompleteParserResult<'a, T> = winnow::IResult<&'a [u8], T>;
 
 pub type StateResult<T, E> = Result<ProgressType<T>, E>;
 

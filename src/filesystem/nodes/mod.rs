@@ -257,12 +257,14 @@ impl Node {
         let node_data_start = input;
 
         // let (input, node_data_buf) = take(node_data_len)(input)?;
+        // Need to add check for error conditions here (i.e. don't try to parse past `node_data_len`)
 
-        // let (node_data_buf, permanent_id) = PermanentId::parse(node_data_buf)?;
-        // let (node_data_buf, vector_clock) = VectorClock::parse(node_data_buf)?;
+        let (input, permanent_id) = PermanentId::parse(input)?;
+        let (input, vector_clock) = VectorClock::parse(input)?;
+        let (input, parent_present) = take(1u8).parse_next(input)?;
 
-        let (input, (permanent_id, vector_clock, parent_present)) =
-            (PermanentId::parse, VectorClock::parse, take(1u8)).parse_next(input)?;
+        // , vector_clock, parent_present)) =
+        //     (PermanentId::parse, VectorClock::parse, take(1u8)).parse_next(input)?;
         tracing::trace!(node_data_len, ?cid, "cid/node_data_len");
 
         // let (node_data_buf, parent_present) = take(1u8)(node_data_buf)?;
@@ -281,14 +283,14 @@ impl Node {
             }
         };
 
-        // let (node_data_buf, owner_id) = ActorId::parse(node_data_buf)?;
-        // let (node_data_buf, created_at) = le_i64(node_data_buf)?;
-        // let (node_data_buf, modified_at) = le_i64(node_data_buf)?;
-        // let (node_data_buf, name) = NodeName::parse(node_data_buf)?;
-        // let (mut node_data_buf, metadata_entries) = le_u8(node_data_buf)?;
+        let (input, owner_id) = ActorId::parse(input)?;
+        let (input, created_at) = le_i64(input)?;
+        let (input, modified_at) = le_i64(input)?;
+        let (input, name) = NodeName::parse(input)?;
+        let (mut input, metadata_entries) = le_u8(input)?;
 
-        let (input, (owner_id, created_at, modified_at, name, metadata_entries)) =
-            (ActorId::parse, le_i64, le_i64, NodeName::parse, le_u8).parse_next(input)?;
+        // let (input, (owner_id, created_at, modified_at, name, metadata_entries)) =
+        //     (ActorId::parse, le_i64, le_i64, NodeName::parse, le_u8).parse_next(input)?;
 
         let mut metadata = HashMap::new();
         for _ in 0..metadata_entries {
