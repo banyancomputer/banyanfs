@@ -20,8 +20,8 @@ mod node_name;
 pub(crate) use cid_cache::CidCache;
 pub(crate) use node_builder::{NodeBuilder, NodeBuilderError};
 
-pub use node_data::{NodeData, NodeDataError};
-pub use node_name::{NodeName, NodeNameError};
+pub(crate) use node_data::{NodeData, NodeDataError};
+pub(crate) use node_name::{NodeName, NodeNameError};
 
 use std::collections::HashMap;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};

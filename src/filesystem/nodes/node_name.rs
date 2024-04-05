@@ -6,7 +6,7 @@ use nom::number::streaming::le_u8;
 use crate::codec::ParserResult;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum NodeName {
+pub(crate) enum NodeName {
     Root,
     Named(String),
 }
@@ -16,14 +16,14 @@ const NAME_TYPE_ROOT_ID: u8 = 0x00;
 const NAME_TYPE_NAMED_ID: u8 = 0x01;
 
 impl NodeName {
-    pub fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         match &self {
             Self::Root => "{:root:}",
             Self::Named(name) => name,
         }
     }
 
-    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
     ) -> std::io::Result<usize> {
@@ -83,11 +83,11 @@ impl NodeName {
         Ok(Self::Named(name))
     }
 
-    pub fn is_root(&self) -> bool {
+    pub(crate) fn is_root(&self) -> bool {
         matches!(self, Self::Root)
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub(crate) fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, name_type) = le_u8(input)?;
 
         match name_type {
@@ -129,7 +129,7 @@ impl std::convert::TryFrom<&str> for NodeName {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum NodeNameError {
+pub(crate) enum NodeNameError {
     #[error("name can't contain slashes")]
     ContainsSlash,
 
