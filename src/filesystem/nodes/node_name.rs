@@ -6,7 +6,7 @@ use nom::number::streaming::le_u8;
 use crate::codec::ParserResult;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(crate) enum NodeName {
+pub enum NodeName {
     Root,
     Named(String),
 }
@@ -16,13 +16,6 @@ const NAME_TYPE_ROOT_ID: u8 = 0x00;
 const NAME_TYPE_NAMED_ID: u8 = 0x01;
 
 impl NodeName {
-    pub(crate) fn as_str(&self) -> &str {
-        match &self {
-            Self::Root => "{:root:}",
-            Self::Named(name) => name,
-        }
-    }
-
     pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
@@ -129,7 +122,7 @@ impl std::convert::TryFrom<&str> for NodeName {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum NodeNameError {
+pub enum NodeNameError {
     #[error("name can't contain slashes")]
     ContainsSlash,
 
