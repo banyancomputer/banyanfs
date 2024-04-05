@@ -8,6 +8,7 @@ pub(crate) use node_builder::{NodeBuilder, NodeBuilderError};
 
 pub use node_data::{NodeData, NodeDataError};
 pub use node_name::{NodeName, NodeNameError};
+use winnow::stream::Offset;
 use winnow::Parser;
 
 use std::collections::HashMap;
@@ -252,21 +253,23 @@ impl Node {
 
         let (input, cid) = Cid::parse(input)?;
         let (input, node_data_len) = le_u32(input)?;
-        tracing::trace!(node_data_len, ?cid, "cid/node_data_len");
+
+        let node_data_start = input;
 
         // let (input, node_data_buf) = take(node_data_len)(input)?;
-
-        let (input, (permanent_id, vector_clock, parent_present)) =
-            (PermanentId::parse, VectorClock::parse, take(1u8)).parse_next(input)?;
 
         // let (node_data_buf, permanent_id) = PermanentId::parse(node_data_buf)?;
         // let (node_data_buf, vector_clock) = VectorClock::parse(node_data_buf)?;
 
+        let (input, (permanent_id, vector_clock, parent_present)) =
+            (PermanentId::parse, VectorClock::parse, take(1u8)).parse_next(input)?;
+        tracing::trace!(node_data_len, ?cid, "cid/node_data_len");
+
         // let (node_data_buf, parent_present) = take(1u8)(node_data_buf)?;
-        let (node_data_buf, parent_id) = match parent_present[0] {
-            0x00 => (node_data_buf, None),
+        let (input, parent_id) = match parent_present[0] {
+            0x00 => (input, None),
             0x01 => {
-                let (node_data_buf, pid) = PermanentId::parse(node_data_buf)?;
+                let (node_data_buf, pid) = PermanentId::parse(input)?;
                 (node_data_buf, Some(pid))
             }
             _ => {
@@ -278,15 +281,18 @@ impl Node {
             }
         };
 
-        let (node_data_buf, owner_id) = ActorId::parse(node_data_buf)?;
-        let (node_data_buf, created_at) = le_i64(node_data_buf)?;
-        let (node_data_buf, modified_at) = le_i64(node_data_buf)?;
-        let (node_data_buf, name) = NodeName::parse(node_data_buf)?;
-        let (mut node_data_buf, metadata_entries) = le_u8(node_data_buf)?;
+        // let (node_data_buf, owner_id) = ActorId::parse(node_data_buf)?;
+        // let (node_data_buf, created_at) = le_i64(node_data_buf)?;
+        // let (node_data_buf, modified_at) = le_i64(node_data_buf)?;
+        // let (node_data_buf, name) = NodeName::parse(node_data_buf)?;
+        // let (mut node_data_buf, metadata_entries) = le_u8(node_data_buf)?;
+
+        let (input, (owner_id, created_at, modified_at, name, metadata_entries)) =
+            (ActorId::parse, le_i64, le_i64, NodeName::parse, le_u8).parse_next(input)?;
 
         let mut metadata = HashMap::new();
         for _ in 0..metadata_entries {
-            let (meta_buf, key_len) = le_u8(node_data_buf)?;
+            let (meta_buf, key_len) = le_u8(input)?;
             let (meta_buf, key) = take(key_len)(meta_buf)?;
             let key_str = String::from_utf8(key.to_vec()).map_err(|_| {
                 winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(
@@ -300,11 +306,14 @@ impl Node {
             let val = val.to_vec();
 
             metadata.insert(key_str, val);
-            node_data_buf = meta_buf;
+            input = meta_buf;
         }
 
-        let (remaining, inner) = NodeData::parse(node_data_buf)?;
-        debug_assert!(remaining.is_empty(), "did not consume all input");
+        let (remaining, inner) = NodeData::parse(input)?;
+        debug_assert!(
+            node_data_start.offset_to(&remaining) == usize::try_from(node_data_len).unwrap(), //Unwrap safe on 32bit and up systems (unsafe on 16 bit systems)
+            "did not consume all input"
+        );
 
         let node = Self {
             id: allocated_id,
