@@ -1,6 +1,6 @@
 mod vec_stream;
 
-pub(crate) use vec_stream::vec_to_pinned_stream;
+pub use vec_stream::VecStream;
 
 use std::time::Duration;
 

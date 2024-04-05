@@ -211,7 +211,7 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
 
         for (idx, cid) in tracked_cids.into_iter().enumerate() {
             let data = self.cached_store.retrieve(cid.clone()).await?;
-            let block_stream = crate::api::client::utils::vec_to_pinned_stream(data);
+            let block_stream = crate::api::client::utils::VecStream::new(data).pinned();
 
             tracing::info!(?cid, "syncing block to the network");
 
