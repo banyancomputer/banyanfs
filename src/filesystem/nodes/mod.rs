@@ -277,7 +277,7 @@ impl Node {
             _ => {
                 let err = winnow::error::ParseError::from_error_kind(
                     input,
-                    winnow::error::ErrorKind::Switch,
+                    winnow::error::ErrorKind::Token,
                 );
                 return Err(winnow::error::ErrMode::Cut(err));
             }
@@ -295,16 +295,16 @@ impl Node {
         let mut metadata = HashMap::new();
         for _ in 0..metadata_entries {
             let (meta_buf, key_len) = le_u8(input)?;
-            let (meta_buf, key) = take(key_len)(meta_buf)?;
+            let (meta_buf, key) = take(key_len).parse_next(meta_buf)?;
             let key_str = String::from_utf8(key.to_vec()).map_err(|_| {
                 winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(
                     input,
-                    winnow::error::ErrorKind::Char,
+                    winnow::error::ErrorKind::Token,
                 ))
             })?;
 
             let (meta_buf, val_len) = le_u8(meta_buf)?;
-            let (meta_buf, val) = take(val_len)(meta_buf)?;
+            let (meta_buf, val) = take(val_len).parse_next(meta_buf)?;
             let val = val.to_vec();
 
             metadata.insert(key_str, val);

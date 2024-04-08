@@ -1,6 +1,7 @@
 use futures::io::{AsyncWrite, AsyncWriteExt};
 use winnow::bytes::take;
 use winnow::number::le_u8;
+use winnow::Parser;
 
 use crate::codec::crypto::VerifyingKey;
 use crate::codec::header::KeyAccessSettings;
@@ -77,7 +78,7 @@ impl ActorSettings {
         let (input, access_settings) = KeyAccessSettings::parse_private(input)?;
 
         let (input, agent_len) = le_u8(input)?;
-        let (input, agent_fixed) = take(SOFTWARE_AGENT_BYTE_STR_SIZE)(input)?;
+        let (input, agent_fixed) = take(SOFTWARE_AGENT_BYTE_STR_SIZE).parse_next(input)?;
         let agent = agent_fixed[..agent_len as usize].to_vec();
 
         let actor_settings = Self {

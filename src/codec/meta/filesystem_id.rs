@@ -1,7 +1,7 @@
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
 use uuid::{NoContext, Timestamp, Uuid};
-use winnow::bytes::take;
+use winnow::{bytes::take, Parser};
 
 use crate::codec::{ParserResult, Stream};
 
@@ -27,7 +27,7 @@ impl FilesystemId {
     }
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
-        let (remaining, id_bytes) = take(ID_LENGTH)(input)?;
+        let (remaining, id_bytes) = take(ID_LENGTH).parse_next(input)?;
 
         // All zeros and all ones are disallowed, this isn't actually harmful though so we'll only
         // perform this check in strict mode.

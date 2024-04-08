@@ -5,6 +5,7 @@ use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::AsyncWrite;
 use winnow::error::Needed;
 use winnow::multi::count;
+use winnow::Parser;
 
 use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, KeyId, SigningKey};
 use crate::codec::header::KeyCount;
@@ -55,7 +56,7 @@ impl MetaKey {
             key_count as usize,
         );
 
-        let (input, locked_keys): (_, Vec<_>) = match asym_parser(input) {
+        let (input, locked_keys): (_, Vec<_>) = match asym_parser.parse_next(input) {
             Ok(res) => res,
             Err(winnow::error::ErrMode::Incomplete(Needed::Size(_))) => {
                 let record_size = KeyId::size() + AsymLockedAccessKey::size();

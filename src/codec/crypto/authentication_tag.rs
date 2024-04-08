@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use chacha20poly1305::Tag as ChaChaTag;
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::bytes::take;
+use winnow::{bytes::take, Parser};
 
 use crate::codec::{ParserResult, Stream};
 
@@ -25,7 +25,7 @@ impl AuthenticationTag {
     }
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
-        let (remaining, slice) = take(TAG_LENGTH)(input)?;
+        let (remaining, slice) = take(TAG_LENGTH).parse_next(input)?;
 
         let mut bytes = [0u8; TAG_LENGTH];
         bytes.copy_from_slice(slice);

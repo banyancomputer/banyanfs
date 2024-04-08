@@ -1,7 +1,7 @@
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::number::le_u8;
+use winnow::{number::le_u8, Parser};
 
 use crate::codec::{ParserResult, Stream};
 
@@ -94,7 +94,7 @@ impl NodeName {
             NAME_TYPE_ROOT_ID => Ok((input, Self::Root)),
             NAME_TYPE_NAMED_ID => {
                 let (input, name_length) = le_u8(input)?;
-                let (input, name) = winnow::bytes::take(name_length as usize)(input)?;
+                let (input, name) = winnow::bytes::take(name_length as usize).parse_next(input)?;
 
                 let name = String::from_utf8(name.to_vec()).map_err(|_| {
                     winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(

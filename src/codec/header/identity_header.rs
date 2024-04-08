@@ -1,5 +1,6 @@
 use futures::{AsyncWrite, AsyncWriteExt};
 use winnow::bytes::{tag, take};
+use winnow::Parser;
 
 use crate::codec::header::BANYAN_FS_MAGIC;
 use crate::codec::{ParserResult, Stream};
@@ -34,11 +35,11 @@ impl IdentityHeader {
 }
 
 fn banyanfs_magic_tag(input: Stream) -> ParserResult<&[u8]> {
-    tag(BANYAN_FS_MAGIC)(input)
+    tag(BANYAN_FS_MAGIC).parse_next(input)
 }
 
 fn version_field(input: Stream) -> ParserResult<u8> {
-    let (input, version_byte) = take(1u8)(input)?;
+    let (input, version_byte) = take(1u8).parse_next(input)?;
     let version_byte = version_byte[0];
 
     // The specification indicates decoders SHOULD ignore this bit. We allow the consumers of the

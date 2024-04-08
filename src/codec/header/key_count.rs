@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::bytes::take;
+use winnow::{bytes::take, Parser};
 
 use crate::codec::{ParserResult, Stream};
 
@@ -17,7 +17,7 @@ impl KeyCount {
         Ok(1)
     }
     pub fn parse(input: Stream) -> ParserResult<Self> {
-        let (input, count) = take(1u8)(input)?;
+        let (input, count) = take(1u8).parse_next(input)?;
         Ok((input, Self(count[0])))
     }
 

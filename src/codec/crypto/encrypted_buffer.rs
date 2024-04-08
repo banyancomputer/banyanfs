@@ -4,6 +4,7 @@ use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 use winnow::bytes::take;
+use winnow::Parser;
 
 use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce};
 use crate::codec::{ParserResult, Stream};
@@ -21,7 +22,7 @@ impl EncryptedBuffer {
         access_key: &AccessKey,
     ) -> ParserResult<'a, Vec<u8>> {
         let (input, nonce) = Nonce::parse(input)?;
-        let (input, encrypted_slice) = take(payload_size)(input)?;
+        let (input, encrypted_slice) = take(payload_size).parse_next(input)?;
         let (input, tag) = AuthenticationTag::parse(input)?;
 
         let mut buffer = encrypted_slice.to_vec();

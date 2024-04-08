@@ -1,6 +1,6 @@
 use futures::{AsyncWrite, AsyncWriteExt};
 use p384::NistP384;
-use winnow::bytes::take;
+use winnow::{bytes::take, Parser};
 
 use crate::codec::{ParserResult, Stream};
 
@@ -26,7 +26,7 @@ impl Signature {
     }
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
-        let (remaining, signature_bytes) = take(SIGNATURE_SIZE)(input)?;
+        let (remaining, signature_bytes) = take(SIGNATURE_SIZE).parse_next(input)?;
         let signature = match Signature::from_slice(signature_bytes) {
             Ok(signature) => signature,
             Err(_) => {

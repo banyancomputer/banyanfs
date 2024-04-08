@@ -1,5 +1,6 @@
 use futures::{AsyncWrite, AsyncWriteExt};
 use winnow::bytes::take;
+use winnow::Parser;
 
 use crate::codec::crypto::{KeyId, VerifyingKey};
 use crate::codec::{ParserResult, Stream};
@@ -31,7 +32,7 @@ impl Fingerprint {
     }
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
-        let (remaining, id_bytes) = take(FINGERPRINT_SIZE)(input)?;
+        let (remaining, id_bytes) = take(FINGERPRINT_SIZE).parse_next(input)?;
 
         let mut bytes = [0u8; FINGERPRINT_SIZE];
         bytes.copy_from_slice(id_bytes);

@@ -4,6 +4,7 @@ use rand::Rng;
 use winnow::bytes::{tag, take};
 use winnow::number::{le_u64, le_u8};
 use winnow::stream::Offset;
+use winnow::Parser;
 
 use crate::codec::crypto::{
     AccessKey, AuthenticationTag, Nonce, Signature, SigningKey, VerifyingKey,
@@ -228,7 +229,7 @@ impl DataBlock {
             let chunk_start = input;
 
             let (input, nonce) = Nonce::parse(input)?;
-            let (input, data) = take(encrypted_chunk_size)(input)?;
+            let (input, data) = take(encrypted_chunk_size).parse_next(input)?;
             let (input, tag) = AuthenticationTag::parse(input)?;
 
             debug_assert!(
@@ -416,7 +417,7 @@ impl DataOptions {
     }
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
-        let (input, version_byte) = take(1u8)(input)?;
+        let (input, version_byte) = take(1u8).parse_next(input)?;
         let option_byte = version_byte[0];
 
         let ecc_present = (option_byte & ECC_PRESENT_BIT) == ECC_PRESENT_BIT;
@@ -438,5 +439,5 @@ impl DataOptions {
 }
 
 fn banyan_data_magic_tag(input: Stream) -> ParserResult<&[u8]> {
-    tag(BANYAN_DATA_MAGIC)(input)
+    tag(BANYAN_DATA_MAGIC).parse_next(input)
 }

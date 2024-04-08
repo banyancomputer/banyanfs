@@ -2,6 +2,7 @@ use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
 use winnow::bytes::take;
 use winnow::number::le_u8;
+use winnow::Parser;
 
 use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, SigningKey, VerifyingKey};
 use crate::codec::header::KeyAccessSettings;
@@ -167,7 +168,7 @@ fn maybe_parse_key(input: Stream) -> ParserResult<Option<AsymLockedAccessKey>> {
         Ok((input, Some(key)))
     } else {
         // still need to advance the input
-        let (input, _blank) = take(AsymLockedAccessKey::size())(input)?;
+        let (input, _blank) = take(AsymLockedAccessKey::size()).parse_next(input)?;
         Ok((input, None))
     }
 }

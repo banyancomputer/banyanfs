@@ -6,6 +6,7 @@ use futures::{AsyncWrite, AsyncWriteExt};
 use p384::ecdh::EphemeralSecret;
 use p384::{NistP384, PublicKey};
 use winnow::bytes::take;
+use winnow::Parser;
 
 use crate::codec::crypto::{AccessKey, Fingerprint, KeyId};
 use crate::codec::ParserResult;
@@ -85,7 +86,7 @@ impl VerifyingKey {
     }
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
-        let (remaining, slice) = take(KEY_SIZE)(input)?;
+        let (remaining, slice) = take(KEY_SIZE).parse_next(input)?;
 
         let mut bytes = [0u8; KEY_SIZE];
         bytes.copy_from_slice(slice);

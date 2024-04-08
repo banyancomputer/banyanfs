@@ -3,7 +3,7 @@ use std::ops::Deref;
 use chacha20poly1305::XNonce as ChaChaNonce;
 use futures::{AsyncWrite, AsyncWriteExt};
 use rand::Rng;
-use winnow::bytes::take;
+use winnow::{bytes::take, Parser};
 
 use crate::codec::{ParserResult, Stream};
 
@@ -30,7 +30,7 @@ impl Nonce {
     }
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
-        let (remaining, slice) = take(NONCE_LENGTH)(input)?;
+        let (remaining, slice) = take(NONCE_LENGTH).parse_next(input)?;
 
         let mut bytes = [0u8; NONCE_LENGTH];
         bytes.copy_from_slice(slice);
