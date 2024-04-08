@@ -1,6 +1,6 @@
 use futures::io::{AsyncWrite, AsyncWriteExt};
 use winnow::bytes::take;
-use winnow::number::le_u8;
+use winnow::binary::le_u8;
 use winnow::Parser;
 
 use crate::codec::crypto::VerifyingKey;

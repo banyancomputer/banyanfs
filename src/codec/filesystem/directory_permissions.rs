@@ -1,5 +1,5 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::number::le_u8;
+use winnow::binary::le_u8;
 
 use crate::codec::{ParserResult, Stream};
 

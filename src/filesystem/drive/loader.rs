@@ -4,7 +4,7 @@ use async_std::sync::RwLock;
 use futures::{AsyncRead, AsyncReadExt};
 use tracing::{debug, trace};
 use winnow::error::ErrMode;
-use winnow::number::le_u64;
+use winnow::binary::le_u64;
 
 use crate::codec::crypto::{AuthenticationTag, EncryptedBuffer, Nonce, SigningKey};
 use crate::codec::header::{ContentOptions, IdentityHeader, KeyCount, PublicSettings};

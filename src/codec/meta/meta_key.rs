@@ -3,8 +3,9 @@ use std::ops::Deref;
 
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::AsyncWrite;
+use winnow::combinator::repeat;
 use winnow::error::Needed;
-use winnow::multi::count;
+
 use winnow::Parser;
 
 use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, KeyId, SigningKey};
@@ -51,9 +52,9 @@ impl MetaKey {
         key_count: u8,
         signing_key: &SigningKey,
     ) -> ParserResult<'a, Option<Self>> {
-        let mut asym_parser = count(
-            (KeyId::parse, AsymLockedAccessKey::parse),
+        let mut asym_parser = repeat(
             key_count as usize,
+            (KeyId::parse, AsymLockedAccessKey::parse),
         );
 
         let (input, locked_keys): (_, Vec<_>) = match asym_parser.parse_next(input) {

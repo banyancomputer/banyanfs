@@ -2,7 +2,7 @@ use elliptic_curve::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
 use rand::Rng;
 use winnow::bytes::{tag, take};
-use winnow::number::{le_u64, le_u8};
+use winnow::binary::{le_u64, le_u8};
 use winnow::stream::Offset;
 use winnow::Parser;
 

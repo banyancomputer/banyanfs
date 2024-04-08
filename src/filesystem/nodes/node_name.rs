@@ -1,7 +1,7 @@
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::{number::le_u8, Parser};
+use winnow::{binary::le_u8, Parser};
 
 use crate::codec::{ParserResult, Stream};
 

@@ -1,6 +1,6 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::multi::count;
-use winnow::number::{le_u16, le_u64};
+use winnow::binary::{le_u16, le_u64};
+use winnow::combinator::repeat;
 use winnow::Parser;
 
 use crate::codec::filesystem::BlockKind;
@@ -78,7 +78,7 @@ impl ContentReference {
     }
 
     pub fn parse_many(input: Stream, ref_count: u8) -> ParserResult<Vec<Self>> {
-        count(Self::parse, ref_count as usize).parse_next(input)
+        repeat(ref_count as usize, Self::parse).parse_next(input)
     }
 
     pub fn size(&self) -> usize {
@@ -146,7 +146,7 @@ impl ContentLocation {
     }
 
     pub fn parse_many(input: Stream, ref_count: u16) -> ParserResult<Vec<Self>> {
-        count(Self::parse, ref_count as usize).parse_next(input)
+        repeat(ref_count as usize, Self::parse).parse_next(input)
     }
 
     pub fn size(&self) -> usize {

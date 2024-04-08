@@ -1,5 +1,5 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::number::{le_u64, le_u8};
+use winnow::binary::{le_u64, le_u8};
 
 use crate::codec::crypto::SymLockedAccessKey;
 use crate::codec::{Cid, ParserResult, Stream};

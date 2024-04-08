@@ -4,7 +4,7 @@ use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
 use slab::Slab;
 use tracing::instrument;
-use winnow::number::le_u64;
+use winnow::binary::le_u64;
 
 use crate::codec::crypto::AccessKey;
 use crate::codec::*;

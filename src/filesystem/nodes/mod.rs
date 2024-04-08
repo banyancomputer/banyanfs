@@ -16,7 +16,7 @@ use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
 use futures::{AsyncWrite, AsyncWriteExt};
 use winnow::bytes::take;
-use winnow::number::{le_i64, le_u32, le_u8};
+use winnow::binary::{le_i64, le_u32, le_u8};
 
 use crate::codec::crypto::AccessKey;
 use crate::codec::filesystem::NodeKind;

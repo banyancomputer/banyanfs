@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_std::sync::RwLock;
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::number::le_u64;
+use winnow::binary::le_u64;
 
 use crate::codec::{ParserResult, Stream};
 
