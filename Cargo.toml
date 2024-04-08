@@ -51,7 +51,7 @@ base64 = "^0.22"
 bytes = "^1"
 # TODO: we only minimally use UUID and only for the v7 version, we can hand generate those and save the dependency
 uuid = { version = "^1", features = ["v7", "serde"] }
-winnow = "0.5"
+winnow = "0.6"
 crdts = { version = "^7", default-features = false, features = [
   "merkle",
   "num",
