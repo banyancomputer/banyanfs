@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::binary::le_u16;
+use winnow::{binary::le_u16, Parser};
 
 use crate::codec::{ParserResult, Stream};
 
@@ -19,7 +19,7 @@ impl KeyId {
     }
 
     pub(crate) fn parse(input: Stream) -> ParserResult<Self> {
-        let (input, key_id) = le_u16(input)?;
+        let (input, key_id) = le_u16.parse_peek(input)?;
         Ok((input, Self(key_id)))
     }
 

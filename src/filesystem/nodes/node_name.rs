@@ -88,25 +88,25 @@ impl NodeName {
     }
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
-        let (input, name_type) = le_u8(input)?;
+        let (input, name_type) = le_u8.parse_peek(input)?;
 
         match name_type {
             NAME_TYPE_ROOT_ID => Ok((input, Self::Root)),
             NAME_TYPE_NAMED_ID => {
-                let (input, name_length) = le_u8(input)?;
-                let (input, name) = winnow::bytes::take(name_length as usize).parse_next(input)?;
+                let (input, name_length) = le_u8.parse_peek(input)?;
+                let (input, name) = winnow::token::take(name_length as usize).parse_peek(input)?;
 
                 let name = String::from_utf8(name.to_vec()).map_err(|_| {
-                    winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(
-                        input,
+                    winnow::error::ErrMode::Cut(winnow::error::ParserError::from_error_kind(
+                        &input,
                         winnow::error::ErrorKind::Verify,
                     ))
                 })?;
                 Ok((input, Self::Named(name)))
             }
             _ => {
-                let err = winnow::error::ParseError::from_error_kind(
-                    input,
+                let err = winnow::error::ParserError::from_error_kind(
+                    &input,
                     winnow::error::ErrorKind::Verify,
                 );
                 Err(winnow::error::ErrMode::Cut(err))

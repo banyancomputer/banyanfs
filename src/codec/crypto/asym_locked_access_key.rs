@@ -1,7 +1,7 @@
 use chacha20poly1305::{AeadInPlace, KeyInit, XChaCha20Poly1305};
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::bytes::take;
-use winnow::Parser;
+use winnow::token::take;
+use winnow::{unpeek, Parser};
 
 use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce, SigningKey, VerifyingKey};
 use crate::codec::{ParserResult, Stream};
@@ -32,14 +32,14 @@ impl AsymLockedAccessKey {
     }
     pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, (dh_exchange_key, nonce, raw_cipher_text, tag)) = (
-            VerifyingKey::parse,
-            Nonce::parse,
+            unpeek(VerifyingKey::parse),
+            unpeek(Nonce::parse),
             // This is NOT being parsed into the target data type yet as its still encrypted. We'll
             // construct it when the contents are valid.
             take(AccessKey::size()),
-            AuthenticationTag::parse,
+            unpeek(AuthenticationTag::parse),
         )
-            .parse_next(input)?;
+            .parse_peek(input)?;
 
         let mut cipher_text = [0u8; AccessKey::size()];
         cipher_text.copy_from_slice(raw_cipher_text);

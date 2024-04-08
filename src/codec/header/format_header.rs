@@ -1,5 +1,4 @@
 use futures::AsyncWrite;
-use winnow::Parser;
 
 use crate::codec::{ParserResult, Stream};
 
@@ -30,13 +29,9 @@ impl FormatHeader {
     }
 
     pub fn parse_with_magic(input: Stream) -> ParserResult<Self> {
-        let mut header_parser = (
-            IdentityHeader::parse_with_magic,
-            FilesystemId::parse,
-            PublicSettings::parse,
-        );
-
-        let (input, (_, filesystem_id, settings)) = header_parser.parse_next(input)?;
+        let (input, _) = IdentityHeader::parse_with_magic(input)?;
+        let (input, filesystem_id) = FilesystemId::parse(input)?;
+        let (input, settings) = PublicSettings::parse(input)?;
 
         let header = FormatHeader {
             ecc_present: settings.ecc_present(),

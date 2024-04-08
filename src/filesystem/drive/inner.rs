@@ -5,6 +5,7 @@ use futures::io::{AsyncWrite, AsyncWriteExt};
 use slab::Slab;
 use tracing::instrument;
 use winnow::binary::le_u64;
+use winnow::Parser;
 
 use crate::codec::crypto::AccessKey;
 use crate::codec::*;
@@ -252,7 +253,7 @@ impl InnerDrive {
         let (remaining, root_pid) = PermanentId::parse(input)?;
         let bytes_read = input.len() - remaining.len();
 
-        let (remaining, node_count) = le_u64(remaining)?;
+        let (remaining, node_count) = le_u64.parse_peek(remaining)?;
         let bytes_read = input.len() - remaining.len() - bytes_read;
         tracing::trace!(node_count, bytes_read,
             remaining_len = ?remaining.len(),
@@ -274,7 +275,7 @@ impl InnerDrive {
                 if !permanent_id_map.contains_key(&pid) {
                     tracing::warn!(?permanent_id, child_pid = ?pid, "encountered child PID before parent");
 
-                    //return Err(winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(
+                    //return Err(winnow::error::ErrMode::Cut(winnow::error::ParserError::from_error_kind(
                     //    node_input,
                     //    winnow::error::ErrorKind::Verify,
                     //)));
@@ -287,8 +288,8 @@ impl InnerDrive {
         }
 
         let root_node_id = *permanent_id_map.get(&root_pid).ok_or_else(|| {
-            winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(
-                node_input,
+            winnow::error::ErrMode::Cut(winnow::error::ParserError::from_error_kind(
+                &node_input,
                 winnow::error::ErrorKind::Verify,
             ))
         })?;

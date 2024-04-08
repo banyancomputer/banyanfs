@@ -1,5 +1,5 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::bytes::{tag, take};
+use winnow::token::{literal, take};
 use winnow::Parser;
 
 use crate::codec::header::BANYAN_FS_MAGIC;
@@ -25,8 +25,10 @@ impl IdentityHeader {
 
         // Only version one is valid
         if version != 0x01 {
-            let err =
-                winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
+            let err = winnow::error::ParserError::from_error_kind(
+                &input,
+                winnow::error::ErrorKind::Verify,
+            );
             return Err(winnow::error::ErrMode::Cut(err));
         }
 
@@ -35,11 +37,11 @@ impl IdentityHeader {
 }
 
 fn banyanfs_magic_tag(input: Stream) -> ParserResult<&[u8]> {
-    tag(BANYAN_FS_MAGIC).parse_next(input)
+    literal(BANYAN_FS_MAGIC).parse_peek(input)
 }
 
 fn version_field(input: Stream) -> ParserResult<u8> {
-    let (input, version_byte) = take(1u8).parse_next(input)?;
+    let (input, version_byte) = take(1u8).parse_peek(input)?;
     let version_byte = version_byte[0];
 
     // The specification indicates decoders SHOULD ignore this bit. We allow the consumers of the
@@ -47,7 +49,7 @@ fn version_field(input: Stream) -> ParserResult<u8> {
     let reserved = (version_byte & 0x80) >> 7;
     if cfg!(feature = "strict") && reserved != 0 {
         let err =
-            winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
+            winnow::error::ParserError::from_error_kind(&input, winnow::error::ErrorKind::Verify);
         return Err(winnow::error::ErrMode::Cut(err));
     }
 

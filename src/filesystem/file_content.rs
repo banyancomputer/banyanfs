@@ -1,5 +1,6 @@
 use futures::{AsyncWrite, AsyncWriteExt};
 use winnow::binary::{le_u64, le_u8};
+use winnow::Parser;
 
 use crate::codec::crypto::SymLockedAccessKey;
 use crate::codec::{Cid, ParserResult, Stream};
@@ -149,17 +150,17 @@ impl FileContent {
     }
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
-        let (input, content_type) = le_u8(input)?;
+        let (input, content_type) = le_u8.parse_peek(input)?;
 
         let parsed = match content_type {
             FILE_CONTENT_TYPE_STUB => {
-                let (input, data_size) = le_u64(input)?;
+                let (input, data_size) = le_u64.parse_peek(input)?;
                 (input, FileContent::Stub { data_size })
             }
             FILE_CONTENT_TYPE_PUBLIC => {
                 let (input, cid) = Cid::parse(input)?;
-                let (input, data_size) = le_u64(input)?;
-                let (input, ref_count) = le_u8(input)?;
+                let (input, data_size) = le_u64.parse_peek(input)?;
+                let (input, ref_count) = le_u8.parse_peek(input)?;
                 let (input, content) = ContentReference::parse_many(input, ref_count)?;
 
                 (
@@ -173,10 +174,10 @@ impl FileContent {
             }
             FILE_CONTENT_TYPE_ENCRYPTED => {
                 let (input, cid) = Cid::parse(input)?;
-                let (input, data_size) = le_u64(input)?;
+                let (input, data_size) = le_u64.parse_peek(input)?;
                 let (input, locked_access_key) = SymLockedAccessKey::parse(input)?;
 
-                let (input, ref_count) = le_u8(input)?;
+                let (input, ref_count) = le_u8.parse_peek(input)?;
                 let (input, content) = ContentReference::parse_many(input, ref_count)?;
 
                 let data = FileContent::Encrypted {
@@ -189,8 +190,8 @@ impl FileContent {
                 (input, data)
             }
             _ => {
-                let err = winnow::error::ParseError::from_error_kind(
-                    input,
+                let err = winnow::error::ParserError::from_error_kind(
+                    &input,
                     winnow::error::ErrorKind::Tag,
                 );
                 return Err(winnow::error::ErrMode::Cut(err));

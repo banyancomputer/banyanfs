@@ -6,7 +6,7 @@ use futures::AsyncWrite;
 use winnow::combinator::repeat;
 use winnow::error::Needed;
 
-use winnow::Parser;
+use winnow::{unpeek, Parser};
 
 use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, KeyId, SigningKey};
 use crate::codec::header::KeyCount;
@@ -54,10 +54,10 @@ impl MetaKey {
     ) -> ParserResult<'a, Option<Self>> {
         let mut asym_parser = repeat(
             key_count as usize,
-            (KeyId::parse, AsymLockedAccessKey::parse),
+            (unpeek(KeyId::parse), unpeek(AsymLockedAccessKey::parse)),
         );
 
-        let (input, locked_keys): (_, Vec<_>) = match asym_parser.parse_next(input) {
+        let (input, locked_keys): (_, Vec<_>) = match asym_parser.parse_peek(input) {
             Ok(res) => res,
             Err(winnow::error::ErrMode::Incomplete(Needed::Size(_))) => {
                 let record_size = KeyId::size() + AsymLockedAccessKey::size();

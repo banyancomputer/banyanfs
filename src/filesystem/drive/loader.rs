@@ -3,8 +3,9 @@ use std::sync::Arc;
 use async_std::sync::RwLock;
 use futures::{AsyncRead, AsyncReadExt};
 use tracing::{debug, trace};
-use winnow::error::ErrMode;
 use winnow::binary::le_u64;
+use winnow::error::ErrMode;
+use winnow::Parser;
 
 use crate::codec::crypto::{AuthenticationTag, EncryptedBuffer, Nonce, SigningKey};
 use crate::codec::header::{ContentOptions, IdentityHeader, KeyCount, PublicSettings};
@@ -163,8 +164,8 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                     DriveAccess::parse(Stream::new(header), **key_count, self.signing_key)
                         .map_err(|e| match e {
                             ErrMode::Incomplete(_) => winnow::error::ErrMode::Cut(
-                                winnow::error::ParseError::from_error_kind(
-                                    Stream::new(header),
+                                winnow::error::ParserError::from_error_kind(
+                                    &Stream::new(header),
                                     winnow::error::ErrorKind::Verify,
                                 ),
                             ),
@@ -176,12 +177,12 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
 
                 let (remaining, content_options) = ContentOptions::parse(Stream::new(header))
                     .map_err(|e| match e {
-                        ErrMode::Incomplete(_) => {
-                            winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(
-                                Stream::new(header),
+                        ErrMode::Incomplete(_) => winnow::error::ErrMode::Cut(
+                            winnow::error::ParserError::from_error_kind(
+                                &Stream::new(header),
                                 winnow::error::ErrorKind::Verify,
-                            ))
-                        }
+                            ),
+                        ),
                         e => e,
                     })?;
                 let bytes_read = header.len() - remaining.len();
@@ -193,12 +194,12 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
 
                 let (remaining, journal_start) = JournalCheckpoint::parse(Stream::new(header))
                     .map_err(|e| match e {
-                        ErrMode::Incomplete(_) => {
-                            winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(
-                                Stream::new(header),
+                        ErrMode::Incomplete(_) => winnow::error::ErrMode::Cut(
+                            winnow::error::ParserError::from_error_kind(
+                                &Stream::new(header),
                                 winnow::error::ErrorKind::Verify,
-                            ))
-                        }
+                            ),
+                        ),
                         e => e,
                     })?;
                 let bytes_read = header.len() - remaining.len();
@@ -266,12 +267,12 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                         data_key,
                     )
                     .map_err(|e| match e {
-                        ErrMode::Incomplete(_) => {
-                            winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(
-                                Stream::new(fs_buffer.as_slice()),
+                        ErrMode::Incomplete(_) => winnow::error::ErrMode::Cut(
+                            winnow::error::ParserError::from_error_kind(
+                                &Stream::new(fs_buffer.as_slice()),
                                 winnow::error::ErrorKind::Verify,
-                            ))
-                        }
+                            ),
+                        ),
                         e => e,
                     })?;
                     debug_assert!(remaining.is_empty());
@@ -300,7 +301,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
 }
 
 fn content_length(input: Stream) -> ParserResult<u64> {
-    le_u64(input)
+    le_u64.parse_peek(input)
 }
 
 #[derive(Debug, thiserror::Error)]

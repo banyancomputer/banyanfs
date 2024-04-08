@@ -1,5 +1,5 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::binary::le_u8;
+use winnow::{binary::le_u8, Parser};
 
 use crate::codec::{ParserResult, Stream};
 
@@ -219,11 +219,13 @@ impl KeyAccessSettings {
     }
 
     pub fn parse_private(input: Stream) -> ParserResult<Self> {
-        let (input, byte) = le_u8(input)?;
+        let (input, byte) = le_u8.parse_peek(input)?;
 
         if cfg!(feature = "strict") && byte & PRIVATE_RESERVED_MASK != 0 {
-            let err =
-                winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
+            let err = winnow::error::ParserError::from_error_kind(
+                &input,
+                winnow::error::ErrorKind::Verify,
+            );
             return Err(winnow::error::ErrMode::Cut(err));
         }
 
@@ -249,11 +251,13 @@ impl KeyAccessSettings {
     }
 
     pub fn parse_public(input: Stream) -> ParserResult<Self> {
-        let (input, byte) = le_u8(input)?;
+        let (input, byte) = le_u8.parse_peek(input)?;
 
         if cfg!(feature = "strict") && byte & PUBLIC_RESERVED_MASK != 0 {
-            let err =
-                winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
+            let err = winnow::error::ParserError::from_error_kind(
+                &input,
+                winnow::error::ErrorKind::Verify,
+            );
             return Err(winnow::error::ErrMode::Cut(err));
         }
 

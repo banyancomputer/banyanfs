@@ -1,5 +1,5 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::{bytes::take, Parser};
+use winnow::{token::take, Parser};
 
 use crate::codec::{ParserResult, Stream};
 
@@ -42,7 +42,7 @@ impl Cid {
     }
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
-        let (remaining, cid_bytes) = take(CID_LENGTH).parse_next(input)?;
+        let (remaining, cid_bytes) = take(CID_LENGTH).parse_peek(input)?;
 
         let mut bytes = [0u8; CID_LENGTH];
         bytes.copy_from_slice(cid_bytes);

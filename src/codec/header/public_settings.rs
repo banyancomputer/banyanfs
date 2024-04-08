@@ -1,5 +1,5 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::{bytes::take, Parser};
+use winnow::{token::take, Parser};
 
 use crate::codec::{ParserResult, Stream};
 
@@ -47,12 +47,14 @@ impl PublicSettings {
     }
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
-        let (input, settings_byte) = take(1u8).parse_next(input)?;
+        let (input, settings_byte) = take(1u8).parse_peek(input)?;
         let settings_byte = settings_byte[0];
 
         if cfg!(feature = "strict") && (settings_byte & RESERVED_BITS) != 0 {
-            let err =
-                winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
+            let err = winnow::error::ParserError::from_error_kind(
+                &input,
+                winnow::error::ErrorKind::Verify,
+            );
             return Err(winnow::error::ErrMode::Cut(err));
         }
 

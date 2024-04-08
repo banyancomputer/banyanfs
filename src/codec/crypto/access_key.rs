@@ -109,7 +109,7 @@ impl From<[u8; ACCESS_KEY_LENGTH]> for AccessKey {
 #[derive(Debug, thiserror::Error)]
 pub enum AccessKeyError<I> {
     #[error("decoding data failed: {0}")]
-    FormatFailure(#[from] winnow::error::ErrMode<winnow::error::Error<I>>),
+    FormatFailure(#[from] winnow::error::ErrMode<winnow::error::ContextError<I>>),
 
     #[error("unspecified crypto error")]
     CryptoFailure,

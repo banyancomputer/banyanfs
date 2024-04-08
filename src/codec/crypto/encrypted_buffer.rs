@@ -3,7 +3,7 @@ use std::ops::{Deref, DerefMut};
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
-use winnow::bytes::take;
+use winnow::token::take;
 use winnow::Parser;
 
 use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce};
@@ -22,15 +22,17 @@ impl EncryptedBuffer {
         access_key: &AccessKey,
     ) -> ParserResult<'a, Vec<u8>> {
         let (input, nonce) = Nonce::parse(input)?;
-        let (input, encrypted_slice) = take(payload_size).parse_next(input)?;
+        let (input, encrypted_slice) = take(payload_size).parse_peek(input)?;
         let (input, tag) = AuthenticationTag::parse(input)?;
 
         let mut buffer = encrypted_slice.to_vec();
 
         if let Err(err) = access_key.decrypt_buffer(nonce, authenticated_data, &mut buffer, tag) {
             tracing::error!("failed to decrypt permission buffer: {err}");
-            let err =
-                winnow::error::ParseError::from_error_kind(input, winnow::error::ErrorKind::Verify);
+            let err = winnow::error::ParserError::from_error_kind(
+                &input,
+                winnow::error::ErrorKind::Verify,
+            );
             return Err(winnow::error::ErrMode::Cut(err));
         }
 

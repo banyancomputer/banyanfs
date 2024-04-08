@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_std::sync::RwLock;
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::binary::le_u64;
+use winnow::{binary::le_u64, Parser};
 
 use crate::codec::{ParserResult, Stream};
 
@@ -25,7 +25,7 @@ impl VectorClock {
     }
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
-        let (input, value) = le_u64(input)?;
+        let (input, value) = le_u64.parse_peek(input)?;
         Ok((input, Self::from(value)))
     }
 

@@ -15,8 +15,8 @@ use std::collections::HashMap;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::bytes::take;
 use winnow::binary::{le_i64, le_u32, le_u8};
+use winnow::token::take;
 
 use crate::codec::crypto::AccessKey;
 use crate::codec::filesystem::NodeKind;
@@ -252,7 +252,7 @@ impl Node {
         tracing::trace!(allocated_id, "begin");
 
         let (input, cid) = Cid::parse(input)?;
-        let (input, node_data_len) = le_u32(input)?;
+        let (input, node_data_len) = le_u32.parse_peek(input)?;
 
         let node_data_start = input;
 
@@ -261,7 +261,7 @@ impl Node {
 
         let (input, permanent_id) = PermanentId::parse(input)?;
         let (input, vector_clock) = VectorClock::parse(input)?;
-        let (input, parent_present) = take(1u8).parse_next(input)?;
+        let (input, parent_present) = take(1u8).parse_peek(input)?;
 
         // , vector_clock, parent_present)) =
         //     (PermanentId::parse, VectorClock::parse, take(1u8)).parse_next(input)?;
@@ -275,8 +275,8 @@ impl Node {
                 (node_data_buf, Some(pid))
             }
             _ => {
-                let err = winnow::error::ParseError::from_error_kind(
-                    input,
+                let err = winnow::error::ParserError::from_error_kind(
+                    &input,
                     winnow::error::ErrorKind::Token,
                 );
                 return Err(winnow::error::ErrMode::Cut(err));
@@ -284,27 +284,27 @@ impl Node {
         };
 
         let (input, owner_id) = ActorId::parse(input)?;
-        let (input, created_at) = le_i64(input)?;
-        let (input, modified_at) = le_i64(input)?;
+        let (input, created_at) = le_i64.parse_peek(input)?;
+        let (input, modified_at) = le_i64.parse_peek(input)?;
         let (input, name) = NodeName::parse(input)?;
-        let (mut input, metadata_entries) = le_u8(input)?;
+        let (mut input, metadata_entries) = le_u8.parse_peek(input)?;
 
         // let (input, (owner_id, created_at, modified_at, name, metadata_entries)) =
         //     (ActorId::parse, le_i64, le_i64, NodeName::parse, le_u8).parse_next(input)?;
 
         let mut metadata = HashMap::new();
         for _ in 0..metadata_entries {
-            let (meta_buf, key_len) = le_u8(input)?;
-            let (meta_buf, key) = take(key_len).parse_next(meta_buf)?;
+            let (meta_buf, key_len) = le_u8.parse_peek(input)?;
+            let (meta_buf, key) = take(key_len).parse_peek(meta_buf)?;
             let key_str = String::from_utf8(key.to_vec()).map_err(|_| {
-                winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(
-                    input,
+                winnow::error::ErrMode::Cut(winnow::error::ParserError::from_error_kind(
+                    &input,
                     winnow::error::ErrorKind::Token,
                 ))
             })?;
 
-            let (meta_buf, val_len) = le_u8(meta_buf)?;
-            let (meta_buf, val) = take(val_len).parse_next(meta_buf)?;
+            let (meta_buf, val_len) = le_u8.parse_peek(meta_buf)?;
+            let (meta_buf, val) = take(val_len).parse_peek(meta_buf)?;
             let val = val.to_vec();
 
             metadata.insert(key_str, val);
@@ -313,7 +313,7 @@ impl Node {
 
         let (remaining, inner) = NodeData::parse(input)?;
         debug_assert!(
-            node_data_start.offset_to(&remaining) == usize::try_from(node_data_len).unwrap(), //Unwrap safe on 32bit and up systems (unsafe on 16 bit systems)
+            node_data_start.offset_from(&remaining) == usize::try_from(node_data_len).unwrap(), //Unwrap safe on 32bit and up systems (unsafe on 16 bit systems)
             "did not consume all input"
         );
 

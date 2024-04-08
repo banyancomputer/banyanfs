@@ -1,7 +1,7 @@
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
 use winnow::binary::le_u8;
-use winnow::bytes::take;
+use winnow::token::take;
 use winnow::Parser;
 
 use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, SigningKey, VerifyingKey};
@@ -73,8 +73,8 @@ impl PermissionKeys {
             .map(|key| key.unlock(unlock_key))
             .transpose()
             .map_err(|_| {
-                winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(
-                    input,
+                winnow::error::ErrMode::Cut(winnow::error::ParserError::from_error_kind(
+                    &input,
                     winnow::error::ErrorKind::Verify,
                 ))
             })?;
@@ -84,8 +84,8 @@ impl PermissionKeys {
             .map(|key| key.unlock(unlock_key))
             .transpose()
             .map_err(|_| {
-                winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(
-                    input,
+                winnow::error::ErrMode::Cut(winnow::error::ParserError::from_error_kind(
+                    &input,
                     winnow::error::ErrorKind::Verify,
                 ))
             })?;
@@ -95,8 +95,8 @@ impl PermissionKeys {
             .map(|key| key.unlock(unlock_key))
             .transpose()
             .map_err(|_| {
-                winnow::error::ErrMode::Cut(winnow::error::ParseError::from_error_kind(
-                    input,
+                winnow::error::ErrMode::Cut(winnow::error::ParserError::from_error_kind(
+                    &input,
                     winnow::error::ErrorKind::Verify,
                 ))
             })?;
@@ -161,14 +161,14 @@ pub async fn maybe_encode_key<W: AsyncWrite + Unpin + Send>(
 }
 
 fn maybe_parse_key(input: Stream) -> ParserResult<Option<AsymLockedAccessKey>> {
-    let (input, presence_flag) = le_u8(input)?;
+    let (input, presence_flag) = le_u8.parse_peek(input)?;
 
     if presence_flag & KEY_PRESENT_BIT != 0 {
         let (input, key) = AsymLockedAccessKey::parse(input)?;
         Ok((input, Some(key)))
     } else {
         // still need to advance the input
-        let (input, _blank) = take(AsymLockedAccessKey::size()).parse_next(input)?;
+        let (input, _blank) = take(AsymLockedAccessKey::size()).parse_peek(input)?;
         Ok((input, None))
     }
 }

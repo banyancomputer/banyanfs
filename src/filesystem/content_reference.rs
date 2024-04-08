@@ -1,7 +1,7 @@
 use futures::{AsyncWrite, AsyncWriteExt};
 use winnow::binary::{le_u16, le_u64};
 use winnow::combinator::repeat;
-use winnow::Parser;
+use winnow::{unpeek, Parser};
 
 use crate::codec::filesystem::BlockKind;
 use crate::codec::{BlockSize, Cid, ParserResult, Stream};
@@ -65,7 +65,7 @@ impl ContentReference {
         let (input, data_block_cid) = Cid::parse(input)?;
         let (input, block_size) = BlockSize::parse(input)?;
 
-        let (input, chunk_count) = le_u16(input)?;
+        let (input, chunk_count) = le_u16.parse_peek(input)?;
         let (input, chunks) = ContentLocation::parse_many(input, chunk_count)?;
 
         let content_ref = Self {
@@ -78,7 +78,7 @@ impl ContentReference {
     }
 
     pub fn parse_many(input: Stream, ref_count: u8) -> ParserResult<Vec<Self>> {
-        repeat(ref_count as usize, Self::parse).parse_next(input)
+        repeat(ref_count as usize, unpeek(Self::parse)).parse_peek(input)
     }
 
     pub fn size(&self) -> usize {
@@ -134,7 +134,7 @@ impl ContentLocation {
     pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, block_kind) = BlockKind::parse(input)?;
         let (input, content_cid) = Cid::parse(input)?;
-        let (input, block_index) = le_u64(input)?;
+        let (input, block_index) = le_u64.parse_peek(input)?;
 
         let location = Self {
             block_kind,
@@ -146,7 +146,7 @@ impl ContentLocation {
     }
 
     pub fn parse_many(input: Stream, ref_count: u16) -> ParserResult<Vec<Self>> {
-        repeat(ref_count as usize, Self::parse).parse_next(input)
+        repeat(ref_count as usize, unpeek(Self::parse)).parse_peek(input)
     }
 
     pub fn size(&self) -> usize {

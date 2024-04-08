@@ -5,7 +5,7 @@ use elliptic_curve::pkcs8::EncodePublicKey;
 use futures::{AsyncWrite, AsyncWriteExt};
 use p384::ecdh::EphemeralSecret;
 use p384::{NistP384, PublicKey};
-use winnow::bytes::take;
+use winnow::token::take;
 use winnow::Parser;
 
 use crate::codec::crypto::{AccessKey, Fingerprint, KeyId};
@@ -86,7 +86,7 @@ impl VerifyingKey {
     }
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
-        let (remaining, slice) = take(KEY_SIZE).parse_next(input)?;
+        let (remaining, slice) = take(KEY_SIZE).parse_peek(input)?;
 
         let mut bytes = [0u8; KEY_SIZE];
         bytes.copy_from_slice(slice);
@@ -95,8 +95,8 @@ impl VerifyingKey {
             Ok(key) => key,
             Err(err) => {
                 tracing::error!("failed to decode ECDSA key: {err}");
-                let err = winnow::error::ParseError::from_error_kind(
-                    input,
+                let err = winnow::error::ParserError::from_error_kind(
+                    &input,
                     winnow::error::ErrorKind::Verify,
                 );
                 return Err(winnow::error::ErrMode::Cut(err));

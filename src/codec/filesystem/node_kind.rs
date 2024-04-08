@@ -1,5 +1,5 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::{bytes::take, Parser};
+use winnow::{token::take, Parser};
 
 use crate::codec::{ParserResult, Stream};
 
@@ -33,7 +33,7 @@ impl NodeKind {
     }
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
-        let (input, node_type) = take(1u8).parse_next(input)?;
+        let (input, node_type) = take(1u8).parse_peek(input)?;
         let node_type = node_type[0];
 
         let parsed_type = match node_type {
