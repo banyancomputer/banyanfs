@@ -2,7 +2,6 @@ use std::collections::HashSet;
 
 use futures::io::Cursor;
 use futures::StreamExt;
-use uuid::Uuid;
 
 use crate::prelude::*;
 
@@ -40,10 +39,21 @@ impl WasmMount {
         let mut rng = crypto_rng();
         let signing_key = wasm_client.signing_key();
 
-        let api_assigned_id = bucket.id();
-        let fs_uuid =
-            Uuid::try_parse(&api_assigned_id).map_err(|e| BanyanFsError::from(e.to_string()))?;
-        let filesystem_id = FilesystemId::from(fs_uuid.to_bytes_le());
+        let api_assigned_id = bucket.id().replace("-", "");
+        let mut id_bytes = [0u8; 16];
+
+        for (i, byte_chunk) in api_assigned_id.as_bytes().chunks(2).enumerate() {
+            let byte_str = std::str::from_utf8(byte_chunk).map_err(|_| {
+                "UUID assigned from platform has non-hex and hyphen characters present"
+            })?;
+
+            let byte = u8::from_str_radix(byte_str, 16)
+                .map_err(|_| "failed to convert byte string chunk to a byte")?;
+
+            id_bytes[i] = byte;
+        }
+
+        let filesystem_id = FilesystemId::from(id_bytes);
 
         let drive = Drive::initialize_private_with_id(&mut rng, signing_key, filesystem_id)
             .map_err(|e| BanyanFsError::from(e.to_string()))?;
