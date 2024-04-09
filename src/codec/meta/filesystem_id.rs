@@ -1,7 +1,6 @@
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
 use nom::bytes::streaming::take;
-use uuid::{NoContext, Timestamp, Uuid};
 
 use crate::codec::ParserResult;
 
@@ -19,11 +18,25 @@ impl FilesystemId {
         Ok(self.0.len())
     }
 
-    pub fn generate(_rng: &mut impl CryptoRngCore) -> Self {
-        // todo: this needs to use the provided rng to generate
-        let ts = Timestamp::now(NoContext);
-        let uuid = Uuid::new_v7(ts);
-        Self(uuid.to_bytes_le())
+    pub fn generate(rng: &mut impl CryptoRngCore) -> Self {
+        let current_ts = crate::utils::current_time_ms();
+        let timestamp_bytes = current_ts.to_be_bytes();
+
+        let mut random_bytes: [u8; 10] = [0u8; 10];
+        rng.fill_bytes(&mut random_bytes);
+
+        let mixed_version_rng = 0b0111_0000 | (random_bytes[0] & 0b0000_1111);
+        let variant_rng = 0b1000_0000 | (random_bytes[1] & 0b0011_1111);
+
+        let mut uuid_bytes: [u8; ID_LENGTH] = [0u8; ID_LENGTH];
+
+        uuid_bytes[0..=5].copy_from_slice(&timestamp_bytes[2..]);
+        uuid_bytes[6] = mixed_version_rng;
+        uuid_bytes[7] = random_bytes[2];
+        uuid_bytes[8] = variant_rng;
+        uuid_bytes[9..].copy_from_slice(&random_bytes[3..]);
+
+        Self(uuid_bytes)
     }
 
     pub fn parse(input: &[u8]) -> ParserResult<Self> {
@@ -38,8 +51,7 @@ impl FilesystemId {
             return Err(nom::Err::Failure(err));
         }
 
-        // todo(sstelfox): parse into an actually UUID, validate the version, probably store the
-        // UUID instead of the bytes.
+        // todo(sstelfox): validate the UUID format...
 
         let mut bytes = [0u8; ID_LENGTH];
         bytes.copy_from_slice(id_bytes);

@@ -42,8 +42,6 @@ zeroize = { version = "^1", features = ["derive", "std"] }
 
 base64 = "^0.22"
 bytes = "^1"
-# TODO: we only minimally use UUID and only for the v7 version, we can hand generate those and save the dependency
-uuid = { version = "^1", features = ["v7", "serde"] }
 # TODO: transitioning from nom to winnow, finish it up and remove nom
 nom = "^7"
 winnow = "^0.6"
