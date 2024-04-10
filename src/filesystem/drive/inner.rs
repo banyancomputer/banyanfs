@@ -385,7 +385,7 @@ mod test {
         assert!(inner.nodes.len() == 1);
     }
 
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn create_node() {
         let mut rng = OsRng {};
@@ -417,7 +417,7 @@ mod test {
         assert_eq!(root_children.get(0).unwrap(), &node_pid);
     }
 
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn encode_to_parse() {
         let inner = interesting_inner().await;
