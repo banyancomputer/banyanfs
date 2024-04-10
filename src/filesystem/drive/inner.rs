@@ -271,13 +271,15 @@ impl InnerDrive {
                 if !permanent_id_map.contains_key(&pid) {
                     tracing::warn!(?permanent_id, child_pid = ?pid, "encountered child PID before parent");
 
-                    // Error is disable for now since there are some existing filesytems out there that
+                    // Error is disabled in builds without the `strict` feature
+                    // for now since there are some existing filesytems out there that
                     // have the "backwards" encoding order
 
-                    // return Err(nom::Err::Failure(nom::error::make_error(
-                    //     node_input,
-                    //     nom::error::ErrorKind::Verify,
-                    // )));
+                    #[cfg(feature = "strict")]
+                    return Err(nom::Err::Failure(nom::error::make_error(
+                        node_input,
+                        nom::error::ErrorKind::Verify,
+                    )));
                 }
             }
 
@@ -383,7 +385,8 @@ mod test {
         assert!(inner.nodes.len() == 1);
     }
 
-    #[tokio::test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn create_node() {
         let mut rng = OsRng {};
         let actor_id = ActorId::from(Fingerprint::from([0u8; Fingerprint::size()]));
@@ -414,7 +417,8 @@ mod test {
         assert_eq!(root_children.get(0).unwrap(), &node_pid);
     }
 
-    #[tokio::test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn encode_to_parse() {
         let inner = interesting_inner().await;
         let access = inner.access();

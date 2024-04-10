@@ -12,7 +12,7 @@ keywords = ["banyan", "filesystem", "encryption", "storage"]
 categories = ["filesystems", "cryptography", "storage"]
 
 [features]
-default = ["banyan-api", "pem", "strict", "tomb-compat"]
+default = ["banyan-api", "pem", "tomb-compat"]
 banyan-api = ["async-trait", "reqwest", "serde", "serde_json", "url"]
 pem = ["p384/pem", "p384/pkcs8"]
 strict = []
