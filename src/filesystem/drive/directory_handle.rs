@@ -21,6 +21,9 @@ use self::filesystem::FilePermissions;
 
 const MAX_PATH_DEPTH: usize = 32;
 
+/// A handle on a specific directory, used to perform most operations on the filesystem itself.
+/// Instances of these are safe to clone but each one will track its own current working directory.
+/// Changing the directory of a clone for example does not update the original handle.
 #[derive(Clone)]
 pub struct DirectoryHandle {
     pub(crate) current_key: Arc<SigningKey>,
@@ -29,6 +32,9 @@ pub struct DirectoryHandle {
 }
 
 impl DirectoryHandle {
+    /// Allows traversing the filesystem both up and down. Does not allow invalid character in any
+    /// of the path elements (primarily "/"). Will report an error if you attempt to traverse above
+    /// the root of the filesystem or into/through an invalid node type.
     #[instrument(level = Level::DEBUG, skip(self))]
     pub async fn cd(&self, path: &[&str]) -> Result<DirectoryHandle, OperationError> {
         trace!(cwd_id = self.cwd_id, "directory::cd");
@@ -51,6 +57,8 @@ impl DirectoryHandle {
         Ok(directory)
     }
 
+    /// Changes the permission on the target node. Currently not implemented and changes are
+    /// expected to combine the [`FilePermissions`] with the [`crate::codec::filesystem::DirectoryPermissions`] all at once.
     pub async fn chmod(
         &self,
         _path: &[&str],

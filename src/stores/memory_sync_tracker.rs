@@ -6,6 +6,10 @@ use async_trait::async_trait;
 
 use crate::codec::Cid;
 
+/// A minimal implementation of a memory backed sync tracker. This implementation
+/// is currently used by our WASM implementation for tracking which blocks are
+/// stored where, but also represents the minimal amount of work that others
+/// would need to implement to create an alternate block tracking system.
 #[derive(Default)]
 pub struct MemorySyncTracker {
     pending_deletion: HashSet<Cid>,

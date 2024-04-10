@@ -1,3 +1,5 @@
+//! API endpoints, helpers, and models for the core Banyan platform.
+
 mod models;
 
 pub mod account;

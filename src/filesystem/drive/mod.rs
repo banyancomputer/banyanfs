@@ -30,6 +30,27 @@ use crate::codec::*;
 
 use crate::filesystem::nodes::{Node, NodeBuilderError};
 
+/// The core entry point of the library, a `Drive` is the means through which the BanyanFS
+/// filesystem's public or private data is accessed. Initial creation of a new drive requires a
+/// [`SigningKey`] to be provided to [`Drive::initialize_private`]. It is up to the consumer of the
+/// library to store and load the private key, and the metadata of the
+/// filesystem produce via [`Drive::encode`]. File data itself is not stored in the drive, but uses
+/// the provided [`crate::stores::DataStore`] to store the data blocks.
+///
+/// Most of the operations on the drive itself are done through [`DirectoryHandle`] instances and
+/// [`DirectoryEntry`] instances, which are used to navigate the filesystem and access the both
+/// file and associated data directly. The [`Drive::root`] method allows grabbing a handle on the
+/// root directory of the filesystem to begin performing operations on them.
+///
+/// # Examples
+///
+/// ```rust
+/// use std::sync::Arc;
+/// use banyanfs::prelude::*;
+/// # let mut rng = rand::thread_rng();
+/// let signing_key = Arc::new(SigningKey::generate(&mut rng));
+/// let new_drive = Drive::initialize_private(&mut rng, signing_key);
+/// ```
 #[derive(Clone)]
 pub struct Drive {
     filesystem_id: FilesystemId,

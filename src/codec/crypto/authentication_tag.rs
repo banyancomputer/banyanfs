@@ -8,6 +8,7 @@ use crate::codec::{ParserResult, Stream};
 
 const TAG_LENGTH: usize = 16;
 
+/// Returned from symetric encryption operations and required as part of the decryption operations
 #[derive(Clone, Debug)]
 pub struct AuthenticationTag([u8; TAG_LENGTH]);
 

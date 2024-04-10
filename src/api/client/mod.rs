@@ -2,6 +2,7 @@ mod api_auth;
 mod direct_response;
 mod error;
 mod expiring_token;
+mod platform_token;
 mod storage_host_auth;
 mod traits;
 
@@ -12,27 +13,32 @@ pub(crate) mod utils;
 pub(crate) use api_auth::ApiAuth;
 pub(crate) use direct_response::DirectResponse;
 pub(crate) use expiring_token::ExpiringToken;
+pub(crate) use platform_token::{PlatformToken, PlatformTokenError};
 pub(crate) use storage_host_auth::{StorageHostAuth, StorageTokenError};
 pub(crate) use traits::{
     ApiRequest, FromReqwestResponse, PlatformApiRequest, StorageHostApiRequest,
 };
 
+pub(crate) const PLATFORM_AUDIENCE: &str = "banyan-platform";
+
+pub(crate) const STORAGE_HOST_AUDIENCE: &str = "banyan-storage";
+
 use std::sync::Arc;
 
-use async_std::sync::RwLock;
-use jwt_simple::prelude::*;
 use reqwest::{Client, StatusCode, Url};
 use serde::Deserialize;
-use time::OffsetDateTime;
 use tracing::debug;
 
 use crate::codec::crypto::SigningKey;
 use crate::prelude::BanyanFsError;
 
-pub(crate) const PLATFORM_AUDIENCE: &str = "banyan-platform";
-
-pub(crate) const STORAGE_HOST_AUDIENCE: &str = "banyan-storage";
-
+/// An HTTP client for interacting with the Banyan API (both platform and storage hosts). Specific
+/// requests can be found the in appropriate module for their request type either
+/// [`crate::api::platform`] or [`crate::api::storage_host`].
+///
+/// The authentication state machine between the platform is fairly complete but documented in the
+/// platform API public documentation. This library expects to re-used the key that is protecting
+/// and granting access to specific drives to also be a valid key for accessing the APIs.
 #[derive(Clone)]
 pub struct ApiClient {
     auth: ApiAuth,
@@ -41,6 +47,10 @@ pub struct ApiClient {
 }
 
 impl ApiClient {
+    /// Create a new instance. The base URL is normally either the base HTTP(S) URL of the platform
+    /// and will be what is used for all future requets (other than storage hot requests). This
+    /// client customizes its user agent so recipients can prevent abuse from requests from this
+    /// software if it becomes misconfigured.
     pub fn new(
         base_url: &str,
         account_id: &str,
@@ -57,10 +67,22 @@ impl ApiClient {
         })
     }
 
+    /// Returns the configured base URL for the API client. If you wish to change this you should
+    /// create a new [`ApiClient`] instance the desired base URL.
     pub fn base_url(&self) -> Url {
         self.base_url.clone()
     }
 
+    /// Internal method used for making raw requests to any of the Banyan API endpoints, provides
+    /// some consistent logging and expects the caller to handle the authentication. In almost all
+    /// cases you'll want to use the [`platform_request`] or [`storage_host_request`] methods.
+    ///
+    /// There are a few places where calling this directly is needed, mostly around authentication
+    /// and registration with storage hosts but other exceptions may also exist.
+    ///
+    /// One thing to be aware of is that this will only ever parse the response from the server as
+    /// the [`R::Response`] type if the status code returned from the server was one of the success
+    /// codes (2xx).
     pub(crate) async fn request<R: ApiRequest>(
         &self,
         base_url: &Url,
@@ -89,7 +111,7 @@ impl ApiClient {
                 return Err(ApiError::NotAuthorized);
             }
 
-            match serde_json::from_slice::<RawApiError>(&resp_bytes) {
+            match serde_json::from_slice::<StandardApiError>(&resp_bytes) {
                 Ok(raw_error) => Err(ApiError::Message {
                     status_code: status.as_u16(),
                     message: raw_error.message,
@@ -106,6 +128,10 @@ impl ApiClient {
         }
     }
 
+    /// Perform a request to the platform API. This is more restrictive than the
+    /// [`ApiClient::request`] method, limiting the request to only those that are explicitly
+    /// implementing the marker trait [`PlatformApiRequest`] but will handle the authentication for
+    /// you.
     pub(crate) async fn platform_request<R: PlatformApiRequest>(
         &self,
         request: R,
@@ -115,6 +141,9 @@ impl ApiClient {
         self.request(&self.base_url, &token, request).await
     }
 
+    /// When a request to the platform API is expected to return an empty response, this shortcuts
+    /// some of the boilerplate and allows enabling a strict mode we can use for validation of or
+    /// platform's behavior.
     pub(crate) async fn platform_request_empty_response<R>(
         &self,
         request: R,
@@ -131,6 +160,9 @@ impl ApiClient {
         Ok(())
     }
 
+    /// This is the most commonly used way to interact with the platform. It should be used
+    /// whenever you're expecting a response from the platform in any form. This supports streaming
+    /// response as well by using a [`DirectResponse`] in the request's defined response type.
     pub(crate) async fn platform_request_full<R: PlatformApiRequest>(
         &self,
         request: R,
@@ -149,6 +181,10 @@ impl ApiClient {
             .await;
     }
 
+    /// Provides direct access to the internal authentication's signing key that the API client was
+    /// initialized with. This isn't really ideal and should be avoided. We'll be refactoring this
+    /// out in the future. This isn't a problem but it is a smell that I don't like around
+    /// sensitive material.
     pub(crate) fn signing_key(&self) -> Arc<SigningKey> {
         self.auth.signing_key()
     }
@@ -209,101 +245,108 @@ fn default_reqwest_client() -> Result<reqwest::Client, ApiClientError> {
     Ok(client)
 }
 
-#[derive(Clone, Default)]
-pub(crate) struct PlatformToken(Arc<RwLock<Option<ExpiringToken>>>);
-
-impl PlatformToken {
-    pub(crate) async fn get_token(
-        &self,
-        id: &str,
-        key: &Arc<SigningKey>,
-    ) -> Result<String, PlatformTokenError> {
-        // If we already have token and it's not expired, return it
-        if let Some(expiring_token) = &*self.0.read().await {
-            if let Some(token) = expiring_token.value() {
-                return Ok(token);
-            }
-        }
-
-        let verifying_key = key.verifying_key();
-        let fingerprint = crate::api::client::utils::api_fingerprint_key(&verifying_key);
-        let expiration = OffsetDateTime::now_utc() + std::time::Duration::from_secs(300);
-
-        // todo(sstelfox): this jwt library is definitely an integration pain point, we have all
-        // the primives already in this crate, we should just use them and correctly construct the
-        // JWTs ourselves.
-        let current_ts = Clock::now_since_epoch();
-        let mut claims = Claims::create(Duration::from_secs(330))
-            .with_audience(PLATFORM_AUDIENCE)
-            .with_subject(id)
-            .invalid_before(current_ts - Duration::from_secs(30));
-
-        claims.create_nonce();
-        claims.issued_at = Some(current_ts);
-
-        let mut jwt_key = ES384KeyPair::from_bytes(&key.to_bytes())?;
-        jwt_key = jwt_key.with_key_id(&fingerprint);
-        let token = jwt_key.sign(claims)?;
-
-        tracing::debug!("generated new platform token");
-
-        let stored_token = ExpiringToken::new(token.clone(), expiration);
-        let platform_token = &mut *self.0.write().await;
-        *platform_token = Some(stored_token);
-
-        tracing::debug!("recorded token");
-
-        Ok(token)
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum PlatformTokenError {
-    #[error("failed to generate token for platform platform: {0}")]
-    JwtSimpleError(#[from] jwt_simple::Error),
-}
-
+/// These are API errors that occurs directly as a result of an HTTP request and does not represent
+/// a failure in the client or library itself. Please refer to the specific error variant if you're
+/// looking for additional diagnostics for addressing the issue.
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
+    /// The general exception to the rule stated in the error description, these errors are
+    /// exepcted to be incredibly rare as they usually result from misuse of the reqwest client.
+    /// The way we use the client is fairly standard, though the WASM variant has some heavy
+    /// additional restrictions that make these errors more likely to occur due to browser
+    /// incompatibilities.
     #[error("network client experienced issue: {0}")]
     ClientError(#[from] reqwest::Error),
 
+    /// The server (could come from either the platform or a storage host) reported that the user
+    /// doesn't have enough capacity to complete request. For requests to the platform this is
+    /// frequently a result of the account limit and the intended amount of data to store at a
+    /// storage host instead of the size of the specific request.
     #[error("the user does not have sufficient authorized capacity to accept the request")]
     InsufficientStorage,
 
+    /// The request that was previously made contained invalid data. This libary's API was designed
+    /// to limit the possibility of these kinds of errors by strictly enforcing the types used for
+    /// the request parameters. Some parameters still come in as strings and numbers without
+    /// supporting all forms of those types.
+    ///
+    /// Pay attention to the returned error message as it likely contains useful details for
+    /// identifying which piece of data specifically was at fault.
     #[error("the data provided to the API client wasn't valid: {0}")]
     InvalidData(String),
 
+    /// The provided URL wasn't valid. This one should be pretty straight-forward as it almost
+    /// certainly falls down to an issue with the provided base URL. Issues from generated or
+    /// derived URLs should be reported as a bug in the library itself.
     #[error("Request URL is invalid: {0}")]
     InvalidUrl(#[from] url::ParseError),
 
+    /// The most common error message returned from the API itself. This captures both the status
+    /// code and the specific message that the server returned.
     #[error("API returned {status_code} response with message: {message}")]
     Message { status_code: u16, message: String },
 
+    /// The client will report this error when one of the provided arguments to the call is not
+    /// matched against the expectations already set for the client. The message provides more
+    /// details, but doing things like attempting to create an API key with the remote API using
+    /// the key you're authenticating with will report this kind of an error as the premise of the
+    /// request doesn't make sense.
     #[error("response from API did not match our expectations: {0}")]
     MismatchedData(String),
 
+    /// Fairly straight-forward, the request was rejected due to an access control issue. For
+    /// storage hosts this may mean that the client simply isn't registered yet and additional
+    /// work needs to be done with the platform to authorize the client's key. The internal
+    /// mechanisms that handle storage host authentication will handle these cases for you, end
+    /// users are only expected to see this in the event the extra authorization steps also fail.
     #[error("the client was not authorized to make the request")]
     NotAuthorized,
 
+    /// While generating a JWT to authenticate a request for the platform, an operation failed.
+    /// This is a highly unlikely error as its primarily wrapping operations that shouldn't fail as
+    /// long as the arguments are correct. You'll need to refer to the specific error case reported
+    /// and the operation for additional context on the failure cause.
     #[error("failed to generate token for platform platform: {0}")]
     PlatformTokenError(#[from] PlatformTokenError),
 
+    /// This is a very specific error case. This library streams its large data uploads by
+    /// consuming an asynchronous stream of bytes. When that stream has be consumed by an attempted
+    /// upload, and the same request object is attempted to be re-used you'll get this error. The
+    /// library caller should create a new request for each upload attempt.
     #[error("unable to reuse streaming requests")]
     RequestReused,
 
+    /// When this error occurs its likely due to a skism between the current client's view of one
+    /// of the APIs and what the real API is serving. Fixing this error likely requires either an
+    /// update (the client library is outdated) or a pull-request to the library to patch the
+    /// affected request/response.
     #[error("failed to during json (de)serialization: {0}")]
     Serde(#[from] serde_json::Error),
 
+    /// Similar to [`Self::PlatformTokenError`] but for storage host tokens. This one is more
+    /// common as there is a significantly more complex dance that occurs behind the scene in some
+    /// cases. Generation of storage tokens effectively needs to be done online in the general case
+    /// as it may need to perform a registration step involving the platform.
+    ///
+    /// More specific details of the error cases are covered in the [`StorageTokenError`]
+    /// definition.
     #[error("failed to generate token for storage host: {0}")]
     StorageTokenError(#[from] StorageTokenError),
 
+    /// When performing some form of streaming I/O an unrecoverable error such as end-of-file in
+    /// the stream or in some cases failure to parse the contents of that stream occurred.
     #[error("unexpected I/O error in API client: {0}")]
     StreamingIo(#[from] std::io::Error),
 
+    /// This will occur only when an error was returned from the remote API and the response was
+    /// not in the API's standard error format. This is a bug in the API itself and can be reported
+    /// through GitHub issues, but we'll almost certainly see this before you do ;)
     #[error("unexpected API response: {0}")]
     UnexpectedResponse(&'static str),
 
+    /// A WASM specific error that likely occurred due to a browser API inconsistency. These are
+    /// only present in a few specific operations so the internal cause should reveal more about
+    /// the error itself.
     #[cfg(target_arch = "wasm32")]
     #[error("WASM internal error: {0}")]
     WasmInternal(String),
@@ -315,8 +358,10 @@ impl From<ApiError> for BanyanFsError {
     }
 }
 
-#[derive(Debug, Deserialize)]
-pub struct RawApiError {
+/// This is the inner error type that the API will always return. We don't return this directly as
+/// we want to include the status code as well. Will always become a [`ApiError::Message`].
+#[derive(Deserialize)]
+struct StandardApiError {
     #[serde(rename = "msg")]
     pub message: String,
 }

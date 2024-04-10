@@ -7,8 +7,13 @@ use crate::codec::crypto::{
     AsymLockedAccessKey, AuthenticationTag, Nonce, SymLockedAccessKey, VerifyingKey,
 };
 
-const ACCESS_KEY_LENGTH: usize = 32;
+/// The number of bytes that make up an AccessKey. Under the hood we use XChaCha20Poly1305 which
+/// uses 256-bit keys.
+pub const ACCESS_KEY_LENGTH: usize = 32;
 
+/// An AccessKey is an unencrypted symmetric key used for encrypting and decrypting arbitrary data.
+/// This is used on data blocks, protecting header and filesystem settings, as well as other keys.
+/// This is heavily opionated for its purpose but should still be used with care.
 #[derive(Clone, PartialEq, Eq, Zeroize, ZeroizeOnDrop)]
 pub struct AccessKey([u8; ACCESS_KEY_LENGTH]);
 
@@ -17,6 +22,9 @@ impl AccessKey {
         ChaChaKey::from_slice(&self.0)
     }
 
+    /// Decrypts the provided buffer in place using the internal key, and the provided nonce, tag,
+    /// and additional authenticated data. Buffer's length should be a multiple of
+    /// ACCESS_KEY_LENGTH.
     pub fn decrypt_buffer(
         &self,
         nonce: Nonce,
@@ -29,6 +37,10 @@ impl AccessKey {
         Ok(())
     }
 
+    /// Encrypt the provided buffer in place using the internal key and provided authenticated
+    /// data. The returned [`Nonce`] and [`AuthenticationTag`] need to be stored alongside the
+    /// ciphertext in-order to decrypt it later. In most cases, this will be handled for you by the
+    /// library itself. The buffer should be a multiple of ACCESS_KEY_LENGTH.
     pub fn encrypt_buffer(
         &self,
         rng: &mut impl CryptoRngCore,
@@ -47,10 +59,20 @@ impl AccessKey {
         Ok((nonce, tag))
     }
 
+    /// Create a new [`AccessKey`] using the provided random number generator.
     pub fn generate(rng: &mut impl CryptoRngCore) -> Self {
         Self(rng.gen())
     }
 
+    /// [`AccessKey`] instances are designed to be shared and protected using asymmetric keys from
+    /// within this library. We frequently want to share a private key with another entity that we
+    /// have the public key of. This method facilitates this by performing an ephemeral
+    /// Diffie-Hellman key exchange between and ephemerally generated key pair and the target
+    /// public key.
+    ///
+    /// Thist method returns a struct that contains all the information necessary to complete the
+    /// DH key exchange by the intended recipient. Additional details on getting access to the
+    /// encrypted key can be found in the [`AsymLockedAccessKey`] struct.
     pub fn lock_for(
         &self,
         rng: &mut impl CryptoRngCore,
@@ -71,6 +93,11 @@ impl AccessKey {
         })
     }
 
+    /// Some [`AccessKey`] instances are protected by other symmetric keys, most notably each file
+    /// has its own unique encryption key that is protected with the filesystem's general data
+    /// encryption key. This produces a different struct than the lock_for that does not involve
+    /// additional asymmetric keys. Refer to [`SymLockedAccessKey`] for additional details on
+    /// decryption.
     pub fn lock_with(
         &self,
         rng: &mut impl CryptoRngCore,
@@ -89,6 +116,10 @@ impl AccessKey {
         })
     }
 
+    /// Reports the size of this data struct when its encoded or decoded. This struct isn't
+    /// directly encodable or parsable as the plaintext is never supposed to be exposed but knowing
+    /// the size of this is important for any encoding or decoding that will include the encrypted
+    /// form of the key (which doesn't change size itself).
     pub const fn size() -> usize {
         ACCESS_KEY_LENGTH
     }
@@ -108,9 +139,23 @@ impl From<[u8; ACCESS_KEY_LENGTH]> for AccessKey {
 
 #[derive(Debug, thiserror::Error)]
 pub enum AccessKeyError<I> {
+    /// When decoding the data that is supposed to represent an [`AccessKey`] is not represented as
+    /// expected. This error frequently looks like a stream of bytes and its not always clear from
+    /// that why the decoding failed. There are future improvements in the work to improve these
+    /// kinds of errors by switching off of the `nom` library but for now additional context is
+    /// recommended to help identify what the specific failure was.
     #[error("decoding data failed: {0}")]
     FormatFailure(#[from] winnow::error::ErrMode<winnow::error::ContextError<I>>),
 
+    /// The underlying libraries used by this one for its cryptograhic operations do not provide a
+    /// more specific error type so we can not provide more detailed errors than the operation
+    /// failed. This is intentional to prevent leaking information about the cryptographic
+    /// operations and usually the context of the failure is sufficient to identify why the error
+    /// occurred.
+    ///
+    /// It it important for consumers of this error to provide additional context on the nature of
+    /// the error when this occurs so that users have a more informed notion of how this failure
+    /// came about.
     #[error("unspecified crypto error")]
     CryptoFailure,
 }
