@@ -271,10 +271,13 @@ impl InnerDrive {
                 if !permanent_id_map.contains_key(&pid) {
                     tracing::warn!(?permanent_id, child_pid = ?pid, "encountered child PID before parent");
 
-                    return Err(nom::Err::Failure(nom::error::make_error(
-                        node_input,
-                        nom::error::ErrorKind::Verify,
-                    )));
+                    // Error is disable for now since there are some existing filesytems out there that
+                    // have the "backwards" encoding order
+
+                    // return Err(nom::Err::Failure(nom::error::make_error(
+                    //     node_input,
+                    //     nom::error::ErrorKind::Verify,
+                    // )));
                 }
             }
 
