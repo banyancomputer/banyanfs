@@ -140,7 +140,7 @@ impl WasmMount {
             .await
             .map_err(|e| format!("unable to retrieve deleted data CIDs: {e}"))?;
 
-        let drive_stream = crate::api::client::utils::vec_to_pinned_stream(encoded_drive);
+        let drive_stream = crate::api::client::utils::VecStream::new(encoded_drive).pinned();
 
         let push_response = platform::metadata::push_stream(
             self.wasm_client.client(),
@@ -199,15 +199,6 @@ impl WasmMount {
 
 #[wasm_bindgen]
 impl WasmMount {
-    // appears deprecated
-    //pub async fn add(
-    //    &mut self,
-    //    _path_segments: js_sys::Array,
-    //    _content_buffer: js_sys::ArrayBuffer,
-    //) -> BanyanFsResult<()> {
-    //    todo!()
-    //}
-
     // new, checked
     pub fn bucket(&self) -> WasmBucket {
         self.bucket.clone()

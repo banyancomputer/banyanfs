@@ -4,20 +4,18 @@ use std::task::{Context, Poll};
 use async_std::stream::Stream;
 use bytes::Bytes;
 
-pub(crate) fn vec_to_pinned_stream(
-    inner: Vec<u8>,
-) -> Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>>>> {
-    Box::pin(VecStream::new(inner))
-}
-
-pub(crate) struct VecStream {
+pub struct VecStream {
     data: Vec<u8>,
     pos: usize,
 }
 
 impl VecStream {
-    pub(crate) fn new(data: Vec<u8>) -> Self {
+    pub fn new(data: Vec<u8>) -> Self {
         Self { data, pos: 0 }
+    }
+
+    pub fn pinned(self) -> Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>>>> {
+        Box::pin(self)
     }
 }
 

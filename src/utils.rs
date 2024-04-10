@@ -3,7 +3,10 @@ use crate::codec::Cid;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
-const CID_HASH_SIZE: usize = 32;
+/// Number of bytes that make up a raw CID within this framework. When properly formatted as a
+/// multicodec CIDv1 it will be longer. For the full size representation please refer to
+/// [`crate::codec::Cid`].
+pub const CID_HASH_SIZE: usize = 32;
 
 /// Quick helper that produces the library specific [`Cid`] object over the given data. Internally
 /// this is simply a 32 byte BLAKE3 hash of the data wrapped around a helper struct. For formating

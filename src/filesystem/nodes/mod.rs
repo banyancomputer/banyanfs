@@ -20,8 +20,8 @@ mod node_name;
 pub(crate) use cid_cache::CidCache;
 pub(crate) use node_builder::{NodeBuilder, NodeBuilderError};
 
-pub use node_data::{NodeData, NodeDataError};
-pub use node_name::{NodeName, NodeNameError};
+pub(crate) use node_data::{NodeData, NodeDataError};
+pub(crate) use node_name::{NodeName, NodeNameError};
 
 use std::collections::HashMap;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
@@ -60,7 +60,15 @@ pub struct Node {
 }
 
 impl Node {
-    pub async fn add_child(
+    /// Associates a child node with the current node. This is a low-level operation and should be
+    /// used with care. This will check that the current nodes allow a child below it, but does not
+    /// validate the node being added is a valid type. It is the responsibility of the caller to
+    /// ensure that for example a directory is not added below a child. The correct one-way
+    /// hiearchy is directory -> (directory | file), file -> associated data.
+    ///
+    /// Calling this function will modify the CID of the node and as such will invalidate the
+    /// internal encoding cache if available from [`Node::cached_encoding`].
+    pub(crate) async fn add_child(
         &mut self,
         name: NodeName,
         child_id: PermanentId,
@@ -71,10 +79,22 @@ impl Node {
         Ok(())
     }
 
-    pub async fn cached_encoding(&self) -> Option<Vec<u8>> {
+    /// During the encoding process we first need the CID of the node (via [`Node::cid`]) which
+    /// requires fully encoding the node to calculate. That method caches the result of that
+    /// encoding if it needed to generate it. This consumes that cached encoding if we have it and
+    /// is mostly used as an optimization that is described in the [`Node::cid`] documentation.
+    pub(crate) async fn cached_encoding(&self) -> Option<Vec<u8>> {
         self.cid.take_cached().await
     }
 
+    /// Returns the CID of the node. If the internal data has changed in anyway (as indicated by
+    /// and internal call to CidCache::is_dirty), this will fully encode the node as it would
+    /// appear on disk and calculates the CID over that data.
+    ///
+    /// As an optimization this cache's that encoding so we don't have to re-encode it when we're
+    /// writing the filesystem out to disk. This comes with a small memory penalty if some
+    /// non-encoding process attempts to access a large number of node CIDs but that seems like an
+    /// unlikely use case.
     pub async fn cid(&self) -> Result<Cid, OperationError> {
         if self.cid.is_dirty().await {
             let mut node_data = Vec::new();
@@ -86,18 +106,19 @@ impl Node {
             self.cid.set_cached(node_data).await;
         }
 
-        Ok(self.cid.cid().await.expect("enforce cid generation above"))
+        Ok(self.cid.cid().await.expect("enforced cid generation above"))
     }
 
+    /// Returnes the unix timestamp (in milliseconds precision) of when the node was created.
     pub fn created_at(&self) -> i64 {
         self.created_at
     }
 
-    pub fn data(&self) -> &NodeData {
+    pub(crate) fn data(&self) -> &NodeData {
         &self.inner
     }
 
-    pub async fn data_mut(&mut self) -> &mut NodeData {
+    pub(crate) async fn data_mut(&mut self) -> &mut NodeData {
         // note(sstelfox): we should probably arbitrate changes to the inner data in a way that
         // allows us to detect if changes actually occurred. For now we have to assume that by
         // grabbing a mutable handle they intend to mutate the content which will invalidate our
@@ -250,10 +271,18 @@ impl Node {
         encoded_size
     }
 
+    /// The owner of a node is the actor that created the specific version of this file. If a file
+    /// is replaced or edited, the new actor will be the owner of the new version. Some client
+    /// implementations make use of custom authorization middlewares that reject change violating
+    /// more complex authorization policies such as only alllowing the owner to modify a file,
+    /// enforce the actor is a member of a specific group, etc.
     pub fn owner_id(&self) -> ActorId {
         self.owner_id
     }
 
+    /// If the node is a child in the overall filesystem, this will return the parent's permanent
+    /// identifier. The only [`Node`] that does not have a parent is the root node within the
+    /// filesystem.
     pub fn parent_id(&self) -> Option<PermanentId> {
         self.parent_id
     }
@@ -384,7 +413,6 @@ impl Node {
     }
 }
 
-// TODO: this belongs on the inner class not here
 impl std::fmt::Debug for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.inner {
