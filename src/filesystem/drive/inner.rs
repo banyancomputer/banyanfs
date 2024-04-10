@@ -362,7 +362,7 @@ impl InnerDrive {
 
 #[cfg(test)]
 mod test {
-    use rand::{rngs::OsRng, RngCore};
+    use rand::rngs::OsRng;
 
     use crate::prelude::NodeName;
 
@@ -483,125 +483,107 @@ mod test {
             )
             .await
             .unwrap();
-        let dir_1 = {
-            let mut rng = OsRng {};
-            inner
-                .create_node(
-                    &mut rng,
-                    actor_id,
-                    inner.root_pid(),
-                    |rng, new_node_id, parent_id, actor_id| async move {
-                        NodeBuilder::directory(NodeName::try_from("dir_1").unwrap())
-                            .with_parent(parent_id)
-                            .with_id(new_node_id)
-                            .with_owner(actor_id)
-                            .build(rng)
-                            .map_err(OperationError::CreationFailed)
-                    },
-                )
-                .await
-                .unwrap()
-        };
+        let dir_1 = inner
+            .create_node(
+                &mut rng,
+                actor_id,
+                inner.root_pid(),
+                |rng, new_node_id, parent_id, actor_id| async move {
+                    NodeBuilder::directory(NodeName::try_from("dir_1").unwrap())
+                        .with_parent(parent_id)
+                        .with_id(new_node_id)
+                        .with_owner(actor_id)
+                        .build(rng)
+                        .map_err(OperationError::CreationFailed)
+                },
+            )
+            .await
+            .unwrap();
 
-        let dir_2 = {
-            let mut rng = OsRng {};
-            inner
-                .create_node(
-                    &mut rng,
-                    actor_id,
-                    dir_1,
-                    |rng, new_node_id, parent_id, actor_id| async move {
-                        NodeBuilder::directory(NodeName::try_from("dir_2").unwrap())
-                            .with_parent(parent_id)
-                            .with_id(new_node_id)
-                            .with_owner(actor_id)
-                            .build(rng)
-                            .map_err(OperationError::CreationFailed)
-                    },
-                )
-                .await
-                .unwrap()
-        };
+        let dir_2 = inner
+            .create_node(
+                &mut rng,
+                actor_id,
+                dir_1,
+                |rng, new_node_id, parent_id, actor_id| async move {
+                    NodeBuilder::directory(NodeName::try_from("dir_2").unwrap())
+                        .with_parent(parent_id)
+                        .with_id(new_node_id)
+                        .with_owner(actor_id)
+                        .build(rng)
+                        .map_err(OperationError::CreationFailed)
+                },
+            )
+            .await
+            .unwrap();
 
-        let dir_3 = {
-            let mut rng = OsRng {};
-            inner
-                .create_node(
-                    &mut rng,
-                    actor_id,
-                    dir_2,
-                    |rng, new_node_id, parent_id, actor_id| async move {
-                        NodeBuilder::directory(NodeName::try_from("dir_3").unwrap())
-                            .with_parent(parent_id)
-                            .with_id(new_node_id)
-                            .with_owner(actor_id)
-                            .build(rng)
-                            .map_err(OperationError::CreationFailed)
-                    },
-                )
-                .await
-                .unwrap()
-        };
+        let dir_3 = inner
+            .create_node(
+                &mut rng,
+                actor_id,
+                dir_2,
+                |rng, new_node_id, parent_id, actor_id| async move {
+                    NodeBuilder::directory(NodeName::try_from("dir_3").unwrap())
+                        .with_parent(parent_id)
+                        .with_id(new_node_id)
+                        .with_owner(actor_id)
+                        .build(rng)
+                        .map_err(OperationError::CreationFailed)
+                },
+            )
+            .await
+            .unwrap();
 
-        let _file_4 = {
-            let mut rng = OsRng {};
-            inner
-                .create_node(
-                    &mut rng,
-                    actor_id,
-                    dir_2,
-                    |rng, new_node_id, parent_id, actor_id| async move {
-                        NodeBuilder::directory(NodeName::try_from("file_4").unwrap())
-                            .with_parent(parent_id)
-                            .with_id(new_node_id)
-                            .with_owner(actor_id)
-                            .build(rng)
-                            .map_err(OperationError::CreationFailed)
-                    },
-                )
-                .await
-                .unwrap()
-        };
+        let _file_4 = inner
+            .create_node(
+                &mut rng,
+                actor_id,
+                dir_2,
+                |rng, new_node_id, parent_id, actor_id| async move {
+                    NodeBuilder::directory(NodeName::try_from("file_4").unwrap())
+                        .with_parent(parent_id)
+                        .with_id(new_node_id)
+                        .with_owner(actor_id)
+                        .build(rng)
+                        .map_err(OperationError::CreationFailed)
+                },
+            )
+            .await
+            .unwrap();
 
-        let _file_5 = {
-            let mut rng = OsRng {};
-            inner
-                .create_node(
-                    &mut rng,
-                    actor_id,
-                    dir_2,
-                    |rng, new_node_id, parent_id, actor_id| async move {
-                        NodeBuilder::directory(NodeName::try_from("file_5").unwrap())
-                            .with_parent(parent_id)
-                            .with_id(new_node_id)
-                            .with_owner(actor_id)
-                            .build(rng)
-                            .map_err(OperationError::CreationFailed)
-                    },
-                )
-                .await
-                .unwrap()
-        };
+        let _file_5 = inner
+            .create_node(
+                &mut rng,
+                actor_id,
+                dir_2,
+                |rng, new_node_id, parent_id, actor_id| async move {
+                    NodeBuilder::directory(NodeName::try_from("file_5").unwrap())
+                        .with_parent(parent_id)
+                        .with_id(new_node_id)
+                        .with_owner(actor_id)
+                        .build(rng)
+                        .map_err(OperationError::CreationFailed)
+                },
+            )
+            .await
+            .unwrap();
 
-        let _file_3 = {
-            let mut rng = OsRng {};
-            inner
-                .create_node(
-                    &mut rng,
-                    actor_id,
-                    dir_3,
-                    |rng, new_node_id, parent_id, actor_id| async move {
-                        NodeBuilder::directory(NodeName::try_from("file_3").unwrap())
-                            .with_parent(parent_id)
-                            .with_id(new_node_id)
-                            .with_owner(actor_id)
-                            .build(rng)
-                            .map_err(OperationError::CreationFailed)
-                    },
-                )
-                .await
-                .unwrap()
-        };
+        let _file_3 = inner
+            .create_node(
+                &mut rng,
+                actor_id,
+                dir_3,
+                |rng, new_node_id, parent_id, actor_id| async move {
+                    NodeBuilder::directory(NodeName::try_from("file_3").unwrap())
+                        .with_parent(parent_id)
+                        .with_id(new_node_id)
+                        .with_owner(actor_id)
+                        .build(rng)
+                        .map_err(OperationError::CreationFailed)
+                },
+            )
+            .await
+            .unwrap();
 
         inner
     }
