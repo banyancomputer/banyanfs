@@ -228,7 +228,6 @@ impl DataBlock {
 
         let mut contents = Vec::with_capacity(chunk_count);
         for _ in 0..chunk_count {
-            //let (input, chunk_data) = take(base_chunk_size)(input)?;
             let chunk_start = input;
 
             let (input, nonce) = Nonce::parse(input)?;

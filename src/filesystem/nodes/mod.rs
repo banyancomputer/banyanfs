@@ -302,18 +302,12 @@ impl Node {
 
         let node_data_start = input;
 
-        // let (input, node_data_buf) = take(node_data_len)(input)?;
-        // Need to add check for error conditions here (i.e. don't try to parse past `node_data_len`)
-
         let (input, permanent_id) = PermanentId::parse(input)?;
         let (input, vector_clock) = VectorClock::parse(input)?;
         let (input, parent_present) = take(1u8).parse_peek(input)?;
 
-        // , vector_clock, parent_present)) =
-        //     (PermanentId::parse, VectorClock::parse, take(1u8)).parse_next(input)?;
         tracing::trace!(node_data_len, ?cid, "cid/node_data_len");
 
-        // let (node_data_buf, parent_present) = take(1u8)(node_data_buf)?;
         let (input, parent_id) = match parent_present[0] {
             0x00 => (input, None),
             0x01 => {
@@ -334,9 +328,6 @@ impl Node {
         let (input, modified_at) = le_i64.parse_peek(input)?;
         let (input, name) = NodeName::parse(input)?;
         let (mut input, metadata_entries) = le_u8.parse_peek(input)?;
-
-        // let (input, (owner_id, created_at, modified_at, name, metadata_entries)) =
-        //     (ActorId::parse, le_i64, le_i64, NodeName::parse, le_u8).parse_next(input)?;
 
         let mut metadata = HashMap::new();
         for _ in 0..metadata_entries {
@@ -360,7 +351,7 @@ impl Node {
         let (input, inner) = NodeData::parse(input)?;
         debug_assert!(
             input.offset_from(&node_data_start) == usize::try_from(node_data_len).unwrap(), //Unwrap safe on 32bit and up systems (unsafe on 16 bit systems)
-            "did not consume all input"
+            "consumed to little or too much during parse based on the node's data_len field"
         );
 
         let node = Self {
