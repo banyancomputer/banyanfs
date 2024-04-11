@@ -28,8 +28,8 @@ use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
 use futures::{AsyncWrite, AsyncWriteExt};
 use winnow::binary::{le_i64, le_u32, le_u8};
-use winnow::token::take;
 use winnow::stream::Offset;
+use winnow::token::take;
 use winnow::Parser;
 
 use crate::codec::crypto::AccessKey;
@@ -357,9 +357,9 @@ impl Node {
             input = meta_buf;
         }
 
-        let (remaining, inner) = NodeData::parse(input)?;
+        let (input, inner) = NodeData::parse(input)?;
         debug_assert!(
-            node_data_start.offset_from(&remaining) == usize::try_from(node_data_len).unwrap(), //Unwrap safe on 32bit and up systems (unsafe on 16 bit systems)
+            input.offset_from(&node_data_start) == usize::try_from(node_data_len).unwrap(), //Unwrap safe on 32bit and up systems (unsafe on 16 bit systems)
             "did not consume all input"
         );
 

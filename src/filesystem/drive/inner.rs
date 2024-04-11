@@ -365,11 +365,10 @@ impl InnerDrive {
 
 #[cfg(test)]
 mod test {
-    use rand::rngs::OsRng;
-
-    use crate::prelude::NodeName;
-
     use self::crypto::Fingerprint;
+    use crate::prelude::NodeName;
+    use rand::rngs::OsRng;
+    use winnow::Partial;
 
     use super::*;
 
@@ -429,8 +428,13 @@ mod test {
         let encoding_res = inner.encode(&mut encoded).await;
         assert!(encoding_res.is_ok());
 
-        let (remaining, parsed) =
-            InnerDrive::parse(encoded.as_slice(), access.to_owned(), journal, None).unwrap();
+        let (remaining, parsed) = InnerDrive::parse(
+            Partial::new(encoded.as_slice()),
+            access.to_owned(),
+            journal,
+            None,
+        )
+        .unwrap();
         assert!(remaining.is_empty());
         assert_eq!(inner.nodes.len(), parsed.nodes.len());
         for (_, node) in inner.nodes {
