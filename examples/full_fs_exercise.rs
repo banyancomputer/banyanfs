@@ -64,6 +64,12 @@ async fn main() {
             .await
             .unwrap();
         assert_eq!(file_data, b"a filesystem was born");
+
+        let additional_key = std::sync::Arc::new(SigningKey::generate(&mut rng));
+        let additional_pubkey = additional_key.verifying_key();
+
+        //let access = KeyAccessSettingsBuilder::maintenance().build();
+        //drive.authorize_key(&mut rng, additional_pubkey, access);
     }
 
     let mut file_opts = tokio::fs::OpenOptions::new();

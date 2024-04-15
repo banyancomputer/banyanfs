@@ -23,7 +23,6 @@ const PRIVATE_RESERVED_MASK: u8 = PUBLIC_RESERVED_MASK ^ PRIVATE_ONLY_MASK;
 
 pub struct KeyAccessSettingsBuilder {
     bits: u8,
-    private: bool,
 }
 
 impl KeyAccessSettingsBuilder {
@@ -82,23 +81,14 @@ impl KeyAccessSettingsBuilder {
 }
 
 #[derive(Clone, Debug)]
-pub enum KeyAccessSettings {
-    Public {
-        protected: bool,
-        owner: bool,
-        historical: bool,
+pub struct KeyAccessSettings {
+    protected: bool,
+    owner: bool,
+    historical: bool,
 
-        extra: u8,
-    },
-    Private {
-        protected: bool,
-        owner: bool,
-        historical: bool,
-
-        filesystem_key_present: bool,
-        data_key_present: bool,
-        maintenance_key_present: bool,
-    },
+    filesystem_key_present: bool,
+    data_key_present: bool,
+    maintenance_key_present: bool,
 }
 
 impl KeyAccessSettings {
@@ -108,59 +98,28 @@ impl KeyAccessSettings {
     ) -> std::io::Result<usize> {
         let mut settings: u8 = 0x00;
 
-        match self {
-            Self::Public {
-                protected,
-                owner,
-                historical,
-                extra,
-            } => {
-                if *protected {
-                    settings |= PROTECTED_BIT;
-                }
+        if self.protected {
+            settings |= PROTECTED_BIT;
+        }
 
-                if *owner {
-                    settings |= OWNER_BIT;
-                }
+        if self.owner {
+            settings |= OWNER_BIT;
+        }
 
-                if *historical {
-                    settings |= HISTORICAL_BIT;
-                }
+        if self.historical {
+            settings |= HISTORICAL_BIT;
+        }
 
-                settings |= *extra & PRIVATE_ONLY_MASK;
-            }
-            Self::Private {
-                protected,
-                owner,
-                historical,
-                filesystem_key_present,
-                data_key_present,
-                maintenance_key_present,
-            } => {
-                if *protected {
-                    settings |= PROTECTED_BIT;
-                }
+        if self.filesystem_key_present {
+            settings |= FILESYSTEM_KEY_PRESENT_BIT;
+        }
 
-                if *owner {
-                    settings |= OWNER_BIT;
-                }
+        if self.data_key_present {
+            settings |= DATA_KEY_PRESENT_BIT;
+        }
 
-                if *historical {
-                    settings |= HISTORICAL_BIT;
-                }
-
-                if *filesystem_key_present {
-                    settings |= FILESYSTEM_KEY_PRESENT_BIT;
-                }
-
-                if *data_key_present {
-                    settings |= DATA_KEY_PRESENT_BIT;
-                }
-
-                if *maintenance_key_present {
-                    settings |= MAINTENANCE_KEY_PRESENT_BIT;
-                }
-            }
+        if self.maintenance_key_present {
+            settings |= MAINTENANCE_KEY_PRESENT_BIT;
         }
 
         writer.write_all(&[settings]).await?;
@@ -169,56 +128,30 @@ impl KeyAccessSettings {
     }
 
     pub fn has_data_key(&self) -> bool {
-        match self {
-            KeyAccessSettings::Public { .. } => false,
-            KeyAccessSettings::Private {
-                data_key_present, ..
-            } => *data_key_present,
-        }
+        self.data_key_present
     }
 
     pub fn has_filesystem_key(&self) -> bool {
-        match self {
-            KeyAccessSettings::Public { .. } => false,
-            KeyAccessSettings::Private {
-                filesystem_key_present,
-                ..
-            } => *filesystem_key_present,
-        }
+        self.filesystem_key_present
     }
 
     pub fn has_maintenance_key(&self) -> bool {
-        match self {
-            KeyAccessSettings::Public { .. } => false,
-            KeyAccessSettings::Private {
-                maintenance_key_present,
-                ..
-            } => *maintenance_key_present,
-        }
+        self.maintenance_key_present
     }
 
     pub fn is_historical(&self) -> bool {
-        match self {
-            KeyAccessSettings::Public { historical, .. } => *historical,
-            KeyAccessSettings::Private { historical, .. } => *historical,
-        }
+        self.historical
     }
 
     pub fn is_owner(&self) -> bool {
-        match self {
-            KeyAccessSettings::Public { owner, .. } => *owner,
-            KeyAccessSettings::Private { owner, .. } => *owner,
-        }
+        self.owner
     }
 
     pub fn is_protected(&self) -> bool {
-        match self {
-            KeyAccessSettings::Public { protected, .. } => *protected,
-            KeyAccessSettings::Private { protected, .. } => *protected,
-        }
+        self.protected
     }
 
-    pub fn parse_private(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, byte) = le_u8(input)?;
 
         if cfg!(feature = "strict") && byte & PRIVATE_RESERVED_MASK != 0 {
@@ -242,29 +175,6 @@ impl KeyAccessSettings {
             filesystem_key_present,
             data_key_present,
             maintenance_key_present,
-        };
-
-        Ok((input, settings))
-    }
-
-    pub fn parse_public(input: &[u8]) -> ParserResult<Self> {
-        let (input, byte) = le_u8(input)?;
-
-        if cfg!(feature = "strict") && byte & PUBLIC_RESERVED_MASK != 0 {
-            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-            return Err(nom::Err::Failure(err));
-        }
-
-        let protected = byte & PROTECTED_BIT != 0;
-        let owner = byte & OWNER_BIT != 0;
-        let historical = byte & HISTORICAL_BIT != 0;
-        let extra = byte & PRIVATE_ONLY_MASK;
-
-        let settings = Self::Public {
-            protected,
-            owner,
-            historical,
-            extra,
         };
 
         Ok((input, settings))

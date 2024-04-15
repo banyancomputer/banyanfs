@@ -150,6 +150,8 @@ impl Drive {
         self.filesystem_id
     }
 
+    /// Create a new encrypted drive with the provided [`SigningKey`]. This will generate a random
+    /// fileystem ID.
     pub fn initialize_private(
         rng: &mut impl CryptoRngCore,
         current_key: Arc<SigningKey>,
