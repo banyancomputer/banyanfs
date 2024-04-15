@@ -170,10 +170,9 @@ impl Drive {
 
         trace!(?actor_id, ?filesystem_id, "drive::initializing_private");
 
-        let kas = KeyAccessSettingsBuilder::private()
+        let kas = AccessMaskBuilder::full_access()
             .set_owner()
             .set_protected()
-            .with_all_access()
             .build();
 
         let mut access = DriveAccess::init_private(rng, actor_id);

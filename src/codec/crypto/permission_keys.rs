@@ -4,7 +4,7 @@ use nom::bytes::streaming::take;
 use nom::number::streaming::le_u8;
 
 use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, SigningKey, VerifyingKey};
-use crate::codec::header::KeyAccessSettings;
+use crate::codec::header::AccessMask;
 use crate::codec::ParserResult;
 
 const KEY_PRESENT_BIT: u8 = 0b0000_0001;
@@ -21,7 +21,7 @@ impl PermissionKeys {
         &self,
         rng: &mut impl CryptoRngCore,
         writer: &mut W,
-        key_access: &KeyAccessSettings,
+        key_access: &AccessMask,
         verifying_key: &VerifyingKey,
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
@@ -167,7 +167,7 @@ fn maybe_parse_key(input: &[u8]) -> ParserResult<Option<AsymLockedAccessKey>> {
 mod tests {
     use super::*;
 
-    use crate::codec::header::KeyAccessSettingsBuilder;
+    use crate::codec::header::AccessMaskBuilder;
 
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -183,7 +183,7 @@ mod tests {
 
         let mut buffer = Vec::new();
 
-        let kas = KeyAccessSettingsBuilder::private()
+        let kas = AccessMaskBuilder::private()
             .set_owner()
             .with_all_access()
             .build();

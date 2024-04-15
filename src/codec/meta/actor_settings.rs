@@ -3,7 +3,7 @@ use nom::bytes::streaming::take;
 use nom::number::streaming::le_u8;
 
 use crate::codec::crypto::VerifyingKey;
-use crate::codec::header::KeyAccessSettings;
+use crate::codec::header::AccessMask;
 use crate::codec::meta::VectorClock;
 use crate::codec::ParserResult;
 
@@ -13,13 +13,13 @@ const SOFTWARE_AGENT_BYTE_STR_SIZE: usize = 63;
 pub struct ActorSettings {
     verifying_key: VerifyingKey,
     vector_clock: VectorClock,
-    access_settings: KeyAccessSettings,
+    access_mask: AccessMask,
     agent: Vec<u8>,
 }
 
 impl ActorSettings {
-    pub fn actor_settings(&self) -> KeyAccessSettings {
-        self.access_settings.clone()
+    pub fn access(&self) -> AccessMask {
+        self.access_mask.clone()
     }
 
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
@@ -31,7 +31,7 @@ impl ActorSettings {
 
         written_bytes += self.verifying_key.encode(writer).await?;
         written_bytes += self.vector_clock.encode(writer).await?;
-        written_bytes += self.access_settings.encode(writer).await?;
+        written_bytes += self.access_mask.encode(writer).await?;
 
         let (len, bytes) = if overwrite_version {
             current_version_byte_str()
@@ -57,7 +57,7 @@ impl ActorSettings {
         Ok(written_bytes)
     }
 
-    pub fn new(verifying_key: VerifyingKey, access_settings: KeyAccessSettings) -> Self {
+    pub fn new(verifying_key: VerifyingKey, access_mask: AccessMask) -> Self {
         let vector_clock = VectorClock::initialize();
 
         let (len, agent_fixed) = current_version_byte_str();
@@ -65,7 +65,7 @@ impl ActorSettings {
 
         Self {
             verifying_key,
-            access_settings,
+            access_mask,
             vector_clock,
             agent,
         }
@@ -74,7 +74,7 @@ impl ActorSettings {
     pub fn parse_private(input: &[u8]) -> ParserResult<Self> {
         let (input, verifying_key) = VerifyingKey::parse(input)?;
         let (input, vector_clock) = VectorClock::parse(input)?;
-        let (input, access_settings) = KeyAccessSettings::parse_private(input)?;
+        let (input, access_mask) = AccessMask::parse(input)?;
 
         let (input, agent_len) = le_u8(input)?;
         let (input, agent_fixed) = take(SOFTWARE_AGENT_BYTE_STR_SIZE)(input)?;
@@ -83,7 +83,7 @@ impl ActorSettings {
         let actor_settings = Self {
             verifying_key,
             vector_clock,
-            access_settings,
+            access_mask,
             agent,
         };
 
@@ -93,7 +93,7 @@ impl ActorSettings {
     pub const fn size() -> usize {
         VerifyingKey::size()
             + VectorClock::size()
-            + KeyAccessSettings::size()
+            + AccessMask::size()
             + 1
             + SOFTWARE_AGENT_BYTE_STR_SIZE
     }

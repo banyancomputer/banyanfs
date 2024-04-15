@@ -5,7 +5,7 @@ use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::AsyncWrite;
 
 use crate::codec::crypto::{KeyId, PermissionKeys, SigningKey, VerifyingKey};
-use crate::codec::header::KeyAccessSettings;
+use crate::codec::header::AccessMask;
 use crate::codec::{ActorId, ActorSettings, ParserResult};
 
 #[derive(Clone, Debug)]
@@ -16,17 +16,17 @@ pub struct DriveAccess {
 }
 
 impl DriveAccess {
+    pub fn actor_access(&self, actor_id: ActorId) -> Option<AccessMask> {
+        self.actor_settings
+            .get(&actor_id)
+            .map(|settings| settings.access())
+    }
+
     pub fn actor_key(&self, actor_id: &ActorId) -> Option<VerifyingKey> {
         self.actor_settings
             .get(actor_id)
             .map(|settings| settings.verifying_key())
             .clone()
-    }
-
-    pub fn actor_settings(&self, actor_id: ActorId) -> Option<KeyAccessSettings> {
-        self.actor_settings
-            .get(&actor_id)
-            .map(|settings| settings.actor_settings())
     }
 
     pub fn init_private(rng: &mut impl CryptoRngCore, current_actor_id: ActorId) -> Self {
@@ -114,11 +114,9 @@ impl DriveAccess {
             let reset_agent_version = self.current_actor_id == verifying_key.actor_id();
             written_bytes += settings.encode(writer, reset_agent_version).await?;
 
-            let settings = settings.actor_settings();
-
-            // and the protection keys based on their access
+            let access = settings.access();
             written_bytes += permission_keys
-                .encode_for(rng, writer, &settings, &verifying_key)
+                .encode_for(rng, writer, &access, &verifying_key)
                 .await?;
         }
 
@@ -126,43 +124,29 @@ impl DriveAccess {
     }
 
     pub fn has_read_access(&self, actor_id: ActorId) -> bool {
-        let settings = match self.actor_settings.get(&actor_id) {
-            Some(s) => s.actor_settings(),
+        let access = match self.actor_settings.get(&actor_id) {
+            Some(s) => s.access(),
             None => return false,
         };
 
-        if settings.is_historical() {
+        if access.is_historical() {
             return false;
         }
 
-        match settings {
-            KeyAccessSettings::Public { .. } => true,
-            KeyAccessSettings::Private {
-                filesystem_key_present,
-                ..
-            } => filesystem_key_present,
-        }
+        access.has_filesystem_key()
     }
 
     pub fn has_write_access(&self, actor_id: ActorId) -> bool {
-        let settings = match self.actor_settings.get(&actor_id) {
-            Some(s) => s.actor_settings(),
+        let access = match self.actor_settings.get(&actor_id) {
+            Some(s) => s.access(),
             None => return false,
         };
 
-        if settings.is_historical() {
+        if access.is_historical() {
             return false;
         }
 
-        match settings {
-            KeyAccessSettings::Public { owner, .. } => owner,
-            KeyAccessSettings::Private {
-                filesystem_key_present,
-                data_key_present,
-                maintenance_key_present,
-                ..
-            } => filesystem_key_present && data_key_present && maintenance_key_present,
-        }
+        access.has_filesystem_key() && access.has_data_key() && access.has_maintenance_key()
     }
 
     pub fn new(current_actor_id: ActorId) -> Self {
@@ -173,7 +157,7 @@ impl DriveAccess {
         }
     }
 
-    pub fn register_actor(&mut self, key: VerifyingKey, settings: KeyAccessSettings) {
+    pub fn register_actor(&mut self, key: VerifyingKey, settings: AccessMask) {
         let actor_id = key.actor_id();
         let actor_settings = ActorSettings::new(key, settings);
 
