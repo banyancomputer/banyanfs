@@ -183,10 +183,7 @@ mod tests {
 
         let mut buffer = Vec::new();
 
-        let kas = AccessMaskBuilder::private()
-            .set_owner()
-            .with_all_access()
-            .build();
+        let kas = AccessMaskBuilder::full_access().set_owner().build();
 
         original
             .encode_for(&mut rng, &mut buffer, &kas, &verifying_key)
