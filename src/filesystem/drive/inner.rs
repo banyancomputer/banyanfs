@@ -118,8 +118,6 @@ impl InnerDrive {
                 .by_perm_id(&node_pid)
                 .map_err(|_| std_io_err("missing node PID"))?;
 
-            // todo(sstelfox): The encoding order here still isn't correct, but I've loosened the
-            // strictness on the decoder to finish the last production pieces.
             let permanent_id = node.permanent_id();
             if seen_ids.contains(&permanent_id) {
                 // We've already seen this ID, but it now needs to appear earlier in our encoding
@@ -142,9 +140,8 @@ impl InnerDrive {
             outstanding_ids.extend(node.ordered_child_pids());
         }
 
-        // Flip our ordering to encode our leaf nodes first. This allows us to include CIDs from
-        // the leafs as part of the data encoding for any containing nodes.
-        ordered_ids.reverse();
+        // `Vec::pop` pops from the back of the Vec so we will implicitly be getting the correct ordering as
+        // we pop elements in the reverse order we found them in our DFS
 
         let mut referenced_data_cids = HashSet::new();
         let mut node_buffer = Vec::new();
@@ -274,10 +271,15 @@ impl InnerDrive {
                 if !permanent_id_map.contains_key(&pid) {
                     tracing::warn!(?permanent_id, child_pid = ?pid, "encountered child PID before parent");
 
-                    //return Err(nom::Err::Failure(nom::error::make_error(
-                    //    node_input,
-                    //    nom::error::ErrorKind::Verify,
-                    //)));
+                    // Error is disabled in builds without the `strict` feature
+                    // for now since there are some existing filesytems out there that
+                    // have the "backwards" encoding order
+
+                    #[cfg(feature = "strict")]
+                    return Err(nom::Err::Failure(nom::error::make_error(
+                        node_input,
+                        nom::error::ErrorKind::Verify,
+                    )));
                 }
             }
 
@@ -357,5 +359,236 @@ impl InnerDrive {
 
     pub(crate) fn root_pid(&self) -> PermanentId {
         self.root_pid
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use rand::rngs::OsRng;
+
+    use crate::prelude::NodeName;
+
+    use self::crypto::Fingerprint;
+
+    use super::*;
+
+    #[test]
+    fn initialize() {
+        let mut rng = OsRng {};
+        let actor_id = ActorId::from(Fingerprint::from([0u8; Fingerprint::size()]));
+        let access = DriveAccess::new(actor_id);
+        let inner = InnerDrive::initialize(&mut rng, actor_id, access);
+
+        let inner = inner.unwrap();
+
+        assert!(inner.nodes.capacity() == 32);
+        assert!(inner.nodes.len() == 1);
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn create_node() {
+        let mut rng = OsRng {};
+        let actor_id = ActorId::from(Fingerprint::from([0u8; Fingerprint::size()]));
+        let access = DriveAccess::new(actor_id);
+        let mut inner = InnerDrive::initialize(&mut rng, actor_id, access).unwrap();
+
+        let create_node_res = inner
+            .create_node(
+                &mut rng,
+                actor_id,
+                inner.root_pid(),
+                |rng, new_node_id, parent_id, actor_id| async move {
+                    NodeBuilder::directory(NodeName::try_from("test").unwrap())
+                        .with_parent(parent_id)
+                        .with_id(new_node_id)
+                        .with_owner(actor_id)
+                        .build(rng)
+                        .map_err(OperationError::CreationFailed)
+                },
+            )
+            .await;
+        let node_pid = create_node_res.unwrap();
+        let new_node = inner.by_perm_id(&node_pid).unwrap();
+        assert_eq!(new_node.name(), NodeName::try_from("test").unwrap());
+        assert_eq!(new_node.parent_id().unwrap(), inner.root_pid);
+        let root_children = inner.root_node().unwrap().ordered_child_pids();
+        assert_eq!(root_children.len(), 1);
+        assert_eq!(root_children.get(0).unwrap(), &node_pid);
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn encode_to_parse() {
+        let inner = interesting_inner().await;
+        let access = inner.access();
+        let journal = inner.journal_start();
+        let mut encoded = Vec::new();
+
+        let encoding_res = inner.encode(&mut encoded).await;
+        assert!(encoding_res.is_ok());
+
+        let (remaining, parsed) =
+            InnerDrive::parse(encoded.as_slice(), access.to_owned(), journal, None).unwrap();
+        assert!(remaining.is_empty());
+        assert_eq!(inner.nodes.len(), parsed.nodes.len());
+        for (_, node) in inner.nodes {
+            let pid = node.permanent_id();
+            assert!(parsed.lookup_internal_id(&pid).is_ok())
+        }
+    }
+
+    // A fixture to make a relatively interesting inner
+    async fn interesting_inner() -> InnerDrive {
+        let mut rng = OsRng {};
+        let actor_id = ActorId::from(Fingerprint::from([0u8; Fingerprint::size()]));
+        let access = DriveAccess::new(actor_id);
+        let mut inner = InnerDrive::initialize(&mut rng, actor_id, access).unwrap();
+
+        //           -----file_1
+        //         /
+        // root ---------file_2
+        //         \
+        //          --------- dir_1 ----- dir_2 ---- dir_3 ---- file_3
+        //                         \
+        //                           --- file_4
+        //                            \
+        //                              ----file_5
+
+        let _file_1 = inner
+            .create_node(
+                &mut rng,
+                actor_id,
+                inner.root_pid(),
+                |rng, new_node_id, parent_id, actor_id| async move {
+                    NodeBuilder::file(NodeName::try_from("file_1").unwrap())
+                        .with_parent(parent_id)
+                        .with_id(new_node_id)
+                        .with_owner(actor_id)
+                        .build(rng)
+                        .map_err(OperationError::CreationFailed)
+                },
+            )
+            .await
+            .unwrap();
+        let _file_2 = inner
+            .create_node(
+                &mut rng,
+                actor_id,
+                inner.root_pid(),
+                |rng, new_node_id, parent_id, actor_id| async move {
+                    NodeBuilder::file(NodeName::try_from("file_2").unwrap())
+                        .with_parent(parent_id)
+                        .with_id(new_node_id)
+                        .with_owner(actor_id)
+                        .build(rng)
+                        .map_err(OperationError::CreationFailed)
+                },
+            )
+            .await
+            .unwrap();
+        let dir_1 = inner
+            .create_node(
+                &mut rng,
+                actor_id,
+                inner.root_pid(),
+                |rng, new_node_id, parent_id, actor_id| async move {
+                    NodeBuilder::directory(NodeName::try_from("dir_1").unwrap())
+                        .with_parent(parent_id)
+                        .with_id(new_node_id)
+                        .with_owner(actor_id)
+                        .build(rng)
+                        .map_err(OperationError::CreationFailed)
+                },
+            )
+            .await
+            .unwrap();
+
+        let dir_2 = inner
+            .create_node(
+                &mut rng,
+                actor_id,
+                dir_1,
+                |rng, new_node_id, parent_id, actor_id| async move {
+                    NodeBuilder::directory(NodeName::try_from("dir_2").unwrap())
+                        .with_parent(parent_id)
+                        .with_id(new_node_id)
+                        .with_owner(actor_id)
+                        .build(rng)
+                        .map_err(OperationError::CreationFailed)
+                },
+            )
+            .await
+            .unwrap();
+
+        let dir_3 = inner
+            .create_node(
+                &mut rng,
+                actor_id,
+                dir_2,
+                |rng, new_node_id, parent_id, actor_id| async move {
+                    NodeBuilder::directory(NodeName::try_from("dir_3").unwrap())
+                        .with_parent(parent_id)
+                        .with_id(new_node_id)
+                        .with_owner(actor_id)
+                        .build(rng)
+                        .map_err(OperationError::CreationFailed)
+                },
+            )
+            .await
+            .unwrap();
+
+        let _file_4 = inner
+            .create_node(
+                &mut rng,
+                actor_id,
+                dir_2,
+                |rng, new_node_id, parent_id, actor_id| async move {
+                    NodeBuilder::directory(NodeName::try_from("file_4").unwrap())
+                        .with_parent(parent_id)
+                        .with_id(new_node_id)
+                        .with_owner(actor_id)
+                        .build(rng)
+                        .map_err(OperationError::CreationFailed)
+                },
+            )
+            .await
+            .unwrap();
+
+        let _file_5 = inner
+            .create_node(
+                &mut rng,
+                actor_id,
+                dir_2,
+                |rng, new_node_id, parent_id, actor_id| async move {
+                    NodeBuilder::directory(NodeName::try_from("file_5").unwrap())
+                        .with_parent(parent_id)
+                        .with_id(new_node_id)
+                        .with_owner(actor_id)
+                        .build(rng)
+                        .map_err(OperationError::CreationFailed)
+                },
+            )
+            .await
+            .unwrap();
+
+        let _file_3 = inner
+            .create_node(
+                &mut rng,
+                actor_id,
+                dir_3,
+                |rng, new_node_id, parent_id, actor_id| async move {
+                    NodeBuilder::directory(NodeName::try_from("file_3").unwrap())
+                        .with_parent(parent_id)
+                        .with_id(new_node_id)
+                        .with_owner(actor_id)
+                        .build(rng)
+                        .map_err(OperationError::CreationFailed)
+                },
+            )
+            .await
+            .unwrap();
+
+        inner
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "banyanfs"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Sam Stelfox <sstelfox@bedroomprogrammers.net>"]
 license = "MIT OR Apache-2.0"
 description = "A modern end-to-end encrypted filesystem built on distributed block replication primitives"
@@ -12,15 +12,8 @@ keywords = ["banyan", "filesystem", "encryption", "storage"]
 categories = ["filesystems", "cryptography", "storage"]
 
 [features]
-default = ["banyan-api", "pem", "strict", "tomb-compat"]
-banyan-api = [
-  "async-trait",
-  "jwt-simple",
-  "reqwest",
-  "serde",
-  "serde_json",
-  "url",
-]
+default = ["banyan-api", "pem", "tomb-compat"]
+banyan-api = ["async-trait", "reqwest", "serde", "serde_json", "url"]
 pem = ["p384/pem", "p384/pkcs8"]
 strict = []
 tomb-compat = ["banyan-api"]
@@ -49,8 +42,6 @@ zeroize = { version = "^1", features = ["derive", "std"] }
 
 base64 = "^0.22"
 bytes = "^1"
-# TODO: we only minimally use UUID and only for the v7 version, we can hand generate those and save the dependency
-uuid = { version = "^1", features = ["v7", "serde"] }
 # TODO: transitioning from nom to winnow, finish it up and remove nom
 nom = "^7"
 winnow = "^0.6"
@@ -63,11 +54,7 @@ slab = "^0.4"
 # unix milliseconds, displaying is for other libraries so should drop this
 time = "^0.3"
 
-# TODO: we have most of what jwt-simple handles in our own crypto code which we
-# really don't need and it doesn't quite match our needs. We can pull this out
-# and reduce the scope of our library.
-jwt-simple = { version = "^0.12", optional = true }
-reqwest = { version = "^0.11", default-features = false, optional = true, features = [
+reqwest = { version = "^0.12", default-features = false, optional = true, features = [
   "multipart",
   "json",
   "stream",

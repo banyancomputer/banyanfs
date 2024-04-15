@@ -16,14 +16,7 @@ const NAME_TYPE_ROOT_ID: u8 = 0x00;
 const NAME_TYPE_NAMED_ID: u8 = 0x01;
 
 impl NodeName {
-    pub fn as_str(&self) -> &str {
-        match &self {
-            Self::Root => "{:root:}",
-            Self::Named(name) => name,
-        }
-    }
-
-    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
     ) -> std::io::Result<usize> {
@@ -83,11 +76,11 @@ impl NodeName {
         Ok(Self::Named(name))
     }
 
-    pub fn is_root(&self) -> bool {
+    pub(crate) fn is_root(&self) -> bool {
         matches!(self, Self::Root)
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub(crate) fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, name_type) = le_u8(input)?;
 
         match name_type {
