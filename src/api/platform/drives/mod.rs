@@ -11,9 +11,10 @@ use get_request::GetRequest;
 use update_request::UpdateRequest;
 
 use crate::api::client::{ApiClient, ApiError};
-use crate::api::platform::{ApiDrive, ApiDriveId, DriveKind, StorageClass};
+use crate::api::platform::{
+    ApiDrive, ApiDriveId, ApiDriveUpdateAttributes, DriveKind, StorageClass,
+};
 use crate::codec::crypto::Fingerprint;
-use crate::prelude::platform::ApiDriveUpdateAttributes;
 
 pub async fn create(
     client: &ApiClient,

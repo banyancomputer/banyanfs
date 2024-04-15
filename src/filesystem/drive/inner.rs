@@ -364,13 +364,10 @@ impl InnerDrive {
 
 #[cfg(test)]
 mod test {
-    use rand::rngs::OsRng;
-
-    use crate::prelude::NodeName;
-
     use self::crypto::Fingerprint;
-
     use super::*;
+    use crate::filesystem::NodeName;
+    use rand::rngs::OsRng;
 
     #[test]
     fn initialize() {

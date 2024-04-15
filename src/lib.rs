@@ -26,9 +26,11 @@ pub use async_trait;
 pub mod prelude {
     #[cfg(feature = "banyan-api")]
     pub use crate::api::ApiClient;
-    pub use crate::codec::crypto::{SigningKey, VerifyingKey};
-    pub use crate::codec::header::ContentOptions;
-    pub use crate::codec::FilesystemId;
+    pub use crate::codec::{
+        crypto::{SigningKey, VerifyingKey},
+        header::ContentOptions,
+        Cid, FilesystemId,
+    };
     pub use crate::error::{BanyanFsError, BanyanFsResult};
     pub use crate::filesystem::{
         DirectoryEntry, DirectoryHandle, Drive, DriveAccess, DriveLoader, DriveLoaderError,
