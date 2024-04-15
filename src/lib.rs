@@ -2,14 +2,14 @@
 #![doc = include_str!("../README.md")]
 
 #[cfg(feature = "banyan-api")]
-pub mod api;
+mod api;
 
-pub mod codec;
-pub mod error;
-pub mod filesystem;
-pub mod stores;
-pub mod utils;
-pub mod version;
+mod codec;
+mod error;
+mod filesystem;
+mod stores;
+mod utils;
+mod version;
 
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;

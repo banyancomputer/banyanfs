@@ -46,8 +46,8 @@ bytes = "^1"
 nom = "^7"
 winnow = "^0.6"
 crdts = { version = "^7", default-features = false, features = [
-  "merkle",
-  "num",
+	"merkle",
+	"num",
 ] }
 slab = "^0.4"
 # TODO: This is convenient to use with both wasm and native, but we only need
@@ -55,9 +55,9 @@ slab = "^0.4"
 time = "^0.3"
 
 reqwest = { version = "^0.12", default-features = false, optional = true, features = [
-  "multipart",
-  "json",
-  "stream",
+	"multipart",
+	"json",
+	"stream",
 ] }
 serde = { version = "^1", features = ["derive"], optional = true }
 serde_json = { version = "^1", optional = true }
@@ -83,16 +83,16 @@ tracing-wasm = "^0.2"
 wasm-bindgen = { version = "^0.2" }
 wasm-bindgen-futures = "^0.4"
 web-sys = { version = "^0.3", default-features = false, features = [
-  "File",
-  "FileSystemDirectoryHandle",
-  "FileSystemFileHandle",
-  "FileSystemGetFileOptions",
-  "FileSystemGetDirectoryOptions",
-  "FileSystemWritableFileStream",
-  "Navigator",
-  "Storage",
-  "StorageManager",
-  "Window",
+	"File",
+	"FileSystemDirectoryHandle",
+	"FileSystemFileHandle",
+	"FileSystemGetFileOptions",
+	"FileSystemGetDirectoryOptions",
+	"FileSystemWritableFileStream",
+	"Navigator",
+	"Storage",
+	"StorageManager",
+	"Window",
 ] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
