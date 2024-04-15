@@ -170,13 +170,13 @@ impl Drive {
 
         trace!(?actor_id, ?filesystem_id, "drive::initializing_private");
 
-        let kas = AccessMaskBuilder::full_access()
+        let access_mask = AccessMaskBuilder::full_access()
             .set_owner()
             .set_protected()
             .build();
 
         let mut access = DriveAccess::init_private(rng, actor_id);
-        access.register_actor(verifying_key, kas);
+        access.register_actor(verifying_key, access_mask);
 
         let inner = InnerDrive::initialize(rng, actor_id, access.clone())?;
 
@@ -188,6 +188,11 @@ impl Drive {
         };
 
         Ok(drive)
+    }
+
+    pub async fn authorize_key(&self, key: VerifyingKey, access_mask: AccessMask) {
+        let mut inner_write = self.inner.write().await;
+        inner_write.access_mut().register_actor(key, access_mask);
     }
 
     pub async fn for_each_node<F, R>(&self, operation: F) -> Result<Vec<R>, OperationError>

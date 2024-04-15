@@ -92,18 +92,7 @@ impl AccessMask {
 
     pub fn parse(input: &[u8]) -> ParserResult<Self> {
         let (input, byte) = le_u8(input)?;
-
-        let protected = byte & PROTECTED_BIT != 0;
-        let owner = byte & OWNER_BIT != 0;
-        let historical = byte & HISTORICAL_BIT != 0;
-
-        let filesystem_key_present = byte & FILESYSTEM_KEY_PRESENT_BIT != 0;
-        let data_key_present = byte & DATA_KEY_PRESENT_BIT != 0;
-        let maintenance_key_present = byte & MAINTENANCE_KEY_PRESENT_BIT != 0;
-
-        let settings = Self::from(byte);
-
-        Ok((input, settings))
+        Ok((input, Self::from(byte)))
     }
 
     pub const fn size() -> usize {

@@ -157,9 +157,9 @@ impl DriveAccess {
         }
     }
 
-    pub fn register_actor(&mut self, key: VerifyingKey, settings: AccessMask) {
+    pub fn register_actor(&mut self, key: VerifyingKey, access_mask: AccessMask) {
         let actor_id = key.actor_id();
-        let actor_settings = ActorSettings::new(key, settings);
+        let actor_settings = ActorSettings::new(key, access_mask);
 
         self.actor_settings.insert(actor_id, actor_settings);
     }

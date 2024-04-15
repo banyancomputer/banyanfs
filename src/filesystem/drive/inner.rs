@@ -29,6 +29,10 @@ impl InnerDrive {
         &self.access
     }
 
+    pub(crate) fn access_mut(&mut self) -> &mut DriveAccess {
+        &mut self.access
+    }
+
     pub(crate) fn by_id(&self, node_id: NodeId) -> Result<&Node, OperationError> {
         self.nodes
             .get(node_id)
