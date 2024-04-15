@@ -19,6 +19,10 @@ pub(crate) use traits::{
     ApiRequest, FromReqwestResponse, PlatformApiRequest, StorageHostApiRequest,
 };
 
+pub(crate) const PLATFORM_AUDIENCE: &str = "banyan-platform";
+
+pub(crate) const STORAGE_HOST_AUDIENCE: &str = "banyan-storage";
+
 use std::sync::Arc;
 
 use reqwest::{Client, StatusCode, Url};
@@ -28,13 +32,9 @@ use tracing::debug;
 use crate::codec::crypto::SigningKey;
 use crate::prelude::BanyanFsError;
 
-pub(crate) const PLATFORM_AUDIENCE: &str = "banyan-platform";
-
-pub(crate) const STORAGE_HOST_AUDIENCE: &str = "banyan-storage";
-
 /// An HTTP client for interacting with the Banyan API (both platform and storage hosts). Specific
 /// requests can be found the in appropriate module for their request type either
-/// [`crate::api::client::platform`] or [`crate::api::client::storage_host`].
+/// [`crate::api::platform`] or [`crate::api::storage_host`].
 ///
 /// The authentication state machine between the platform is fairly complete but documented in the
 /// platform API public documentation. This library expects to re-used the key that is protecting
@@ -73,6 +73,16 @@ impl ApiClient {
         self.base_url.clone()
     }
 
+    /// Internal method used for making raw requests to any of the Banyan API endpoints, provides
+    /// some consistent logging and expects the caller to handle the authentication. In almost all
+    /// cases you'll want to use the [`platform_request`] or [`storage_host_request`] methods.
+    ///
+    /// There are a few places where calling this directly is needed, mostly around authentication
+    /// and registration with storage hosts but other exceptions may also exist.
+    ///
+    /// One thing to be aware of is that this will only ever parse the response from the server as
+    /// the [`R::Response`] type if the status code returned from the server was one of the success
+    /// codes (2xx).
     pub(crate) async fn request<R: ApiRequest>(
         &self,
         base_url: &Url,
@@ -118,6 +128,10 @@ impl ApiClient {
         }
     }
 
+    /// Perform a request to the platform API. This is more restrictive than the
+    /// [`ApiClient::request`] method, limiting the request to only those that are explicitly
+    /// implementing the marker trait [`PlatformApiRequest`] but will handle the authentication for
+    /// you.
     pub(crate) async fn platform_request<R: PlatformApiRequest>(
         &self,
         request: R,
@@ -127,6 +141,9 @@ impl ApiClient {
         self.request(&self.base_url, &token, request).await
     }
 
+    /// When a request to the platform API is expected to return an empty response, this shortcuts
+    /// some of the boilerplate and allows enabling a strict mode we can use for validation of or
+    /// platform's behavior.
     pub(crate) async fn platform_request_empty_response<R>(
         &self,
         request: R,
@@ -143,6 +160,9 @@ impl ApiClient {
         Ok(())
     }
 
+    /// This is the most commonly used way to interact with the platform. It should be used
+    /// whenever you're expecting a response from the platform in any form. This supports streaming
+    /// response as well by using a [`DirectResponse`] in the request's defined response type.
     pub(crate) async fn platform_request_full<R: PlatformApiRequest>(
         &self,
         request: R,
@@ -161,6 +181,10 @@ impl ApiClient {
             .await;
     }
 
+    /// Provides direct access to the internal authentication's signing key that the API client was
+    /// initialized with. This isn't really ideal and should be avoided. We'll be refactoring this
+    /// out in the future. This isn't a problem but it is a smell that I don't like around
+    /// sensitive material.
     pub(crate) fn signing_key(&self) -> Arc<SigningKey> {
         self.auth.signing_key()
     }
