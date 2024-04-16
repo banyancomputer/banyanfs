@@ -259,15 +259,14 @@ async fn encode_children<W: AsyncWrite + Unpin + Send>(
     children: &HashMap<NodeName, PermanentId>,
     writer: &mut W,
 ) -> std::io::Result<usize> {
-    let child_count = children.len();
-    if child_count > u16::MAX as usize {
-        return Err(std::io::Error::new(
+    let child_count = u16::try_from(children.len()).map_err(|_| {
+        std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             "too many children in a single directory entry",
-        ));
-    }
+        )
+    })?;
+    let child_count_bytes = child_count.to_le_bytes();
 
-    let child_count_bytes = (child_count as u16).to_le_bytes();
     writer.write_all(&child_count_bytes).await?;
     let mut written_bytes = child_count_bytes.len();
 

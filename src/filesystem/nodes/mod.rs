@@ -66,7 +66,7 @@ impl Node {
     /// used with care. This will check that the current nodes allow a child below it, but does not
     /// validate the node being added is a valid type. It is the responsibility of the caller to
     /// ensure that for example a directory is not added below a child. The correct one-way
-    /// hiearchy is directory -> (directory | file), file -> associated data.
+    /// hierarchy is directory -> (directory | file), file -> associated data.
     ///
     /// Calling this function will modify the CID of the node and as such will invalidate the
     /// internal encoding cache if available from [`Node::cached_encoding`].
@@ -93,7 +93,7 @@ impl Node {
     /// and internal call to CidCache::is_dirty), this will fully encode the node as it would
     /// appear on disk and calculates the CID over that data.
     ///
-    /// As an optimization this cache's that encoding so we don't have to re-encode it when we're
+    /// As an optimization this caches that encoding so we don't have to re-encode it when we're
     /// writing the filesystem out to disk. This comes with a small memory penalty if some
     /// non-encoding process attempts to access a large number of node CIDs but that seems like an
     /// unlikely use case.
@@ -111,7 +111,7 @@ impl Node {
         Ok(self.cid.cid().await.expect("enforced cid generation above"))
     }
 
-    /// Returnes the unix timestamp (in milliseconds precision) of when the node was created.
+    /// Returns the unix timestamp (in milliseconds precision) of when the node was created.
     pub fn created_at(&self) -> i64 {
         self.created_at
     }
@@ -249,28 +249,28 @@ impl Node {
         self.inner.data_cids()
     }
 
-    /// This returns the esimated amount of storage that is taken up by attributes at this level of
+    /// This returns the estimated amount of storage that is taken up by attributes at this level of
     /// indirection without the contents of the data itself. This is used internally to dynamically
     /// estimate of the total encoding size of the node.
     fn outer_size_estimate(&self) -> u64 {
         let mut encoded_size = self
             .parent_id
             .as_ref()
-            .map_or(1, |_| 1 + PermanentId::size() as u64);
+            .map_or(1, |_| 1 + PermanentId::size());
 
-        encoded_size += (Cid::size() + PermanentId::size() + ActorId::size() + 8 * 2) as u64;
+        encoded_size += Cid::size() + PermanentId::size() + ActorId::size() + 8usize * 2usize;
         encoded_size += match self.name {
             NodeName::Root => 1,
-            NodeName::Named(ref name) => 2 + name.as_bytes().len() as u64,
+            NodeName::Named(ref name) => 2 + name.as_bytes().len(),
         };
 
         encoded_size += self
             .metadata()
             .iter()
-            .map(|(k, v)| (2 + k.as_bytes().len() + v.len()) as u64)
-            .sum::<u64>();
+            .map(|(k, v)| (2 + k.as_bytes().len() + v.len()))
+            .sum::<usize>();
 
-        encoded_size
+        u64::try_from(encoded_size).expect("usize is larger than u64")
     }
 
     /// The owner of a node is the actor that created the specific version of this file. If a file
@@ -406,6 +406,7 @@ impl Node {
         self.notify_of_change().await;
     }
 
+    /// Returns the size of the node
     pub fn size(&self) -> u64 {
         self.outer_size_estimate() + self.inner.size()
     }

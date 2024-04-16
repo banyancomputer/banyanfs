@@ -142,7 +142,7 @@ impl InnerDrive {
         }
 
         // `Vec::pop` pops from the back of the Vec so we will implicitly be getting the correct ordering as
-        // we pop elements in the reverse order we found them in our DFS
+        // we pop elements in the reverse order we found them in our Depth First Traversal
 
         let mut referenced_data_cids = HashSet::new();
         let mut node_buffer = Vec::new();
@@ -162,7 +162,7 @@ impl InnerDrive {
         }
 
         // todo(sstelfox): should scan the slab for any nodes that are not reachable from the root and track
-        // them for removal in the journal and maintenance logs. It really shoudn't happen but be
+        // them for removal in the journal and maintenance logs. It really shouldn't happen but be
         // defensive against errors... It can wait until the journal is complete though.
 
         // Data cids don't need to be globally ordered, but should be consistent
