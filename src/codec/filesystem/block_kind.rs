@@ -1,7 +1,10 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::number::streaming::{le_u64, le_u8};
+use winnow::{
+    binary::{le_u64, le_u8},
+    Parser,
+};
 
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 #[derive(Clone, Debug)]
 pub enum BlockKind {
@@ -37,18 +40,21 @@ impl BlockKind {
         Self::IndirectReference { total_size }
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
-        let (input, kind) = le_u8(input)?;
+    pub fn parse(input: Stream) -> ParserResult<Self> {
+        let (input, kind) = le_u8.parse_peek(input)?;
 
         match kind {
             0x00 => Ok((input, Self::Data)),
             0x01 => {
-                let (input, total_size) = le_u64(input)?;
+                let (input, total_size) = le_u64.parse_peek(input)?;
                 Ok((input, Self::IndirectReference { total_size }))
             }
             _ => {
-                let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-                Err(nom::Err::Failure(err))
+                let err = winnow::error::ParserError::from_error_kind(
+                    &input,
+                    winnow::error::ErrorKind::Verify,
+                );
+                Err(winnow::error::ErrMode::Cut(err))
             }
         }
     }

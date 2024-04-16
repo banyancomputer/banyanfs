@@ -1,8 +1,8 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
 use p384::NistP384;
+use winnow::{token::take, Parser};
 
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 const SIGNATURE_SIZE: usize = 96;
 
@@ -25,13 +25,16 @@ impl Signature {
         Ok(Self { inner })
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
-        let (remaining, signature_bytes) = take(SIGNATURE_SIZE)(input)?;
+    pub fn parse(input: Stream) -> ParserResult<Self> {
+        let (remaining, signature_bytes) = take(SIGNATURE_SIZE).parse_peek(input)?;
         let signature = match Signature::from_slice(signature_bytes) {
             Ok(signature) => signature,
             Err(_) => {
-                let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-                return Err(nom::Err::Failure(err));
+                let err = winnow::error::ParserError::from_error_kind(
+                    &input,
+                    winnow::error::ErrorKind::Verify,
+                );
+                return Err(winnow::error::ErrMode::Cut(err));
             }
         };
 

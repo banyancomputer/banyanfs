@@ -27,13 +27,15 @@ use std::collections::HashMap;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
-use nom::number::streaming::{le_i64, le_u32, le_u8};
+use winnow::binary::{le_i64, le_u32, le_u8};
+use winnow::stream::Offset;
+use winnow::token::take;
+use winnow::Parser;
 
 use crate::codec::crypto::AccessKey;
 use crate::codec::filesystem::NodeKind;
 use crate::codec::meta::{ActorId, Cid, PermanentId};
-use crate::codec::{ParserResult, VectorClock};
+use crate::codec::{ParserResult, Stream, VectorClock};
 use crate::filesystem::drive::OperationError;
 
 pub(crate) type NodeId = usize;
@@ -289,58 +291,68 @@ impl Node {
 
     #[tracing::instrument(skip(input))]
     pub(crate) fn parse<'a>(
-        input: &'a [u8],
+        input: Stream<'a>,
         allocated_id: NodeId,
         data_key: Option<&AccessKey>,
     ) -> ParserResult<'a, Self> {
         tracing::trace!(allocated_id, "begin");
 
         let (input, cid) = Cid::parse(input)?;
-        let (input, node_data_len) = le_u32(input)?;
+        let (input, node_data_len) = le_u32.parse_peek(input)?;
+
+        let node_data_start = input;
+
+        let (input, permanent_id) = PermanentId::parse(input)?;
+        let (input, vector_clock) = VectorClock::parse(input)?;
+        let (input, parent_present) = take(1u8).parse_peek(input)?;
+
         tracing::trace!(node_data_len, ?cid, "cid/node_data_len");
 
-        let (input, node_data_buf) = take(node_data_len)(input)?;
-
-        let (node_data_buf, permanent_id) = PermanentId::parse(node_data_buf)?;
-        let (node_data_buf, vector_clock) = VectorClock::parse(node_data_buf)?;
-
-        let (node_data_buf, parent_present) = take(1u8)(node_data_buf)?;
-        let (node_data_buf, parent_id) = match parent_present[0] {
-            0x00 => (node_data_buf, None),
+        let (input, parent_id) = match parent_present[0] {
+            0x00 => (input, None),
             0x01 => {
-                let (node_data_buf, pid) = PermanentId::parse(node_data_buf)?;
+                let (node_data_buf, pid) = PermanentId::parse(input)?;
                 (node_data_buf, Some(pid))
             }
             _ => {
-                let err = nom::error::make_error(input, nom::error::ErrorKind::Switch);
-                return Err(nom::Err::Failure(err));
+                let err = winnow::error::ParserError::from_error_kind(
+                    &input,
+                    winnow::error::ErrorKind::Token,
+                );
+                return Err(winnow::error::ErrMode::Cut(err));
             }
         };
 
-        let (node_data_buf, owner_id) = ActorId::parse(node_data_buf)?;
-        let (node_data_buf, created_at) = le_i64(node_data_buf)?;
-        let (node_data_buf, modified_at) = le_i64(node_data_buf)?;
-        let (node_data_buf, name) = NodeName::parse(node_data_buf)?;
-        let (mut node_data_buf, metadata_entries) = le_u8(node_data_buf)?;
+        let (input, owner_id) = ActorId::parse(input)?;
+        let (input, created_at) = le_i64.parse_peek(input)?;
+        let (input, modified_at) = le_i64.parse_peek(input)?;
+        let (input, name) = NodeName::parse(input)?;
+        let (mut input, metadata_entries) = le_u8.parse_peek(input)?;
 
         let mut metadata = HashMap::new();
         for _ in 0..metadata_entries {
-            let (meta_buf, key_len) = le_u8(node_data_buf)?;
-            let (meta_buf, key) = take(key_len)(meta_buf)?;
+            let (meta_buf, key_len) = le_u8.parse_peek(input)?;
+            let (meta_buf, key) = take(key_len).parse_peek(meta_buf)?;
             let key_str = String::from_utf8(key.to_vec()).map_err(|_| {
-                nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Char))
+                winnow::error::ErrMode::Cut(winnow::error::ParserError::from_error_kind(
+                    &input,
+                    winnow::error::ErrorKind::Token,
+                ))
             })?;
 
-            let (meta_buf, val_len) = le_u8(meta_buf)?;
-            let (meta_buf, val) = take(val_len)(meta_buf)?;
+            let (meta_buf, val_len) = le_u8.parse_peek(meta_buf)?;
+            let (meta_buf, val) = take(val_len).parse_peek(meta_buf)?;
             let val = val.to_vec();
 
             metadata.insert(key_str, val);
-            node_data_buf = meta_buf;
+            input = meta_buf;
         }
 
-        let (remaining, inner) = NodeData::parse(node_data_buf)?;
-        debug_assert!(remaining.is_empty(), "did not consume all input");
+        let (input, inner) = NodeData::parse(input)?;
+        debug_assert!(
+            input.offset_from(&node_data_start) == usize::try_from(node_data_len).unwrap(), //Unwrap safe on 32bit and up systems (unsafe on 16 bit systems)
+            "consumed to little or too much during parse based on the node's data_len field"
+        );
 
         let node = Self {
             id: allocated_id,

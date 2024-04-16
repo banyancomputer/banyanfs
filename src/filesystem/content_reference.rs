@@ -1,9 +1,10 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::multi::count;
-use nom::number::streaming::{le_u16, le_u64};
+use winnow::binary::{le_u16, le_u64};
+use winnow::combinator::repeat;
+use winnow::{unpeek, Parser};
 
 use crate::codec::filesystem::BlockKind;
-use crate::codec::{BlockSize, Cid, ParserResult};
+use crate::codec::{BlockSize, Cid, ParserResult, Stream};
 
 #[derive(Clone, Debug)]
 pub struct ContentReference {
@@ -60,11 +61,11 @@ impl ContentReference {
         Ok(written_bytes)
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, data_block_cid) = Cid::parse(input)?;
         let (input, block_size) = BlockSize::parse(input)?;
 
-        let (input, chunk_count) = le_u16(input)?;
+        let (input, chunk_count) = le_u16.parse_peek(input)?;
         let (input, chunks) = ContentLocation::parse_many(input, chunk_count)?;
 
         let content_ref = Self {
@@ -76,8 +77,8 @@ impl ContentReference {
         Ok((input, content_ref))
     }
 
-    pub fn parse_many(input: &[u8], ref_count: u8) -> ParserResult<Vec<Self>> {
-        count(Self::parse, ref_count as usize)(input)
+    pub fn parse_many(input: Stream, ref_count: u8) -> ParserResult<Vec<Self>> {
+        repeat(ref_count as usize, unpeek(Self::parse)).parse_peek(input)
     }
 
     pub fn size(&self) -> usize {
@@ -130,10 +131,10 @@ impl ContentLocation {
         Ok(written_bytes)
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, block_kind) = BlockKind::parse(input)?;
         let (input, content_cid) = Cid::parse(input)?;
-        let (input, block_index) = le_u64(input)?;
+        let (input, block_index) = le_u64.parse_peek(input)?;
 
         let location = Self {
             block_kind,
@@ -144,8 +145,8 @@ impl ContentLocation {
         Ok((input, location))
     }
 
-    pub fn parse_many(input: &[u8], ref_count: u16) -> ParserResult<Vec<Self>> {
-        count(Self::parse, ref_count as usize)(input)
+    pub fn parse_many(input: Stream, ref_count: u16) -> ParserResult<Vec<Self>> {
+        repeat(ref_count as usize, unpeek(Self::parse)).parse_peek(input)
     }
 
     pub fn size(&self) -> usize {

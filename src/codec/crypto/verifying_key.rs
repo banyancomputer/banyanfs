@@ -3,13 +3,14 @@ use std::ops::Deref;
 use ecdsa::signature::rand_core::CryptoRngCore;
 use elliptic_curve::pkcs8::EncodePublicKey;
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
 use p384::ecdh::EphemeralSecret;
 use p384::{NistP384, PublicKey};
+use winnow::token::take;
+use winnow::Parser;
 
 use crate::codec::crypto::{AccessKey, Fingerprint, KeyId};
-use crate::codec::ActorId;
 use crate::codec::ParserResult;
+use crate::codec::{ActorId, Stream};
 
 const KEY_SIZE: usize = 49;
 
@@ -84,8 +85,8 @@ impl VerifyingKey {
         self.fingerprint().key_id()
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
-        let (remaining, slice) = take(KEY_SIZE)(input)?;
+    pub fn parse(input: Stream) -> ParserResult<Self> {
+        let (remaining, slice) = take(KEY_SIZE).parse_peek(input)?;
 
         let mut bytes = [0u8; KEY_SIZE];
         bytes.copy_from_slice(slice);
@@ -94,8 +95,11 @@ impl VerifyingKey {
             Ok(key) => key,
             Err(err) => {
                 tracing::error!("failed to decode ECDSA key: {err}");
-                let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-                return Err(nom::Err::Failure(err));
+                let err = winnow::error::ParserError::from_error_kind(
+                    &input,
+                    winnow::error::ErrorKind::Verify,
+                );
+                return Err(winnow::error::ErrMode::Cut(err));
             }
         };
 

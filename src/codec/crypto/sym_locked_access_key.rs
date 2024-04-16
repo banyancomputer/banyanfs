@@ -1,9 +1,10 @@
 use chacha20poly1305::{AeadInPlace, KeyInit, XChaCha20Poly1305};
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
+use winnow::token::take;
+use winnow::Parser;
 
 use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce};
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 #[derive(Clone)]
 pub struct SymLockedAccessKey {
@@ -26,10 +27,10 @@ impl SymLockedAccessKey {
 
         Ok(written_bytes)
     }
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (remaining, nonce) = Nonce::parse(input)?;
 
-        let (remaining, cipher_text) = take(AccessKey::size())(remaining)?;
+        let (remaining, cipher_text) = take(AccessKey::size()).parse_peek(remaining)?;
         let mut fixed_cipher_text = [0u8; AccessKey::size()];
         fixed_cipher_text.copy_from_slice(cipher_text);
 
@@ -69,7 +70,7 @@ pub enum SymLockedAccessKeyError<I> {
     CryptoFailure(String),
 
     #[error("decoding data failed: {0}")]
-    FormatFailure(#[from] nom::Err<nom::error::Error<I>>),
+    FormatFailure(#[from] winnow::error::ErrMode<winnow::error::ContextError<I>>),
 
     #[error("validation failed most likely due to the use of an incorrect key")]
     IncorrectKey,

@@ -433,12 +433,15 @@ impl DirectoryHandle {
 
                 let data_chunk = store.retrieve(content_ref.data_block_cid()).await?;
 
-                let (_remaining, block) =
-                    DataBlock::parse_with_magic(&data_chunk, &unlocked_key, &verifying_key)
-                        .map_err(|err| {
-                            tracing::error!("parsing of data block failed: {err:?}");
-                            OperationError::BlockCorrupted(content_ref.data_block_cid())
-                        })?;
+                let (_remaining, block) = DataBlock::parse_with_magic(
+                    Stream::new(&data_chunk),
+                    &unlocked_key,
+                    &verifying_key,
+                )
+                .map_err(|err| {
+                    tracing::error!("parsing of data block failed: {err:?}");
+                    OperationError::BlockCorrupted(content_ref.data_block_cid())
+                })?;
                 // todo(sstelfox): still stuff remaining which means this decoder is sloppy
                 //tracing::info!(?remaining, "drive::read::remaining");
                 //debug_assert!(remaining.is_empty(), "no extra data should be present");

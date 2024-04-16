@@ -1,11 +1,12 @@
 use futures::io::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
-use nom::number::streaming::le_u8;
+use winnow::binary::le_u8;
+use winnow::token::take;
+use winnow::Parser;
 
 use crate::codec::crypto::VerifyingKey;
 use crate::codec::header::KeyAccessSettings;
 use crate::codec::meta::VectorClock;
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 const SOFTWARE_AGENT_BYTE_STR_SIZE: usize = 63;
 
@@ -71,13 +72,13 @@ impl ActorSettings {
         }
     }
 
-    pub fn parse_private(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse_private(input: Stream) -> ParserResult<Self> {
         let (input, verifying_key) = VerifyingKey::parse(input)?;
         let (input, vector_clock) = VectorClock::parse(input)?;
         let (input, access_settings) = KeyAccessSettings::parse_private(input)?;
 
-        let (input, agent_len) = le_u8(input)?;
-        let (input, agent_fixed) = take(SOFTWARE_AGENT_BYTE_STR_SIZE)(input)?;
+        let (input, agent_len) = le_u8.parse_peek(input)?;
+        let (input, agent_fixed) = take(SOFTWARE_AGENT_BYTE_STR_SIZE).parse_peek(input)?;
         let agent = agent_fixed[..agent_len as usize].to_vec();
 
         let actor_settings = Self {

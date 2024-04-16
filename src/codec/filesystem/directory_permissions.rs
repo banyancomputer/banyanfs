@@ -1,7 +1,7 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::number::streaming::le_u8;
+use winnow::{binary::le_u8, Parser};
 
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 const DIRECTORY_PERMISSIONS_RESERVED_MASK: u8 = 0b1111_1100;
 
@@ -42,12 +42,15 @@ impl DirectoryPermissions {
         self.immutable
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
-        let (input, byte) = le_u8(input)?;
+    pub fn parse(input: Stream) -> ParserResult<Self> {
+        let (input, byte) = le_u8.parse_peek(input)?;
 
         if cfg!(feature = "strict") && byte & DIRECTORY_PERMISSIONS_RESERVED_MASK != 0 {
-            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-            return Err(nom::Err::Failure(err));
+            let err = winnow::error::ParserError::from_error_kind(
+                &input,
+                winnow::error::ErrorKind::Verify,
+            );
+            return Err(winnow::error::ErrMode::Cut(err));
         }
 
         let owner_write_only = byte & DIRECTORY_PERMISSIONS_OWNER_WRITE_ONLY != 0;
