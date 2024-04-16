@@ -235,7 +235,7 @@ impl DataBlock {
             let (input, tag) = AuthenticationTag::parse(input)?;
 
             debug_assert!(
-                chunk_start.offset_from(&input) == base_chunk_size,
+                input.offset_from(&chunk_start) == base_chunk_size,
                 "chunk should be fully read"
             );
 
