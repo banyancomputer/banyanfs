@@ -130,62 +130,6 @@ impl Node {
         &self,
         writer: &mut W,
     ) -> std::io::Result<usize> {
-        // let mut node_data = Vec::new();
-
-        // self.permanent_id.encode(&mut node_data).await?;
-        // self.vector_clock.encode(&mut node_data).await?;
-
-        // match self.parent_id {
-        //     Some(pid) => {
-        //         node_data.write_all(&[0x01]).await?;
-        //         pid.encode(&mut node_data).await?;
-        //     }
-        //     None => {
-        //         node_data.write_all(&[0x00]).await?;
-        //     }
-        // };
-
-        // self.owner_id.encode(&mut node_data).await?;
-
-        // let created_at_bytes = self.created_at.to_le_bytes();
-        // node_data.write_all(&created_at_bytes).await?;
-
-        // let modified_at_bytes = self.modified_at.to_le_bytes();
-        // node_data.write_all(&modified_at_bytes).await?;
-
-        // self.name.encode(&mut node_data).await?;
-
-        // let metadata_entry_count = u8::try_from(self.metadata.len())
-        //     .map_err(|_| StdError::new(StdErrorKind::Other, "too many metadata entries"))?;
-
-        // node_data.write_all(&[metadata_entry_count]).await?;
-
-        // let mut sorted_metadata = self.metadata.iter().collect::<Vec<_>>();
-        // sorted_metadata.sort_by(|(a, _), (b, _)| a.as_bytes().cmp(b.as_bytes()));
-
-        // for (key, val) in sorted_metadata.into_iter() {
-        //     let key_bytes = key.as_bytes();
-        //     let key_bytes_len = key_bytes.len();
-
-        //     if key_bytes_len > u8::MAX as usize {
-        //         return Err(StdError::new(StdErrorKind::Other, "metadata key too long"));
-        //     }
-
-        //     node_data.write_all(&[key_bytes_len as u8]).await?;
-        //     node_data.write_all(key_bytes).await?;
-
-        //     let val_bytes_len = val.len();
-        //     if val_bytes_len > u8::MAX as usize {
-        //         return Err(StdError::new(StdErrorKind::Other, "metadata val too long"));
-        //     }
-
-        //     node_data.write_all(&[val_bytes_len as u8]).await?;
-        //     node_data.write_all(val).await?;
-        // }
-
-        // self.data().encode(&mut node_data).await?;
-        // self.cid.set_with_ref(&node_data).await;
-
         let node_data = self.node_data().await?;
         let mut written_bytes = 0;
 

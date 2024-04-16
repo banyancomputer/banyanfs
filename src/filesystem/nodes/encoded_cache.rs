@@ -40,23 +40,4 @@ impl EncodedCache {
             |inner: &Option<Vec<u8>>| inner.as_deref().unwrap(),
         )
     }
-
-    // pub(crate) fn get_or_insert_with<'a, F: FnOnce() -> Vec<u8>>(
-    //     &'a self,
-    //     func: F,
-    // ) -> MappedRwLockReadGuard<'a, &'a [u8]> {
-    //     let cached = self.0.upgradable_read();
-    //     if cached.is_some() {
-    //         let reader = RwLockUpgradableReadGuard::downgrade(cached);
-    //         return RwLockReadGuard::map(reader, |inner: &Option<Vec<u8>>| {
-    //             &inner.unwrap().as_slice()
-    //         });
-    //     }
-    //     let mut cached = RwLockUpgradableReadGuard::upgrade(cached);
-    //     cached.insert(func());
-    //     RwLockReadGuard::map(
-    //         RwLockWriteGuard::downgrade(cached),
-    //         |inner: &Option<Vec<u8>>| &inner.unwrap().as_slice(),
-    //     )
-    // }
 }
