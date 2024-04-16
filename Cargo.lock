@@ -260,6 +260,7 @@ dependencies = [
  "getrandom",
  "js-sys",
  "p384",
+ "parking_lot",
  "rand",
  "rand_chacha",
  "reqwest",

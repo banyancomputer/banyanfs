@@ -12,21 +12,23 @@
 //! are not considered part of our public API for the purpose of breaking changes (we won't
 //! guarantee the major version will be increased when a breaking change is made).
 
-mod cid_cache;
+mod encoded_cache;
 mod node_builder;
 mod node_data;
 mod node_name;
 
-pub(crate) use cid_cache::CidCache;
+use async_std::sync::{RwLock, RwLockReadGuard};
+pub(crate) use encoded_cache::EncodedCache;
 pub(crate) use node_builder::{NodeBuilder, NodeBuilderError};
 
 pub(crate) use node_data::{NodeData, NodeDataError};
 pub(crate) use node_name::{NodeName, NodeNameError};
 
+use async_std::sync::RwLockUpgradableReadGuard;
+use futures::{AsyncWrite, AsyncWriteExt, TryFutureExt};
+use parking_lot::MappedRwLockReadGuard;
 use std::collections::HashMap;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
-
-use futures::{AsyncWrite, AsyncWriteExt};
 use winnow::binary::{le_i64, le_u32, le_u8};
 use winnow::stream::Offset;
 use winnow::token::take;
@@ -37,6 +39,7 @@ use crate::codec::filesystem::NodeKind;
 use crate::codec::meta::{ActorId, Cid, PermanentId};
 use crate::codec::{ParserResult, Stream, VectorClock};
 use crate::filesystem::drive::OperationError;
+use crate::utils::calculate_cid;
 
 pub(crate) type NodeId = usize;
 
@@ -49,7 +52,7 @@ pub struct Node {
     permanent_id: PermanentId,
     owner_id: ActorId,
 
-    cid: CidCache,
+    node_data_cache: EncodedCache,
     vector_clock: VectorClock,
 
     created_at: i64,
@@ -85,9 +88,10 @@ impl Node {
     /// requires fully encoding the node to calculate. That method caches the result of that
     /// encoding if it needed to generate it. This consumes that cached encoding if we have it and
     /// is mostly used as an optimization that is described in the [`Node::cid`] documentation.
-    pub(crate) async fn cached_encoding(&self) -> Option<Vec<u8>> {
-        self.cid.take_cached().await
-    }
+    // pub(crate) async fn cached_encoding(&self) -> Option<Vec<u8>> {
+    //     let encoded = self.encoded_cache.read().await;
+    //     encoded.clone()
+    // }
 
     /// Returns the CID of the node. If the internal data has changed in anyway (as indicated by
     /// and internal call to CidCache::is_dirty), this will fully encode the node as it would
@@ -98,17 +102,10 @@ impl Node {
     /// non-encoding process attempts to access a large number of node CIDs but that seems like an
     /// unlikely use case.
     pub async fn cid(&self) -> Result<Cid, OperationError> {
-        if self.cid.is_dirty().await {
-            let mut node_data = Vec::new();
-
-            self.encode(&mut node_data).await.map_err(|_| {
-                OperationError::InternalCorruption(self.id, "failed to encode node for CID")
-            })?;
-
-            self.cid.set_cached(node_data).await;
-        }
-
-        Ok(self.cid.cid().await.expect("enforced cid generation above"))
+        let node_data = self.node_data().await.map_err(|_| {
+            OperationError::InternalCorruption(self.id, "failed to encode node for CID")
+        })?;
+        Ok(calculate_cid(&node_data))
     }
 
     /// Returns the unix timestamp (in milliseconds precision) of when the node was created.
@@ -133,72 +130,66 @@ impl Node {
         &self,
         writer: &mut W,
     ) -> std::io::Result<usize> {
-        let mut node_data = Vec::new();
+        // let mut node_data = Vec::new();
 
-        self.permanent_id.encode(&mut node_data).await?;
-        self.vector_clock.encode(&mut node_data).await?;
+        // self.permanent_id.encode(&mut node_data).await?;
+        // self.vector_clock.encode(&mut node_data).await?;
 
-        match self.parent_id {
-            Some(pid) => {
-                node_data.write_all(&[0x01]).await?;
-                pid.encode(&mut node_data).await?;
-            }
-            None => {
-                node_data.write_all(&[0x00]).await?;
-            }
-        };
+        // match self.parent_id {
+        //     Some(pid) => {
+        //         node_data.write_all(&[0x01]).await?;
+        //         pid.encode(&mut node_data).await?;
+        //     }
+        //     None => {
+        //         node_data.write_all(&[0x00]).await?;
+        //     }
+        // };
 
-        self.owner_id.encode(&mut node_data).await?;
+        // self.owner_id.encode(&mut node_data).await?;
 
-        let created_at_bytes = self.created_at.to_le_bytes();
-        node_data.write_all(&created_at_bytes).await?;
+        // let created_at_bytes = self.created_at.to_le_bytes();
+        // node_data.write_all(&created_at_bytes).await?;
 
-        let modified_at_bytes = self.modified_at.to_le_bytes();
-        node_data.write_all(&modified_at_bytes).await?;
+        // let modified_at_bytes = self.modified_at.to_le_bytes();
+        // node_data.write_all(&modified_at_bytes).await?;
 
-        self.name.encode(&mut node_data).await?;
+        // self.name.encode(&mut node_data).await?;
 
-        let metadata_entries = self.metadata.len();
-        if metadata_entries > u8::MAX as usize {
-            return Err(StdError::new(
-                StdErrorKind::Other,
-                "too many metadata entries",
-            ));
-        }
+        // let metadata_entry_count = u8::try_from(self.metadata.len())
+        //     .map_err(|_| StdError::new(StdErrorKind::Other, "too many metadata entries"))?;
 
-        let entry_count = metadata_entries as u8;
-        node_data.write_all(&[entry_count]).await?;
+        // node_data.write_all(&[metadata_entry_count]).await?;
 
-        let mut sorted_metadata = self.metadata.iter().collect::<Vec<_>>();
-        sorted_metadata.sort_by(|(a, _), (b, _)| a.as_bytes().cmp(b.as_bytes()));
+        // let mut sorted_metadata = self.metadata.iter().collect::<Vec<_>>();
+        // sorted_metadata.sort_by(|(a, _), (b, _)| a.as_bytes().cmp(b.as_bytes()));
 
-        for (key, val) in sorted_metadata.into_iter() {
-            let key_bytes = key.as_bytes();
-            let key_bytes_len = key_bytes.len();
+        // for (key, val) in sorted_metadata.into_iter() {
+        //     let key_bytes = key.as_bytes();
+        //     let key_bytes_len = key_bytes.len();
 
-            if key_bytes_len > u8::MAX as usize {
-                return Err(StdError::new(StdErrorKind::Other, "metadata key too long"));
-            }
+        //     if key_bytes_len > u8::MAX as usize {
+        //         return Err(StdError::new(StdErrorKind::Other, "metadata key too long"));
+        //     }
 
-            node_data.write_all(&[key_bytes_len as u8]).await?;
-            node_data.write_all(key_bytes).await?;
+        //     node_data.write_all(&[key_bytes_len as u8]).await?;
+        //     node_data.write_all(key_bytes).await?;
 
-            let val_bytes_len = val.len();
-            if val_bytes_len > u8::MAX as usize {
-                return Err(StdError::new(StdErrorKind::Other, "metadata val too long"));
-            }
+        //     let val_bytes_len = val.len();
+        //     if val_bytes_len > u8::MAX as usize {
+        //         return Err(StdError::new(StdErrorKind::Other, "metadata val too long"));
+        //     }
 
-            node_data.write_all(&[val_bytes_len as u8]).await?;
-            node_data.write_all(val).await?;
-        }
+        //     node_data.write_all(&[val_bytes_len as u8]).await?;
+        //     node_data.write_all(val).await?;
+        // }
 
-        self.data().encode(&mut node_data).await?;
-        self.cid.set_with_ref(&node_data).await;
+        // self.data().encode(&mut node_data).await?;
+        // self.cid.set_with_ref(&node_data).await;
 
+        let node_data = self.node_data().await?;
         let mut written_bytes = 0;
 
         let cid = self
-            .cid
             .cid()
             .await
             .map_err(|_| StdError::new(StdErrorKind::Other, "failed to get CID"))?;
@@ -237,7 +228,7 @@ impl Node {
     }
 
     async fn notify_of_change(&mut self) {
-        self.cid.mark_dirty().await;
+        self.node_data_cache.mark_dirty();
         self.modified_at = crate::utils::current_time_ms();
     }
 
@@ -360,7 +351,7 @@ impl Node {
             permanent_id,
             owner_id,
 
-            cid: CidCache::empty(),
+            node_data_cache: EncodedCache::empty(),
             vector_clock,
 
             created_at,
@@ -423,6 +414,70 @@ impl Node {
         let old_value = self.metadata.insert(key, value);
         self.notify_of_change().await;
         old_value
+    }
+
+    async fn node_data<'a>(&'a self) -> std::io::Result<MappedRwLockReadGuard<'a, [u8]>> {
+        let blah = self.node_data_cache.get();
+        match blah {
+            None => Ok(self.node_data_cache.set(self.compute_node_data().await?)),
+            Some(inner) => Ok(inner),
+        }
+    }
+
+    async fn compute_node_data(&self) -> std::io::Result<Vec<u8>> {
+        let mut node_data = Vec::new();
+
+        self.permanent_id.encode(&mut node_data).await?;
+        self.vector_clock.encode(&mut node_data).await?;
+
+        match self.parent_id {
+            Some(pid) => {
+                node_data.write_all(&[0x01]).await?;
+                pid.encode(&mut node_data).await?;
+            }
+            None => {
+                node_data.write_all(&[0x00]).await?;
+            }
+        };
+
+        self.owner_id.encode(&mut node_data).await?;
+
+        let created_at_bytes = self.created_at.to_le_bytes();
+        node_data.write_all(&created_at_bytes).await?;
+
+        let modified_at_bytes = self.modified_at.to_le_bytes();
+        node_data.write_all(&modified_at_bytes).await?;
+
+        self.name.encode(&mut node_data).await?;
+
+        let metadata_entry_count = u8::try_from(self.metadata.len())
+            .map_err(|_| StdError::new(StdErrorKind::Other, "too many metadata entries"))?;
+
+        node_data.write_all(&[metadata_entry_count]).await?;
+
+        let mut sorted_metadata = self.metadata.iter().collect::<Vec<_>>();
+        sorted_metadata.sort_by(|(a, _), (b, _)| a.as_bytes().cmp(b.as_bytes()));
+
+        for (key, val) in sorted_metadata.into_iter() {
+            let key_bytes = key.as_bytes();
+            let key_bytes_len = key_bytes.len();
+
+            if key_bytes_len > u8::MAX as usize {
+                return Err(StdError::new(StdErrorKind::Other, "metadata key too long"));
+            }
+
+            node_data.write_all(&[key_bytes_len as u8]).await?;
+            node_data.write_all(key_bytes).await?;
+
+            let val_bytes_len = val.len();
+            if val_bytes_len > u8::MAX as usize {
+                return Err(StdError::new(StdErrorKind::Other, "metadata val too long"));
+            }
+
+            node_data.write_all(&[val_bytes_len as u8]).await?;
+            node_data.write_all(val).await?;
+        }
+        Ok(node_data)
     }
 }
 
