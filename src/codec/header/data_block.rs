@@ -1,15 +1,18 @@
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::{tag, take};
-use nom::number::streaming::{le_u64, le_u8};
 use rand::Rng;
+use winnow::binary::{le_u64, le_u8};
+use winnow::error::ErrMode;
+use winnow::stream::Offset;
+use winnow::token::{literal, take};
+use winnow::Parser;
 
 use crate::codec::crypto::{
     AccessKey, AuthenticationTag, Nonce, Signature, SigningKey, VerifyingKey,
 };
 use crate::codec::header::BANYAN_DATA_MAGIC;
 use crate::codec::meta::{BlockSize, BlockSizeError};
-use crate::codec::{Cid, ParserResult};
+use crate::codec::{Cid, ParserResult, Stream};
 use crate::utils::std_io_err;
 
 const ENCRYPTED_BIT: u8 = 0b1000_0000;
@@ -190,15 +193,18 @@ impl DataBlock {
     }
 
     pub fn parse<'a>(
-        input: &'a [u8],
+        input: Stream<'a>,
         access_key: &AccessKey,
         _verifying_key: &VerifyingKey,
     ) -> ParserResult<'a, Self> {
-        let (input, version) = le_u8(input)?;
+        let (input, version) = le_u8.parse_peek(input)?;
 
         if version != 0x01 {
-            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-            return Err(nom::Err::Failure(err));
+            let err = winnow::error::ParserError::from_error_kind(
+                &input,
+                winnow::error::ErrorKind::Verify,
+            );
+            return Err(winnow::error::ErrMode::Cut(err));
         }
 
         let (input, cid) = Cid::parse(input)?;
@@ -222,34 +228,43 @@ impl DataBlock {
 
         let mut contents = Vec::with_capacity(chunk_count);
         for _ in 0..chunk_count {
-            let (input, chunk_data) = take(base_chunk_size)(input)?;
+            let chunk_start = input;
 
-            let (chunk_data, nonce) = Nonce::parse(chunk_data)?;
-            let (chunk_data, data) = take(encrypted_chunk_size)(chunk_data)?;
-            let (chunk_data, tag) = AuthenticationTag::parse(chunk_data)?;
+            let (input, nonce) = Nonce::parse(input)?;
+            let (input, data) = take(encrypted_chunk_size).parse_peek(input)?;
+            let (input, tag) = AuthenticationTag::parse(input)?;
 
-            debug_assert!(chunk_data.is_empty(), "chunk should be fully read");
+            debug_assert!(
+                chunk_start.offset_from(&input) == base_chunk_size,
+                "chunk should be fully read"
+            );
 
             let mut plaintext_data = data.to_vec();
             if let Err(err) = access_key.decrypt_buffer(nonce, &[], &mut plaintext_data, tag) {
                 tracing::error!("failed to decrypt chunk: {err}");
-                let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-                return Err(nom::Err::Failure(err));
+                let err = winnow::error::ParserError::from_error_kind(
+                    &input,
+                    winnow::error::ErrorKind::Verify,
+                );
+                return Err(winnow::error::ErrMode::Cut(err));
             }
 
-            let data_length =
-                match le_u64::<&[u8], nom::error::VerboseError<_>>(plaintext_data.as_slice()) {
-                    Ok((_, length)) => length,
-                    Err(err) => {
-                        tracing::error!("failed to read inner length: {err:?}");
+            let data_length = match le_u64::<&[u8], ErrMode<winnow::error::ContextError>>
+                .parse_peek(plaintext_data.as_slice())
+            {
+                Ok((_, length)) => length,
+                Err(err) => {
+                    tracing::error!("failed to read inner length: {err:?}");
 
-                        let empty_static: &'static [u8] = &[];
-                        return Err(nom::Err::Failure(nom::error::make_error(
-                            empty_static,
-                            nom::error::ErrorKind::Verify,
-                        )));
-                    }
-                };
+                    let empty_static: &'static [u8] = &[];
+                    return Err(winnow::error::ErrMode::Cut(
+                        winnow::error::ParserError::from_error_kind(
+                            &Stream::new(empty_static),
+                            winnow::error::ErrorKind::Verify,
+                        ),
+                    ));
+                }
+            };
             let plaintext_data: Vec<u8> = plaintext_data
                 .drain(8..(data_length as usize + 8))
                 .collect();
@@ -277,7 +292,7 @@ impl DataBlock {
     }
 
     pub fn parse_with_magic<'a>(
-        input: &'a [u8],
+        input: Stream<'a>,
         access_key: &AccessKey,
         verifying_key: &VerifyingKey,
     ) -> ParserResult<'a, Self> {
@@ -404,8 +419,8 @@ impl DataOptions {
         self.encrypted
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
-        let (input, version_byte) = take(1u8)(input)?;
+    pub fn parse(input: Stream) -> ParserResult<Self> {
+        let (input, version_byte) = take(1u8).parse_peek(input)?;
         let option_byte = version_byte[0];
 
         let ecc_present = (option_byte & ECC_PRESENT_BIT) == ECC_PRESENT_BIT;
@@ -426,6 +441,6 @@ impl DataOptions {
     }
 }
 
-fn banyan_data_magic_tag(input: &[u8]) -> ParserResult<&[u8]> {
-    tag(BANYAN_DATA_MAGIC)(input)
+fn banyan_data_magic_tag<'a>(input: Stream) -> ParserResult<&[u8]> {
+    literal(BANYAN_DATA_MAGIC).parse_peek(input)
 }

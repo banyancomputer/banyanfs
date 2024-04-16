@@ -1,11 +1,12 @@
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
-use nom::number::streaming::le_u8;
+use winnow::binary::le_u8;
+use winnow::token::take;
+use winnow::Parser;
 
 use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, SigningKey, VerifyingKey};
 use crate::codec::header::AccessMask;
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 const KEY_PRESENT_BIT: u8 = 0b0000_0001;
 
@@ -66,13 +67,16 @@ impl PermissionKeys {
         }
     }
 
-    pub fn parse<'a>(input: &'a [u8], unlock_key: &SigningKey) -> ParserResult<'a, Self> {
+    pub fn parse<'a>(input: Stream<'a>, unlock_key: &SigningKey) -> ParserResult<'a, Self> {
         let (input, filesystem) = maybe_parse_key(input)?;
         let filesystem = filesystem
             .map(|key| key.unlock(unlock_key))
             .transpose()
             .map_err(|_| {
-                nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
+                winnow::error::ErrMode::Cut(winnow::error::ParserError::from_error_kind(
+                    &input,
+                    winnow::error::ErrorKind::Verify,
+                ))
             })?;
 
         let (input, data) = maybe_parse_key(input)?;
@@ -80,7 +84,10 @@ impl PermissionKeys {
             .map(|key| key.unlock(unlock_key))
             .transpose()
             .map_err(|_| {
-                nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
+                winnow::error::ErrMode::Cut(winnow::error::ParserError::from_error_kind(
+                    &input,
+                    winnow::error::ErrorKind::Verify,
+                ))
             })?;
 
         let (input, maintenance) = maybe_parse_key(input)?;
@@ -88,7 +95,10 @@ impl PermissionKeys {
             .map(|key| key.unlock(unlock_key))
             .transpose()
             .map_err(|_| {
-                nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
+                winnow::error::ErrMode::Cut(winnow::error::ParserError::from_error_kind(
+                    &input,
+                    winnow::error::ErrorKind::Verify,
+                ))
             })?;
 
         let permission_keys = Self {
@@ -150,15 +160,15 @@ pub async fn maybe_encode_key<W: AsyncWrite + Unpin + Send>(
     Ok(written_bytes)
 }
 
-fn maybe_parse_key(input: &[u8]) -> ParserResult<Option<AsymLockedAccessKey>> {
-    let (input, presence_flag) = le_u8(input)?;
+fn maybe_parse_key(input: Stream) -> ParserResult<Option<AsymLockedAccessKey>> {
+    let (input, presence_flag) = le_u8.parse_peek(input)?;
 
     if presence_flag & KEY_PRESENT_BIT != 0 {
         let (input, key) = AsymLockedAccessKey::parse(input)?;
         Ok((input, Some(key)))
     } else {
         // still need to advance the input
-        let (input, _blank) = take(AsymLockedAccessKey::size())(input)?;
+        let (input, _blank) = take(AsymLockedAccessKey::size()).parse_peek(input)?;
         Ok((input, None))
     }
 }
@@ -190,7 +200,8 @@ mod tests {
             .await
             .unwrap();
 
-        let (remaining, parsed) = PermissionKeys::parse(&buffer, &signing_key).unwrap();
+        let (remaining, parsed) =
+            PermissionKeys::parse(Stream::new(&buffer), &signing_key).unwrap();
         assert!(remaining.is_empty());
         assert_eq!(original, parsed);
     }

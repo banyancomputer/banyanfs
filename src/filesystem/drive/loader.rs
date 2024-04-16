@@ -2,8 +2,10 @@ use std::sync::Arc;
 
 use async_std::sync::RwLock;
 use futures::{AsyncRead, AsyncReadExt};
-use nom::number::streaming::le_u64;
 use tracing::{debug, trace};
+use winnow::binary::le_u64;
+use winnow::error::ErrMode;
+use winnow::Parser;
 
 use crate::codec::crypto::{AuthenticationTag, EncryptedBuffer, Nonce, SigningKey};
 use crate::codec::header::{ContentOptions, IdentityHeader, KeyCount, PublicSettings};
@@ -11,6 +13,7 @@ use crate::codec::meta::{FilesystemId, JournalCheckpoint, MetaKey};
 use crate::codec::parser::{
     ParserResult, ParserStateMachine, ProgressType, SegmentStreamer, StateError, StateResult,
 };
+use crate::codec::Stream;
 use crate::filesystem::{Drive, DriveAccess, InnerDrive};
 
 pub struct DriveLoader<'a> {
@@ -66,7 +69,7 @@ impl<'a> DriveLoader<'a> {
 impl ParserStateMachine<Drive> for DriveLoader<'_> {
     type Error = DriveLoaderError;
 
-    fn parse(&mut self, buffer: &[u8]) -> StateResult<Drive, Self::Error> {
+    fn parse(&mut self, buffer: Stream) -> StateResult<Drive, Self::Error> {
         match &self.state {
             DriveLoaderState::IdentityHeader => {
                 let (input, id_header) = IdentityHeader::parse_with_magic(buffer)?;
@@ -155,15 +158,33 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                     "drive_loader::encrypted_header"
                 );
 
-                let mut header = header_buffer.as_ref();
+                let mut header = header_buffer.as_slice();
 
                 let (remaining, drive_access) =
-                    DriveAccess::parse(header, **key_count, self.signing_key)?;
+                    DriveAccess::parse(Stream::new(header), **key_count, self.signing_key)
+                        .map_err(|e| match e {
+                            ErrMode::Incomplete(_) => winnow::error::ErrMode::Cut(
+                                winnow::error::ParserError::from_error_kind(
+                                    &Stream::new(header),
+                                    winnow::error::ErrorKind::Verify,
+                                ),
+                            ),
+                            e => e,
+                        })?;
                 let bytes_read = header.len() - remaining.len();
                 (_, header) = header.split_at(bytes_read);
                 trace!(bytes_read, "drive_loader::encrypted_header::drive_access");
 
-                let (remaining, content_options) = ContentOptions::parse(header)?;
+                let (remaining, content_options) = ContentOptions::parse(Stream::new(header))
+                    .map_err(|e| match e {
+                        ErrMode::Incomplete(_) => winnow::error::ErrMode::Cut(
+                            winnow::error::ParserError::from_error_kind(
+                                &Stream::new(header),
+                                winnow::error::ErrorKind::Verify,
+                            ),
+                        ),
+                        e => e,
+                    })?;
                 let bytes_read = header.len() - remaining.len();
                 (_, header) = header.split_at(bytes_read);
                 trace!(
@@ -171,7 +192,16 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                     "drive_loader::encrypted_header::content_options"
                 );
 
-                let (remaining, journal_start) = JournalCheckpoint::parse(header)?;
+                let (remaining, journal_start) = JournalCheckpoint::parse(Stream::new(header))
+                    .map_err(|e| match e {
+                        ErrMode::Incomplete(_) => winnow::error::ErrMode::Cut(
+                            winnow::error::ParserError::from_error_kind(
+                                &Stream::new(header),
+                                winnow::error::ErrorKind::Verify,
+                            ),
+                        ),
+                        e => e,
+                    })?;
                 let bytes_read = header.len() - remaining.len();
                 trace!(
                     bytes_read,
@@ -231,11 +261,20 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                     let drive_access = self.drive_access.clone().expect("to have been set");
 
                     let (remaining, inner_drive) = InnerDrive::parse(
-                        &fs_buffer,
+                        Stream::new(fs_buffer.as_slice()),
                         drive_access,
                         journal_start.clone(),
                         data_key,
-                    )?;
+                    )
+                    .map_err(|e| match e {
+                        ErrMode::Incomplete(_) => winnow::error::ErrMode::Cut(
+                            winnow::error::ParserError::from_error_kind(
+                                &Stream::new(fs_buffer.as_slice()),
+                                winnow::error::ErrorKind::Verify,
+                            ),
+                        ),
+                        e => e,
+                    })?;
                     debug_assert!(remaining.is_empty());
 
                     let drive = Drive {
@@ -261,8 +300,8 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
     }
 }
 
-fn content_length(input: &[u8]) -> ParserResult<u64> {
-    le_u64(input)
+fn content_length(input: Stream) -> ParserResult<u64> {
+    le_u64.parse_peek(input)
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -302,13 +341,13 @@ impl StateError for DriveLoaderError {
     }
 }
 
-impl<E: std::fmt::Debug> From<nom::Err<E>> for DriveLoaderError {
-    fn from(err: nom::Err<E>) -> Self {
+impl<E: std::fmt::Debug> From<winnow::error::ErrMode<E>> for DriveLoaderError {
+    fn from(err: winnow::error::ErrMode<E>) -> Self {
         match err {
-            nom::Err::Incomplete(nom::Needed::Size(n)) => {
+            winnow::error::ErrMode::Incomplete(winnow::error::Needed::Size(n)) => {
                 DriveLoaderError::Incomplete(Some(n.get()))
             }
-            nom::Err::Incomplete(_) => DriveLoaderError::Incomplete(None),
+            winnow::error::ErrMode::Incomplete(_) => DriveLoaderError::Incomplete(None),
             err => {
                 let err_msg = format!("parse verification detected failure: {:?}", err);
                 DriveLoaderError::ParserFailure(err_msg)

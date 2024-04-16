@@ -34,7 +34,7 @@ impl<T: Unpin, S: ParserStateMachine<T>> SegmentStreamer<T, S> {
 
     pub async fn next(&mut self) -> Option<Result<(Hash, T), S::Error>> {
         loop {
-            match self.state_machine.parse(&self.buffer) {
+            match self.state_machine.parse(super::Stream::new(&self.buffer)) {
                 Ok(ProgressType::Ready(byte_count, val)) => {
                     let read_data = self.buffer.split_to(byte_count);
 

@@ -1,8 +1,8 @@
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
+use winnow::{token::take, Parser};
 
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 const ID_LENGTH: usize = 16;
 
@@ -39,16 +39,19 @@ impl FilesystemId {
         Self(uuid_bytes)
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
-        let (remaining, id_bytes) = take(ID_LENGTH)(input)?;
+    pub fn parse(input: Stream) -> ParserResult<Self> {
+        let (remaining, id_bytes) = take(ID_LENGTH).parse_peek(input)?;
 
         // All zeros and all ones are disallowed, this isn't actually harmful though so we'll only
         // perform this check in strict mode.
         if cfg!(feature = "strict")
             && (id_bytes.iter().all(|&b| b == 0x00) || id_bytes.iter().all(|&b| b == 0xff))
         {
-            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-            return Err(nom::Err::Failure(err));
+            let err = winnow::error::ParserError::from_error_kind(
+                &input,
+                winnow::error::ErrorKind::Verify,
+            );
+            return Err(winnow::error::ErrMode::Cut(err));
         }
 
         // todo(sstelfox): validate the UUID format...
@@ -102,7 +105,7 @@ mod tests {
         filesystem_id.encode(&mut encoded).await.unwrap();
         assert_eq!(raw_id, encoded.as_slice());
 
-        let (remaining, parsed) = FilesystemId::parse(&encoded).unwrap();
+        let (remaining, parsed) = FilesystemId::parse(Stream::new(&encoded)).unwrap();
         assert!(remaining.is_empty());
         assert_eq!(filesystem_id, parsed);
     }

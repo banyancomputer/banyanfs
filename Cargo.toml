@@ -42,8 +42,6 @@ zeroize = { version = "^1", features = ["derive", "std"] }
 
 base64 = "^0.22"
 bytes = "^1"
-# TODO: transitioning from nom to winnow, finish it up and remove nom
-nom = "^7"
 winnow = "^0.6"
 crdts = { version = "^7", default-features = false, features = [
   "merkle",

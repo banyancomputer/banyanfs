@@ -7,12 +7,21 @@ pub use parser_state_machine::ParserStateMachine;
 pub use progress_type::ProgressType;
 pub(crate) use segment_streamer::SegmentStreamer;
 pub use state_error::StateError;
+use winnow::Partial;
+
+pub type Stream<'a> = Partial<&'a [u8]>;
 
 #[cfg(debug_assertions)]
-pub type ParserResult<'a, T> = nom::IResult<&'a [u8], T, nom::error::VerboseError<&'a [u8]>>;
+pub type ParserResult<'a, T> =
+    winnow::IResult<Stream<'a>, T, winnow::error::ContextError<Stream<'a>>>;
+
+pub type CompleteParserResult<'a, T> =
+    winnow::IResult<&'a [u8], T, winnow::error::ContextError<&'a [u8]>>;
 
 #[cfg(not(debug_assertions))]
-pub type ParserResult<'a, T> = nom::IResult<&'a [u8], T>;
+pub type ParserResult<'a, T> = winnow::IResult<Stream<'a>, T>;
+#[cfg(not(debug_assertions))]
+pub type CompleteParserResult<'a, T> = winnow::IResult<&'a [u8], T>;
 
 pub type StateResult<T, E> = Result<ProgressType<T>, E>;
 
@@ -21,7 +30,7 @@ pub type StateResult<T, E> = Result<ProgressType<T>, E>;
 //    async fn next(input: &'a [u8], ctx: &'a Self::Context) -> ParserResult<'a, Option<Self>> {
 //        match Self::parse(input, ctx) {
 //            Ok((remaining, parsed)) => Ok((remaining, Some(parsed))),
-//            Err(nom::Err::Incomplete(_)) => Ok((input, None)),
+//            Err(winnow::error::ErrMode::Incomplete(_)) => Ok((input, None)),
 //            Err(err) => Err(err),
 //        }
 //    }
@@ -30,10 +39,10 @@ pub type StateResult<T, E> = Result<ProgressType<T>, E>;
 pub trait Parser: Sized {
     type Context: Send + Sync;
 
-    fn parse<'a>(input: &'a [u8], ctx: &'a Self::Context) -> ParserResult<'a, Self>;
+    fn parse<'a>(input: Stream<'a>, ctx: &'a Self::Context) -> ParserResult<'a, Self>;
 
     fn parse_many<'a>(
-        mut input: &'a [u8],
+        mut input: Stream<'a>,
         ctx: &'a Self::Context,
         count: usize,
     ) -> ParserResult<'a, Vec<Self>> {

@@ -3,13 +3,14 @@ use std::ops::Deref;
 
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::AsyncWrite;
-use nom::multi::count;
-use nom::sequence::tuple;
-use nom::Needed;
+use winnow::combinator::repeat;
+use winnow::error::Needed;
+
+use winnow::{unpeek, Parser};
 
 use crate::codec::crypto::{AccessKey, AsymLockedAccessKey, KeyId, SigningKey};
 use crate::codec::header::KeyCount;
-use crate::codec::{ActorSettings, ParserResult};
+use crate::codec::{ActorSettings, ParserResult, Stream};
 
 pub struct MetaKey(AccessKey);
 
@@ -47,22 +48,24 @@ impl MetaKey {
     }
 
     pub fn parse_escrow<'a>(
-        input: &'a [u8],
+        input: Stream<'a>,
         key_count: u8,
         signing_key: &SigningKey,
     ) -> ParserResult<'a, Option<Self>> {
-        let mut asym_parser = count(
-            tuple((KeyId::parse, AsymLockedAccessKey::parse)),
+        let mut asym_parser = repeat(
             key_count as usize,
+            (unpeek(KeyId::parse), unpeek(AsymLockedAccessKey::parse)),
         );
 
-        let (input, locked_keys) = match asym_parser(input) {
+        let (input, locked_keys): (_, Vec<_>) = match asym_parser.parse_peek(input) {
             Ok(res) => res,
-            Err(nom::Err::Incomplete(Needed::Size(_))) => {
+            Err(winnow::error::ErrMode::Incomplete(Needed::Size(_))) => {
                 let record_size = KeyId::size() + AsymLockedAccessKey::size();
                 let total_size = key_count as usize * record_size;
 
-                return Err(nom::Err::Incomplete(Needed::new(total_size - input.len())));
+                return Err(winnow::error::ErrMode::Incomplete(Needed::new(
+                    total_size - input.len(),
+                )));
             }
             Err(err) => return Err(err),
         };

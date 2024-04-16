@@ -6,7 +6,7 @@ use futures::io::AsyncWrite;
 
 use crate::codec::crypto::{KeyId, PermissionKeys, SigningKey, VerifyingKey};
 use crate::codec::header::AccessMask;
-use crate::codec::{ActorId, ActorSettings, ParserResult};
+use crate::codec::{ActorId, ActorSettings, ParserResult, Stream};
 
 #[derive(Clone, Debug)]
 pub struct DriveAccess {
@@ -27,70 +27,6 @@ impl DriveAccess {
             .get(actor_id)
             .map(|settings| settings.verifying_key())
             .clone()
-    }
-
-    pub fn init_private(rng: &mut impl CryptoRngCore, current_actor_id: ActorId) -> Self {
-        Self {
-            current_actor_id,
-            actor_settings: HashMap::new(),
-            permission_keys: Some(PermissionKeys::generate(rng)),
-        }
-    }
-
-    pub fn permission_keys(&self) -> Option<&PermissionKeys> {
-        self.permission_keys.as_ref()
-    }
-
-    pub fn parse<'a>(
-        input: &'a [u8],
-        key_count: u8,
-        signing_key: &SigningKey,
-    ) -> ParserResult<'a, Self> {
-        let mut actor_settings = HashMap::new();
-        let mut permission_keys = None;
-
-        let mut buf_slice = input;
-
-        for _ in 0..key_count {
-            let (i, key_id) = KeyId::parse(buf_slice).map_err(|_| {
-                nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
-            })?;
-            buf_slice = i;
-
-            let (i, settings) = ActorSettings::parse_private(buf_slice).map_err(|_| {
-                nom::Err::Failure(nom::error::make_error(input, nom::error::ErrorKind::Verify))
-            })?;
-            buf_slice = i;
-
-            let verifying_key = settings.verifying_key();
-            let actor_id = verifying_key.actor_id();
-            actor_settings.insert(actor_id, settings);
-
-            if key_id == verifying_key.key_id() {
-                match PermissionKeys::parse(buf_slice, signing_key) {
-                    Ok((i, keys)) => {
-                        permission_keys = Some(keys);
-                        buf_slice = i;
-                        continue;
-                    }
-                    Err(err) => tracing::error!("failed to access permission keys: {err}"),
-                };
-            }
-        }
-
-        if permission_keys.is_none() {
-            tracing::warn!("no matching permission keys found for provided key");
-        }
-
-        let current_actor_id = signing_key.actor_id();
-
-        let drive_access = Self {
-            current_actor_id,
-            actor_settings,
-            permission_keys,
-        };
-
-        Ok((buf_slice, drive_access))
     }
 
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
@@ -149,12 +85,82 @@ impl DriveAccess {
         access.has_filesystem_key() && access.has_data_key() && access.has_maintenance_key()
     }
 
+    pub fn init_private(rng: &mut impl CryptoRngCore, current_actor_id: ActorId) -> Self {
+        Self {
+            current_actor_id,
+            actor_settings: HashMap::new(),
+            permission_keys: Some(PermissionKeys::generate(rng)),
+        }
+    }
+
     pub fn new(current_actor_id: ActorId) -> Self {
         Self {
             current_actor_id,
             actor_settings: HashMap::new(),
             permission_keys: None,
         }
+    }
+
+    pub fn parse<'a>(
+        input: Stream<'a>,
+        key_count: u8,
+        signing_key: &SigningKey,
+    ) -> ParserResult<'a, Self> {
+        let mut actor_settings = HashMap::new();
+        let mut permission_keys = None;
+
+        let mut buf_slice = input;
+
+        for _ in 0..key_count {
+            let (i, key_id) = KeyId::parse(buf_slice).map_err(|_| {
+                winnow::error::ErrMode::Cut(winnow::error::ParserError::from_error_kind(
+                    &input,
+                    winnow::error::ErrorKind::Verify,
+                ))
+            })?;
+            buf_slice = i;
+
+            let (i, settings) = ActorSettings::parse_private(buf_slice).map_err(|_| {
+                winnow::error::ErrMode::Cut(winnow::error::ParserError::from_error_kind(
+                    &input,
+                    winnow::error::ErrorKind::Verify,
+                ))
+            })?;
+            buf_slice = i;
+
+            let verifying_key = settings.verifying_key();
+            let actor_id = verifying_key.actor_id();
+            actor_settings.insert(actor_id, settings);
+
+            if key_id == verifying_key.key_id() {
+                match PermissionKeys::parse(buf_slice, signing_key) {
+                    Ok((i, keys)) => {
+                        permission_keys = Some(keys);
+                        buf_slice = i;
+                        continue;
+                    }
+                    Err(err) => tracing::error!("failed to access permission keys: {err}"),
+                };
+            }
+        }
+
+        if permission_keys.is_none() {
+            tracing::warn!("no matching permission keys found for provided key");
+        }
+
+        let current_actor_id = signing_key.actor_id();
+
+        let drive_access = Self {
+            current_actor_id,
+            actor_settings,
+            permission_keys,
+        };
+
+        Ok((buf_slice, drive_access))
+    }
+
+    pub fn permission_keys(&self) -> Option<&PermissionKeys> {
+        self.permission_keys.as_ref()
     }
 
     pub fn register_actor(&mut self, key: VerifyingKey, access_mask: AccessMask) {

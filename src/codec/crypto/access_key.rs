@@ -1,6 +1,5 @@
 use chacha20poly1305::{AeadInPlace, Key as ChaChaKey, KeyInit, XChaCha20Poly1305};
 use ecdsa::signature::rand_core::CryptoRngCore;
-use nom::AsBytes;
 use rand::Rng;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -54,7 +53,7 @@ impl AccessKey {
         let raw_tag = cipher.encrypt_in_place_detached(&nonce, authenticated_data, buffer)?;
 
         let mut tag_bytes = [0u8; AuthenticationTag::size()];
-        tag_bytes.copy_from_slice(raw_tag.as_bytes());
+        tag_bytes.copy_from_slice(raw_tag.as_slice());
         let tag = AuthenticationTag::from(tag_bytes);
 
         Ok((nonce, tag))
@@ -146,7 +145,7 @@ pub enum AccessKeyError<I> {
     /// kinds of errors by switching off of the `nom` library but for now additional context is
     /// recommended to help identify what the specific failure was.
     #[error("decoding data failed: {0}")]
-    FormatFailure(#[from] nom::Err<nom::error::Error<I>>),
+    FormatFailure(#[from] winnow::error::ErrMode<winnow::error::ContextError<I>>),
 
     /// The underlying libraries used by this one for its cryptograhic operations do not provide a
     /// more specific error type so we can not provide more detailed errors than the operation

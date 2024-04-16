@@ -3,9 +3,9 @@ mod builder;
 pub use builder::AccessMaskBuilder;
 
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::number::streaming::le_u8;
+use winnow::{binary::le_u8, Parser};
 
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 pub(crate) const PROTECTED_BIT: u8 = 0b1000_0000;
 
@@ -90,8 +90,8 @@ impl AccessMask {
         self.protected
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
-        let (input, byte) = le_u8(input)?;
+    pub fn parse(input: Stream) -> ParserResult<Self> {
+        let (input, byte) = le_u8.parse_peek(input)?;
         Ok((input, Self::from(byte)))
     }
 
