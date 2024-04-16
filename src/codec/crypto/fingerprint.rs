@@ -16,6 +16,10 @@ impl Fingerprint {
             .fold(String::new(), |acc, &b| format!("{acc}{:02x}", b))
     }
 
+    pub fn as_hex_id(self) -> String {
+        self.as_hex()[..(2 * 20)].to_string()
+    }
+
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,

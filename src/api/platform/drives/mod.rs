@@ -25,7 +25,7 @@ pub async fn create(
         name: name.to_string(),
         kind: DriveKind::Interactive,
         storage_class: StorageClass::Hot,
-        fingerprint: fingerprint.as_hex()[..(2 * 20)].to_string(),
+        fingerprint: fingerprint.as_hex_id(),
     };
 
     let created_drive = client.platform_request_full(request).await?;
