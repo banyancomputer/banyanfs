@@ -477,6 +477,7 @@ impl Node {
             node_data.write_all(&[val_bytes_len as u8]).await?;
             node_data.write_all(val).await?;
         }
+        self.data().encode(&mut node_data).await?;
         Ok(node_data)
     }
 }
