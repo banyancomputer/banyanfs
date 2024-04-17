@@ -120,7 +120,7 @@ impl DriveAccess {
             })?;
             buf_slice = i;
 
-            let (i, settings) = ActorSettings::parse_private(buf_slice).map_err(|_| {
+            let (i, settings) = ActorSettings::parse(buf_slice).map_err(|_| {
                 winnow::error::ErrMode::Cut(winnow::error::ParserError::from_error_kind(
                     &input,
                     winnow::error::ErrorKind::Verify,

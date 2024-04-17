@@ -5,17 +5,15 @@ use winnow::Parser;
 
 use crate::codec::crypto::VerifyingKey;
 use crate::codec::header::AccessMask;
-use crate::codec::meta::VectorClock;
+use crate::codec::meta::{UserAgent, VectorClock};
 use crate::codec::{ParserResult, Stream};
-
-const SOFTWARE_AGENT_BYTE_STR_SIZE: usize = 63;
 
 #[derive(Clone, Debug)]
 pub struct ActorSettings {
     verifying_key: VerifyingKey,
     vector_clock: VectorClock,
     access_mask: AccessMask,
-    agent: Vec<u8>,
+    user_agent: UserAgent,
 }
 
 impl ActorSettings {
@@ -34,69 +32,49 @@ impl ActorSettings {
         written_bytes += self.vector_clock.encode(writer).await?;
         written_bytes += self.access_mask.encode(writer).await?;
 
-        let (len, bytes) = if overwrite_version {
-            current_version_byte_str()
+        let agent = if overwrite_version {
+            written_bytes += UserAgent::current().encode(writer).await?;
         } else {
-            let agent_len = self.agent.len();
-            if agent_len > SOFTWARE_AGENT_BYTE_STR_SIZE {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "invalid agent byte string length",
-                ));
-            }
-
-            let mut full_agent = [0; SOFTWARE_AGENT_BYTE_STR_SIZE];
-            full_agent.copy_from_slice(&self.agent);
-
-            (agent_len as u8, full_agent)
+            written_bytes += self.user_agent().encode(writer).await?;
         };
-
-        writer.write_all(&[len]).await?;
-        writer.write_all(&bytes).await?;
-        written_bytes += 1 + SOFTWARE_AGENT_BYTE_STR_SIZE;
 
         Ok(written_bytes)
     }
 
     pub fn new(verifying_key: VerifyingKey, access_mask: AccessMask) -> Self {
         let vector_clock = VectorClock::initialize();
-
-        let (len, agent_fixed) = current_version_byte_str();
-        let agent = agent_fixed[..len as usize].to_vec();
+        let user_agent = UserAgent::current();
 
         Self {
             verifying_key,
             access_mask,
             vector_clock,
-            agent,
+            user_agent,
         }
     }
 
-    pub fn parse_private(input: Stream) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, verifying_key) = VerifyingKey::parse(input)?;
         let (input, vector_clock) = VectorClock::parse(input)?;
         let (input, access_mask) = AccessMask::parse(input)?;
-
-        let (input, agent_len) = le_u8.parse_peek(input)?;
-        let (input, agent_fixed) = take(SOFTWARE_AGENT_BYTE_STR_SIZE).parse_peek(input)?;
-        let agent = agent_fixed[..agent_len as usize].to_vec();
+        let (input, user_agent) = UserAgent::parse(input)?;
 
         let actor_settings = Self {
             verifying_key,
             vector_clock,
             access_mask,
-            agent,
+            user_agent,
         };
 
         Ok((input, actor_settings))
     }
 
     pub const fn size() -> usize {
-        VerifyingKey::size()
-            + VectorClock::size()
-            + AccessMask::size()
-            + 1
-            + SOFTWARE_AGENT_BYTE_STR_SIZE
+        VerifyingKey::size() + VectorClock::size() + AccessMask::size() + UserAgent::size()
+    }
+
+    pub fn user_agent(&self) -> UserAgent {
+        self.user_agent.clone()
     }
 
     pub fn vector_clock(&self) -> VectorClock {
@@ -106,14 +84,4 @@ impl ActorSettings {
     pub fn verifying_key(&self) -> VerifyingKey {
         self.verifying_key.clone()
     }
-}
-
-fn current_version_byte_str() -> (u8, [u8; SOFTWARE_AGENT_BYTE_STR_SIZE]) {
-    let new_agent = crate::version::user_agent_byte_str();
-    let new_agent_len = new_agent.len();
-
-    let mut full_agent = [0; SOFTWARE_AGENT_BYTE_STR_SIZE];
-    full_agent[..new_agent_len].copy_from_slice(&new_agent);
-
-    (new_agent.len() as u8, full_agent)
 }
