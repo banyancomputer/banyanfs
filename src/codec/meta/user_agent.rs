@@ -13,7 +13,8 @@ pub struct UserAgent(Vec<u8>);
 impl UserAgent {
     pub fn current() -> Self {
         let agent = crate::version::user_agent_byte_str();
-        Self(agent[..63].to_vec())
+        let agent_trimmed_len = agent.len().min(SOFTWARE_AGENT_BYTE_STR_SIZE);
+        Self(agent[..agent_trimmed_len].to_vec())
     }
 
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
@@ -29,7 +30,7 @@ impl UserAgent {
         }
 
         let mut full_agent = [0; SOFTWARE_AGENT_BYTE_STR_SIZE];
-        full_agent.copy_from_slice(&self.0);
+        full_agent[..agent_len].copy_from_slice(&self.0);
 
         writer.write_all(&[agent_len as u8]).await?;
         writer.write_all(full_agent.as_slice()).await?;
