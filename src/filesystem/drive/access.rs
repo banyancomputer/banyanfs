@@ -8,6 +8,16 @@ use crate::codec::crypto::{KeyId, PermissionKeys, SigningKey, VerifyingKey};
 use crate::codec::header::AccessMask;
 use crate::codec::{ActorId, ActorSettings, ParserResult, Stream};
 
+/// [`DriveAccess`] maintains a mapping of [`ActorId`] instances to their available permissions
+/// within the drive itself. When loaded this holds on to copies of any of the general keys the
+/// current actor has access to.
+///
+/// Access within the drive is broken up based on which internal symmetric keys the current user
+/// has access to. These keys are held within the [`PermissionKeys`] struct and consist of a
+/// filesystem key (which grants access to read the structure and metadata of the filesystem), a
+/// data key which protects the per-file encryption key needed to access the data contained in any
+/// blocks stored), and a maintenance key (which is only used to read block lifecycle information
+/// found in different metadata version syncs).
 #[derive(Clone, Debug)]
 pub struct DriveAccess {
     current_actor_id: ActorId,
