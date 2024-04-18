@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use elliptic_curve::pkcs8::{EncodePublicKey, LineEnding};
 use reqwest::{Method, RequestBuilder};
 use serde::Serialize;
 
@@ -12,31 +13,22 @@ use crate::codec::crypto::VerifyingKey;
 // permission over. We'll need a workflow to upgrade keys to the root of the account for things
 // like managing billing.
 #[derive(Serialize)]
-pub struct RegisterApiKey {
-    #[serde(skip)]
-    fingerprint: String,
-
-    public_key: String,
+pub struct CreateUserKey {
+    name: String,
+    pem: String,
 }
 
-impl RegisterApiKey {
-    pub fn fingerprint(&self) -> &str {
-        &self.fingerprint
-    }
-
-    pub fn new(public_key: &VerifyingKey) -> Self {
-        let fingerprint = public_key.fingerprint().as_hex();
-        let public_key = public_key.to_spki().expect("valid key to be encodable");
-
+impl CreateUserKey {
+    pub fn new(name: &str, key: &VerifyingKey) -> Self {
         Self {
-            fingerprint,
-            public_key,
+            name: name.to_string(),
+            pem: key.to_public_key_pem(LineEnding::CR).unwrap(),
         }
     }
 }
 
 #[async_trait(?Send)]
-impl ApiRequest for RegisterApiKey {
+impl ApiRequest for CreateUserKey {
     type Response = ApiKey;
 
     const METHOD: Method = Method::POST;
@@ -49,8 +41,8 @@ impl ApiRequest for RegisterApiKey {
     }
 
     fn path(&self) -> String {
-        "/api/v1/auth/device_api_key".to_string()
+        "/api/v1/auth/user_key".to_string()
     }
 }
 
-impl PlatformApiRequest for RegisterApiKey {}
+impl PlatformApiRequest for CreateUserKey {}

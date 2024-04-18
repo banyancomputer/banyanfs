@@ -1,15 +1,16 @@
+mod create_user_key;
 mod current_usage;
 mod current_usage_limit;
 mod get_storage_grant;
-mod register_api_key;
 
+use create_user_key::CreateUserKey;
 use current_usage::{CurrentUsage, CurrentUsageResponse};
 use current_usage_limit::{CurrentUsageLimit, CurrentUsageLimitResponse};
 use get_storage_grant::{GetStorageGrant, GetStorageGrantResponse};
-use register_api_key::RegisterApiKey;
 
 use url::Url;
 
+use crate::api::client::utils::api_fingerprint_key;
 use crate::api::client::{ApiClient, ApiError};
 use crate::api::platform::ApiKeyId;
 use crate::codec::crypto::VerifyingKey;
@@ -34,14 +35,14 @@ pub async fn get_storage_grant(
 
 // note(sstelfox): We don't handle API keys well right now. I think this workflow is a
 // little broken. We've captured this for now in ENG-589.
-pub async fn register_api_key(
+pub async fn create_user_key(
     client: &ApiClient,
+    name: &str,
     public_key: &VerifyingKey,
 ) -> Result<ApiKeyId, ApiError> {
-    let key_registration = RegisterApiKey::new(public_key);
-    let fingerprint = key_registration.fingerprint().to_string();
-
-    let response = client.platform_request_full(key_registration).await?;
+    let fingerprint = api_fingerprint_key(public_key);
+    let create_user_key = CreateUserKey::new(name, public_key);
+    let response = client.platform_request_full(create_user_key).await?;
 
     if cfg!(feature = "strict") && response.fingerprint() != fingerprint {
         return Err(ApiError::MismatchedData("fingerprint mismatch".to_string()));

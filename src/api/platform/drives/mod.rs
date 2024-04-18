@@ -10,22 +10,24 @@ use get_all_request::GetAllRequest;
 use get_request::GetRequest;
 use update_request::UpdateRequest;
 
+use crate::api::client::utils::api_fingerprint_key;
 use crate::api::client::{ApiClient, ApiError};
 use crate::api::platform::{
     ApiDrive, ApiDriveId, ApiDriveUpdateAttributes, DriveKind, StorageClass,
 };
 use crate::codec::crypto::Fingerprint;
+use crate::prelude::VerifyingKey;
 
 pub async fn create(
     client: &ApiClient,
     name: &str,
-    fingerprint: &Fingerprint,
+    key: &VerifyingKey,
 ) -> Result<ApiDriveId, ApiError> {
     let request = CreateRequest {
         name: name.to_string(),
         kind: DriveKind::Interactive,
         storage_class: StorageClass::Hot,
-        fingerprint: fingerprint.as_hex_id(),
+        fingerprint: api_fingerprint_key(key),
     };
 
     let created_drive = client.platform_request_full(request).await?;
