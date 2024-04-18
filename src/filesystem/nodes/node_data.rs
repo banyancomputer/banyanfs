@@ -10,9 +10,12 @@ use crate::codec::{Cid, ParserResult, PermanentId, Stream};
 use crate::filesystem::nodes::{NodeKind, NodeName};
 use crate::filesystem::FileContent;
 
+use super::NodeContext;
+
 pub enum NodeData {
     File {
         permissions: FilePermissions,
+        associated_data_size: u64,
         associated_data: HashMap<NodeName, PermanentId>,
         content: FileContent,
     },
@@ -27,6 +30,31 @@ pub enum NodeData {
 }
 
 impl NodeData {
+    pub(crate) async fn update_children_size<T: NodeContext>(
+        &mut self,
+        context: T,
+    ) -> Result<(), NodeDataError> {
+        let mut size = 0;
+        if let Some(children) = self.children() {
+            size += 2; // child count u16
+            for child in children {
+                size += context
+                    .node_size(child.1)
+                    .await
+                    .map_err(|_| NodeDataError::CantRetrieveChild)?;
+            }
+        }
+        match self {
+            Self::Directory { children_size, .. } => *children_size = size,
+            Self::File {
+                associated_data_size,
+                ..
+            } => *associated_data_size = size,
+            _ => (),
+        }
+        Ok(())
+    }
+
     pub(crate) fn add_child(
         &mut self,
         name: NodeName,
@@ -78,10 +106,16 @@ impl NodeData {
             }
             NodeData::File {
                 permissions,
+                associated_data_size,
                 associated_data,
                 content,
             } => {
                 written_bytes += permissions.encode(writer).await?;
+
+                let size_bytes = associated_data_size.to_le_bytes();
+                writer.write_all(&size_bytes).await?;
+                written_bytes += size_bytes.len();
+
                 written_bytes += encode_children(associated_data, writer).await?;
                 written_bytes += content.encode(writer).await?;
 
@@ -104,6 +138,23 @@ impl NodeData {
             permissions: DirectoryPermissions::default(),
             children_size: 0,
             children: HashMap::new(),
+        }
+    }
+
+    fn children(&self) -> Option<&HashMap<NodeName, PermanentId>> {
+        match self {
+            Self::AssociatedData { .. } => None,
+            Self::Directory {
+                permissions,
+                children_size,
+                children,
+            } => Some(children),
+            Self::File {
+                permissions,
+                associated_data_size,
+                associated_data,
+                content,
+            } => Some(associated_data),
         }
     }
 
@@ -136,11 +187,13 @@ impl NodeData {
         match kind {
             NodeKind::File => {
                 let (data_buf, permissions) = FilePermissions::parse(input)?;
+                let (data_buf, associated_data_size) = le_u64.parse_peek(data_buf)?;
                 let (data_buf, associated_data) = parse_children(data_buf)?;
                 let (data_buf, content) = FileContent::parse(data_buf)?;
 
                 let data = NodeData::File {
                     permissions,
+                    associated_data_size,
                     associated_data,
                     content,
                 };
@@ -207,40 +260,32 @@ impl NodeData {
     pub(crate) fn size(&self) -> u64 {
         tracing::warn!("size of child entries are not yet included in parents");
 
-        match self {
+        let mut size = match self {
             NodeData::AssociatedData { content } => content.size(),
-            NodeData::Directory {
-                children,
-                children_size,
-                ..
-            } => {
-                let base_size = DirectoryPermissions::size() + 8;
-
-                let child_map_size = children
-                    .iter()
-                    .fold(0, |acc, (name, _)| acc + name.size() + PermanentId::size());
-
-                (base_size + child_map_size) as u64 + children_size
+            NodeData::Directory { children_size, .. } => {
+                DirectoryPermissions::size() as u64 + 8 + children_size
             }
             NodeData::File {
-                associated_data,
                 content,
+                associated_data_size,
                 ..
-            } => {
-                let base_size = FilePermissions::size();
+            } => FilePermissions::size() as u64 + 8 + content.size() + associated_data_size,
+        };
 
-                let associated_data_size = associated_data
-                    .iter()
-                    .fold(0, |acc, (name, _)| acc + name.size() + PermanentId::size());
-
-                (base_size + associated_data_size) as u64 + content.size()
+        if let Some(children) = self.children() {
+            size += 2; // child count u16
+            for child in children {
+                size += child.0.size() as u64;
+                size += PermanentId::size() as u64;
             }
         }
+        size
     }
 
     pub(crate) fn full_file(content: FileContent) -> Self {
         Self::File {
             permissions: FilePermissions::default(),
+            associated_data_size: 0,
             associated_data: HashMap::new(),
             content,
         }
@@ -249,6 +294,7 @@ impl NodeData {
     pub(crate) fn stub_file(data_size: u64) -> Self {
         Self::File {
             permissions: FilePermissions::default(),
+            associated_data_size: 0,
             associated_data: HashMap::new(),
             content: FileContent::Stub { data_size },
         }
@@ -309,4 +355,7 @@ pub enum NodeDataError {
 
     #[error("non-parent node cannot have or interact with children")]
     NotAParent,
+
+    #[error("Cannot retrieve reference to child")]
+    CantRetrieveChild,
 }

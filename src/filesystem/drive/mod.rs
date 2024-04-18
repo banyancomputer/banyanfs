@@ -1,6 +1,7 @@
 mod access;
 mod directory_entry;
 mod directory_handle;
+mod drive_context;
 mod inner;
 mod loader;
 mod operations;

@@ -14,6 +14,7 @@
 
 mod encoded_cache;
 mod node_builder;
+mod node_context;
 mod node_data;
 mod node_name;
 
@@ -21,11 +22,11 @@ use async_std::sync::{RwLock, RwLockReadGuard};
 pub(crate) use encoded_cache::EncodedCache;
 pub(crate) use node_builder::{NodeBuilder, NodeBuilderError};
 
+pub(crate) use node_context::NodeContext;
 pub(crate) use node_data::{NodeData, NodeDataError};
 pub(crate) use node_name::{NodeName, NodeNameError};
 
-use async_std::sync::RwLockUpgradableReadGuard;
-use futures::{AsyncWrite, AsyncWriteExt, TryFutureExt};
+use futures::{AsyncWrite, AsyncWriteExt};
 use parking_lot::MappedRwLockReadGuard;
 use std::collections::HashMap;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
@@ -162,7 +163,7 @@ impl Node {
         self.name.clone()
     }
 
-    async fn notify_of_change(&mut self) {
+    pub(crate) async fn notify_of_change(&mut self) {
         self.node_data_cache.mark_dirty();
         self.modified_at = crate::utils::current_time_ms();
     }
@@ -179,21 +180,26 @@ impl Node {
     /// indirection without the contents of the data itself. This is used internally to dynamically
     /// estimate of the total encoding size of the node.
     fn outer_size_estimate(&self) -> u64 {
-        let mut encoded_size = self
+        let mut encoded_size = Cid::size(); // Cid
+        encoded_size += 4; // Node data Len
+        encoded_size += PermanentId::size(); // Perm ID
+        encoded_size += self // Parent ID
             .parent_id
             .as_ref()
             .map_or(1, |_| 1 + PermanentId::size());
+        encoded_size += ActorId::size(); //Owner ID
+        encoded_size += 8usize * 2usize; // Created at and Modified at
+        encoded_size += self.name.size(); //Node name
 
-        encoded_size += Cid::size() + PermanentId::size() + ActorId::size() + 8usize * 2usize;
-        encoded_size += match self.name {
-            NodeName::Root => 1,
-            NodeName::Named(ref name) => 2 + name.as_bytes().len(),
-        };
-
-        encoded_size += self
+        encoded_size += 1; //metadata entry count
+        encoded_size += self // Metadata
             .metadata()
             .iter()
-            .map(|(k, v)| (2 + k.as_bytes().len() + v.len()))
+            .map(|(k, v)| {
+                2 // two  u8 lens for value and key
+                + k.as_bytes().len() //key len
+                 + v.len() //value len
+            })
             .sum::<usize>();
 
         u64::try_from(encoded_size).expect("usize is larger than u64")
@@ -332,7 +338,7 @@ impl Node {
         self.notify_of_change().await;
     }
 
-    /// Returns the size of the node
+    /// Returns the size of the node and all of its children (if they exist)
     pub fn size(&self) -> u64 {
         self.outer_size_estimate() + self.inner.size()
     }
