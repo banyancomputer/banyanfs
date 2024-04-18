@@ -32,11 +32,11 @@ impl ActorSettings {
         written_bytes += self.vector_clock.encode(writer).await?;
         written_bytes += self.access_mask.encode(writer).await?;
 
-        let agent = if overwrite_version {
+        if overwrite_version {
             written_bytes += UserAgent::current().encode(writer).await?;
         } else {
             written_bytes += self.user_agent().encode(writer).await?;
-        };
+        }
 
         Ok(written_bytes)
     }

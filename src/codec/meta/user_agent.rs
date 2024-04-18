@@ -12,9 +12,7 @@ pub struct UserAgent(Vec<u8>);
 
 impl UserAgent {
     pub fn current() -> Self {
-        let agent = crate::version::user_agent_byte_str();
-        let agent_trimmed_len = agent.len().min(SOFTWARE_AGENT_BYTE_STR_SIZE);
-        Self(agent[..agent_trimmed_len].to_vec())
+        Self::from(crate::version::minimal_version().as_str())
     }
 
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
@@ -49,5 +47,44 @@ impl UserAgent {
 
     pub const fn size() -> usize {
         1 + SOFTWARE_AGENT_BYTE_STR_SIZE
+    }
+
+    pub fn to_string(&self) -> Result<String, std::string::FromUtf8Error> {
+        String::from_utf8(self.0.clone())
+    }
+}
+
+impl From<&str> for UserAgent {
+    fn from(val: &str) -> Self {
+        let val_trimmed_len = val.len().min(SOFTWARE_AGENT_BYTE_STR_SIZE);
+        Self(val.as_bytes()[..val_trimmed_len].to_vec())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use winnow::Partial;
+
+    use super::*;
+
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::*;
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_user_agent_roundtrip() {
+        let sample_version_str = "test/v1.0.0-g283abc2".to_string();
+        let user_agent = UserAgent::from(sample_version_str.as_str());
+
+        let mut buffer = Vec::with_capacity(64);
+        let length = user_agent.encode(&mut buffer).await.expect("encoding");
+        assert_eq!(length, UserAgent::size());
+
+        let partial = Partial::new(buffer.as_slice());
+        let (remaining, parsed_ua) = UserAgent::parse(partial).expect("round trip");
+        assert!(remaining.is_empty());
+
+        let parsed_ua_str = parsed_ua.to_string().expect("valid chars");
+        assert_eq!(parsed_ua_str, sample_version_str);
     }
 }
