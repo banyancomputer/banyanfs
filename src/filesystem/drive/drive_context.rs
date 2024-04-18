@@ -1,7 +1,6 @@
 use async_std::sync::RwLock;
 use std::sync::Arc;
 
-use crate::prelude::Node;
 
 use super::{
     meta::{Cid, PermanentId},

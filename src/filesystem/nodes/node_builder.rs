@@ -47,7 +47,7 @@ impl NodeBuilder {
             permanent_id: PermanentId::generate(rng),
             owner_id,
 
-            node_data_cache: EncodedCache::empty(),
+            encoded_cache: EncodedCache::empty(),
             vector_clock,
 
             name: self.name,

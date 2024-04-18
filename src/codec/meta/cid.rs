@@ -76,6 +76,19 @@ impl From<[u8; CID_LENGTH]> for Cid {
     }
 }
 
+impl TryFrom<&[u8]> for Cid {
+    type Error = CidError;
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        if value.len() != CID_LENGTH {
+            Err(CidError::InvalidHashSize)
+        } else {
+            let mut data = [0u8; CID_LENGTH];
+            data.copy_from_slice(&value);
+            Ok(data.into())
+        }
+    }
+}
+
 impl TryFrom<&str> for Cid {
     type Error = CidError;
 

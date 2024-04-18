@@ -29,6 +29,7 @@ pub(crate) use node_name::{NodeName, NodeNameError};
 use futures::{AsyncWrite, AsyncWriteExt};
 use parking_lot::MappedRwLockReadGuard;
 use std::collections::HashMap;
+use std::mem::size_of;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 use winnow::binary::{le_i64, le_u32, le_u8};
 use winnow::stream::Offset;
@@ -53,7 +54,7 @@ pub struct Node {
     permanent_id: PermanentId,
     owner_id: ActorId,
 
-    node_data_cache: EncodedCache,
+    encoded_cache: EncodedCache,
     vector_clock: VectorClock,
 
     created_at: i64,
@@ -94,10 +95,10 @@ impl Node {
     /// non-encoding process attempts to access a large number of node CIDs but that seems like an
     /// unlikely use case.
     pub async fn cid(&self) -> Result<Cid, OperationError> {
-        let node_data = self.node_data().await.map_err(|_| {
+        let encoded = self.encoded().await.map_err(|_| {
             OperationError::InternalCorruption(self.id, "failed to encode node for CID")
         })?;
-        Ok(calculate_cid(&node_data))
+        Ok(Cid::try_from(&encoded[..Cid::size()]).expect("Cid size is constant"))
     }
 
     /// Returns the unix timestamp (in milliseconds precision) of when the node was created.
@@ -122,23 +123,12 @@ impl Node {
         &self,
         writer: &mut W,
     ) -> std::io::Result<usize> {
-        let node_data = self.node_data().await?;
+        let encoded = self.encoded().await?;
         let mut written_bytes = 0;
 
-        let cid = self
-            .cid()
-            .await
-            .map_err(|_| StdError::new(StdErrorKind::Other, "failed to get CID"))?;
-        written_bytes += cid.encode(writer).await?;
 
-        let node_data_len = node_data.len() as u32;
-        let node_data_len_bytes = node_data_len.to_le_bytes();
-
-        writer.write_all(&node_data_len_bytes).await?;
-        written_bytes += node_data_len_bytes.len();
-
-        writer.write_all(&node_data).await?;
-        written_bytes += node_data.len();
+        writer.write_all(&encoded).await?;
+        written_bytes += encoded.len();
 
         Ok(written_bytes)
     }
@@ -164,7 +154,7 @@ impl Node {
     }
 
     pub(crate) async fn notify_of_change(&mut self) {
-        self.node_data_cache.mark_dirty();
+        self.encoded_cache.mark_dirty();
         self.modified_at = crate::utils::current_time_ms();
     }
 
@@ -292,7 +282,7 @@ impl Node {
             permanent_id,
             owner_id,
 
-            node_data_cache: EncodedCache::empty(),
+            encoded_cache: EncodedCache::empty(),
             vector_clock,
 
             created_at,
@@ -347,26 +337,28 @@ impl Node {
         matches!(self.inner.kind(), NodeKind::Directory | NodeKind::File)
     }
 
+    /// Get Permanent Id of this Node
     pub fn permanent_id(&self) -> PermanentId {
         self.permanent_id
     }
 
+    /// Set attribute/metadata on this node
     pub async fn set_attribute(&mut self, key: String, value: Vec<u8>) -> Option<Vec<u8>> {
         let old_value = self.metadata.insert(key, value);
         self.notify_of_change().await;
         old_value
     }
 
-    async fn node_data<'a>(&'a self) -> std::io::Result<MappedRwLockReadGuard<'a, [u8]>> {
-        let blah = self.node_data_cache.get();
-        match blah {
-            None => Ok(self.node_data_cache.set(self.compute_node_data().await?)),
+    async fn encoded<'a>(&'a self) -> std::io::Result<MappedRwLockReadGuard<'a, [u8]>> {
+        let cached = self.encoded_cache.get();
+        match cached {
+            None => Ok(self.encoded_cache.set(self.compute_encoding().await?)),
             Some(inner) => Ok(inner),
         }
     }
 
-    async fn compute_node_data(&self) -> std::io::Result<Vec<u8>> {
-        let mut node_data = Vec::new();
+    async fn compute_encoding(&self) -> std::io::Result<Vec<u8>> {
+        let mut node_data = vec![0u8; Cid::size() + size_of::<u32>()]; // Reserve space for CID(32 bytes) and Length(4 bytes)
 
         self.permanent_id.encode(&mut node_data).await?;
         self.vector_clock.encode(&mut node_data).await?;
@@ -419,6 +411,16 @@ impl Node {
             node_data.write_all(val).await?;
         }
         self.data().encode(&mut node_data).await?;
+
+        //Set len
+        let len = node_data.len() as u32 - 36;
+        node_data[32..36].copy_from_slice(&len.to_le_bytes());
+
+        // Set CID
+        let cid = calculate_cid(&node_data[36..]);
+        node_data[0..32].copy_from_slice(cid.as_bytes());
+        
+
         Ok(node_data)
     }
 }
