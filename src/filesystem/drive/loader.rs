@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use async_std::sync::RwLock;
 use futures::{AsyncRead, AsyncReadExt};
+use reqwest::header;
 use tracing::{debug, trace};
 use winnow::binary::le_u64;
 use winnow::error::ErrMode;
@@ -158,57 +159,19 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                     "drive_loader::encrypted_header"
                 );
 
-                let mut header = header_buffer.as_slice();
+                let mut header_stream = Stream::new(header_buffer.as_slice());
 
-                let (remaining, drive_access) =
-                    DriveAccess::parse(Stream::new(header), **key_count, self.signing_key)
-                        .map_err(|e| match e {
-                            ErrMode::Incomplete(_) => winnow::error::ErrMode::Cut(
-                                winnow::error::ParserError::from_error_kind(
-                                    &Stream::new(header),
-                                    winnow::error::ErrorKind::Verify,
-                                ),
-                            ),
-                            e => e,
-                        })?;
-                let bytes_read = header.len() - remaining.len();
-                (_, header) = header.split_at(bytes_read);
-                trace!(bytes_read, "drive_loader::encrypted_header::drive_access");
+                let (header_stream, drive_access) =
+                    DriveAccess::parse(header_stream, **key_count, self.signing_key)?;
+                trace!("drive_loader::encrypted_header::drive_access");
 
-                let (remaining, content_options) = ContentOptions::parse(Stream::new(header))
-                    .map_err(|e| match e {
-                        ErrMode::Incomplete(_) => winnow::error::ErrMode::Cut(
-                            winnow::error::ParserError::from_error_kind(
-                                &Stream::new(header),
-                                winnow::error::ErrorKind::Verify,
-                            ),
-                        ),
-                        e => e,
-                    })?;
-                let bytes_read = header.len() - remaining.len();
-                (_, header) = header.split_at(bytes_read);
-                trace!(
-                    bytes_read,
-                    "drive_loader::encrypted_header::content_options"
-                );
+                let (header_stream, content_options) = ContentOptions::parse(header_stream)?;
+                trace!("drive_loader::encrypted_header::content_options");
 
-                let (remaining, journal_start) = JournalCheckpoint::parse(Stream::new(header))
-                    .map_err(|e| match e {
-                        ErrMode::Incomplete(_) => winnow::error::ErrMode::Cut(
-                            winnow::error::ParserError::from_error_kind(
-                                &Stream::new(header),
-                                winnow::error::ErrorKind::Verify,
-                            ),
-                        ),
-                        e => e,
-                    })?;
-                let bytes_read = header.len() - remaining.len();
-                trace!(
-                    bytes_read,
-                    "drive_loader::encrypted_header::journal_checkpoint"
-                );
+                let (header_stream, journal_start) = JournalCheckpoint::parse(header_stream)?;
+                trace!("drive_loader::encrypted_header::journal_checkpoint");
 
-                debug_assert!(remaining.is_empty());
+                debug_assert!(header_stream.is_empty());
 
                 self.drive_access = Some(drive_access);
                 self.state = DriveLoaderState::PrivateContent(content_options, journal_start);
