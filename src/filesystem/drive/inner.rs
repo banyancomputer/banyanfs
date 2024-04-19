@@ -13,6 +13,7 @@ use crate::filesystem::drive::DriveAccess;
 use crate::filesystem::nodes::{Node, NodeBuilder, NodeId};
 use crate::utils::std_io_err;
 
+use super::drive_context::DriveContext;
 use super::OperationError;
 
 pub(crate) struct InnerDrive {
@@ -152,7 +153,7 @@ impl InnerDrive {
                 .by_perm_id(&node_pid)
                 .map_err(|_| std_io_err("missing node PID"))?;
 
-            node.encode(&mut node_buffer).await?;
+            node.encode_no_compute(&mut node_buffer).await?;
 
             if let Some(data_cids) = node.data_cids() {
                 for cid in data_cids {
@@ -356,6 +357,11 @@ impl InnerDrive {
 
     pub(crate) fn root_node(&self) -> Result<&Node, OperationError> {
         self.by_perm_id(&self.root_pid)
+    }
+
+    pub(crate) fn root_node_mut(&mut self) -> Result<&mut Node, OperationError> {
+        let root_pid = self.root_pid;
+        self.by_perm_id_mut(&root_pid)
     }
 
     pub(crate) fn root_pid(&self) -> PermanentId {

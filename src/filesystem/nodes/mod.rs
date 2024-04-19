@@ -29,8 +29,8 @@ pub(crate) use node_name::{NodeName, NodeNameError};
 use futures::{AsyncWrite, AsyncWriteExt};
 use parking_lot::MappedRwLockReadGuard;
 use std::collections::HashMap;
-use std::mem::size_of;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
+use std::mem::size_of;
 use winnow::binary::{le_i64, le_u32, le_u8};
 use winnow::stream::Offset;
 use winnow::token::take;
@@ -94,11 +94,24 @@ impl Node {
     /// writing the filesystem out to disk. This comes with a small memory penalty if some
     /// non-encoding process attempts to access a large number of node CIDs but that seems like an
     /// unlikely use case.
-    pub async fn cid(&self) -> Result<Cid, OperationError> {
-        let encoded = self.encoded().await.map_err(|_| {
-            OperationError::InternalCorruption(self.id, "failed to encode node for CID")
-        })?;
+    pub async fn cid<T: NodeContext>(&mut self, context: T) -> Result<Cid, OperationError> {
+        let id = self.id;
+        let encoded = self
+            .encoded(context)
+            .await
+            .map_err(|_| OperationError::InternalCorruption(id, "failed to encode node for CID"))?;
         Ok(Cid::try_from(&encoded[..Cid::size()]).expect("Cid size is constant"))
+    }
+
+    pub fn cid_no_compute(&self) -> Option<Cid> {
+        self.encoded_cache
+            .get()
+            .map(|readguard| {
+                let mut data = [0u8; 32];
+                data.copy_from_slice(&readguard[..32]);
+                data
+            })
+            .map(Cid::from)
     }
 
     /// Returns the unix timestamp (in milliseconds precision) of when the node was created.
@@ -119,13 +132,30 @@ impl Node {
         &mut self.inner
     }
 
-    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
+    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send, T: NodeContext>(
+        &mut self,
+        writer: &mut W,
+        context: T,
+    ) -> std::io::Result<usize> {
+        let encoded = self.encoded(context).await?;
+        let mut written_bytes = 0;
+
+        writer.write_all(&encoded).await?;
+        written_bytes += encoded.len();
+
+        Ok(written_bytes)
+    }
+
+    pub(crate) async fn encode_no_compute<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
     ) -> std::io::Result<usize> {
-        let encoded = self.encoded().await?;
-        let mut written_bytes = 0;
+        let encoded = self.encoded_cache.get().ok_or(std::io::Error::new(
+            StdErrorKind::NotFound,
+            "implies incorrect encoding order",
+        ))?;
 
+        let mut written_bytes = 0;
 
         writer.write_all(&encoded).await?;
         written_bytes += encoded.len();
@@ -349,10 +379,16 @@ impl Node {
         old_value
     }
 
-    async fn encoded<'a>(&'a self) -> std::io::Result<MappedRwLockReadGuard<'a, [u8]>> {
+    async fn encoded<'a, T: NodeContext>(
+        &'a mut self,
+        context: T,
+    ) -> std::io::Result<MappedRwLockReadGuard<'a, [u8]>> {
         let cached = self.encoded_cache.get();
         match cached {
-            None => Ok(self.encoded_cache.set(self.compute_encoding().await?)),
+            None => {
+                self.inner.update_children_size(context);
+                Ok(self.encoded_cache.set(self.compute_encoding().await?))
+            }
             Some(inner) => Ok(inner),
         }
     }
@@ -419,7 +455,6 @@ impl Node {
         // Set CID
         let cid = calculate_cid(&node_data[36..]);
         node_data[0..32].copy_from_slice(cid.as_bytes());
-        
 
         Ok(node_data)
     }

@@ -31,6 +31,8 @@ use crate::codec::*;
 
 use crate::filesystem::nodes::{Node, NodeBuilderError};
 
+use self::drive_context::DriveContext;
+
 /// The core entry point of the library, a `Drive` is the means through which the BanyanFS
 /// filesystem's public or private data is accessed. Initial creation of a new drive requires a
 /// [`SigningKey`] to be provided to [`Drive::initialize_private`]. It is up to the consumer of the
@@ -225,8 +227,10 @@ impl Drive {
     pub async fn root_cid(&self) -> Result<Cid, DriveError> {
         let inner_read = self.inner.read().await;
 
-        let root_node = inner_read.root_node()?;
-        let root_cid = root_node.cid().await?;
+        let root_cid = inner_read
+            .root_node()?
+            .cid_no_compute()
+            .expect("Encode order should make this available");
 
         Ok(root_cid)
     }
