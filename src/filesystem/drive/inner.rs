@@ -153,7 +153,7 @@ impl InnerDrive {
                 .by_perm_id(&node_pid)
                 .map_err(|_| std_io_err("missing node PID"))?;
 
-            node.encode_no_compute(&mut node_buffer).await?;
+            node.encode(&mut node_buffer, DRIVE_CONTEXT).await?;
 
             if let Some(data_cids) = node.data_cids() {
                 for cid in data_cids {
