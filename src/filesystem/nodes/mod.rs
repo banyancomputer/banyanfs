@@ -43,6 +43,25 @@ pub(crate) type NodeId = usize;
 /// The core structure that represents a node within the filesystem. This structure represents a
 /// wrapper over any kind of filesystem metadata, structure, or associated data contained within
 /// the BanyanFS structures.
+///
+/// ## Identifiers
+///
+/// When a [`Node`] instance needs to by referenced there are three relevant identifiers to be
+/// aware of. When loaded into memory a [`Node`] will have a runtime identifier type of
+/// [`NodeId`]. A [`NodeId`] should not be used for any reference that may need to persist
+/// between serializations.
+///
+/// A specific version of a Node should be referenced by the content identifier ([`Cid`]), this
+/// takes into account all of the attributes that make up the filesystem entry. This is most useful
+/// for permanently referencing the current version of a child node. Changes to children will also
+/// trigger changes in the CID. The [`Cid`] of the root directory of a filesystem is used as the
+/// version reference for the entire filesystem.
+///
+/// The final identifier is the [`PermanentId`]. This is used for journal entries, histories,
+/// handles on other filesystem instances, parents of a current node, etc. When the handle you're
+/// using needs to persist across versions this is the ID you'll want to use. Most internal
+/// filesystem operations are based on these identifiers only finalizing the content into a [`Cid`]
+/// when requested or when the filesystem is being written to permanent storage.
 pub struct Node {
     id: NodeId,
     parent_id: Option<PermanentId>,
@@ -216,6 +235,9 @@ impl Node {
         Ok(written_bytes)
     }
 
+    /// Retrieves the in-memory identifier for this node instance, initialized when the node is
+    /// first created from the drive that loads it. This is a volatile ID. See the
+    /// [identifiers](#identifiers) section for detailed usage recommendations.
     pub fn id(&self) -> NodeId {
         self.id
     }
@@ -360,7 +382,7 @@ impl Node {
             permanent_id,
             owner_id,
 
-            cid: CidCache::empty(),
+            cid: CidCache::from(cid),
             vector_clock,
 
             created_at,
