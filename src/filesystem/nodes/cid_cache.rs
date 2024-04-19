@@ -57,6 +57,18 @@ impl CidCache {
     }
 }
 
+impl From<Cid> for CidCache {
+    fn from(cid: Cid) -> Self {
+        let inner = InnerCidCache {
+            dirty: false,
+            cid: Some(cid),
+            encoded: None,
+        };
+
+        Self(Arc::new(RwLock::new(inner)))
+    }
+}
+
 struct InnerCidCache {
     dirty: bool,
     cid: Option<Cid>,
