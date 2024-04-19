@@ -7,6 +7,7 @@ use super::{
 };
 use crate::filesystem::nodes::NodeContext;
 
+#[derive(Clone)]
 pub(crate) struct DriveContext {
     inner: Arc<RwLock<InnerDrive>>,
 }

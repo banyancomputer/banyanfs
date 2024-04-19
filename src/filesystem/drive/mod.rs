@@ -92,6 +92,7 @@ impl Drive {
         written_bytes += PublicSettings::new(false, true).encode(writer).await?;
 
         let meta_key = MetaKey::generate(rng);
+        let drive_context = DriveContext::new(self.inner.clone());
         let inner_read = self.inner.read().await;
 
         let key_list = inner_read.access().sorted_actor_settings();
@@ -123,7 +124,12 @@ impl Drive {
                 .ok_or(StdError::new(StdErrorKind::Other, "no filesystem key"))?
                 .clone();
 
-            written_bytes += inner_read.encode(&mut *fs_buffer).await?;
+            written_bytes += self
+                .inner
+                .write()
+                .await
+                .encode(&mut *fs_buffer, drive_context)
+                .await?;
 
             // todo: use filesystem ID and encoded length bytes as AD
             let buffer_length = fs_buffer.encrypted_len() as u64;

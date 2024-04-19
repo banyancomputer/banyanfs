@@ -7,14 +7,12 @@ use tracing::instrument;
 use winnow::binary::le_u64;
 use winnow::Parser;
 
+use super::OperationError;
 use crate::codec::crypto::AccessKey;
 use crate::codec::*;
 use crate::filesystem::drive::DriveAccess;
-use crate::filesystem::nodes::{Node, NodeBuilder, NodeId};
+use crate::filesystem::nodes::{Node, NodeBuilder, NodeContext, NodeId};
 use crate::utils::std_io_err;
-
-use super::drive_context::DriveContext;
-use super::OperationError;
 
 pub(crate) struct InnerDrive {
     access: DriveAccess,
@@ -98,9 +96,10 @@ impl InnerDrive {
         Ok(permanent_id)
     }
 
-    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
+    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send, T: NodeContext + Clone>(
+        &mut self,
         writer: &mut W,
+        context: T,
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
 
@@ -150,10 +149,10 @@ impl InnerDrive {
 
         while let Some(node_pid) = ordered_ids.pop() {
             let node = self
-                .by_perm_id(&node_pid)
+                .by_perm_id_mut(&node_pid)
                 .map_err(|_| std_io_err("missing node PID"))?;
 
-            node.encode(&mut node_buffer, DRIVE_CONTEXT).await?;
+            node.encode(&mut node_buffer, context.clone()).await?;
 
             if let Some(data_cids) = node.data_cids() {
                 for cid in data_cids {
@@ -372,7 +371,8 @@ impl InnerDrive {
 #[cfg(test)]
 mod test {
     use self::crypto::Fingerprint;
-    use crate::prelude::NodeName;
+    use crate::{filesystem::drive::drive_context::DriveContext, prelude::NodeName};
+    use async_std::sync::RwLock;
     use rand::rngs::OsRng;
     use winnow::Partial;
 
@@ -427,11 +427,16 @@ mod test {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn encode_to_parse() {
         let inner = interesting_inner().await;
-        let access = inner.access();
+        let access = inner.access().clone();
         let journal = inner.journal_start();
         let mut encoded = Vec::new();
+        let drive = std::sync::Arc::new(RwLock::new(inner));
 
-        let encoding_res = inner.encode(&mut encoded).await;
+        let encoding_res = drive
+            .write()
+            .await
+            .encode(&mut encoded, DriveContext::new(drive.clone()))
+            .await;
         assert!(encoding_res.is_ok());
 
         let (remaining, parsed) = InnerDrive::parse(
@@ -442,8 +447,8 @@ mod test {
         )
         .unwrap();
         assert!(remaining.is_empty());
-        assert_eq!(inner.nodes.len(), parsed.nodes.len());
-        for (_, node) in inner.nodes {
+        assert_eq!(drive.read().await.nodes.len(), parsed.nodes.len());
+        for (_, node) in &drive.read().await.nodes {
             let pid = node.permanent_id();
             assert!(parsed.lookup_internal_id(&pid).is_ok())
         }
