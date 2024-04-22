@@ -59,6 +59,7 @@ impl NodeBuilder {
             metadata: self.metadata,
         };
 
+        tracing::info!("node_built");
         Ok(new_node)
     }
 

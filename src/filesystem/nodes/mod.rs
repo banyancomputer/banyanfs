@@ -18,7 +18,6 @@ mod node_context;
 mod node_data;
 mod node_name;
 
-use async_std::sync::{RwLock, RwLockReadGuard};
 pub(crate) use encoded_cache::EncodedCache;
 pub(crate) use node_builder::{NodeBuilder, NodeBuilderError};
 
@@ -32,9 +31,12 @@ use std::collections::HashMap;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 use std::mem::size_of;
 use winnow::binary::{le_i64, le_u32, le_u8};
-use winnow::stream::Offset;
+use winnow::error::ContextError;
+use winnow::error::ErrMode;
+use winnow::stream::{Offset, Stream as _};
 use winnow::token::take;
 use winnow::Parser;
+use winnow::Partial;
 
 use crate::codec::crypto::AccessKey;
 use crate::codec::filesystem::NodeKind;
@@ -42,6 +44,8 @@ use crate::codec::meta::{ActorId, Cid, PermanentId};
 use crate::codec::{ParserResult, Stream, VectorClock};
 use crate::filesystem::drive::OperationError;
 use crate::utils::calculate_cid;
+use winnow::binary::u8;
+use winnow::combinator::repeat;
 
 pub(crate) type NodeId = usize;
 
@@ -241,15 +245,16 @@ impl Node {
         self.parent_id
     }
 
-    #[tracing::instrument(skip(input))]
+    #[tracing::instrument(skip(input_stream))]
     pub(crate) fn parse<'a>(
-        input: Stream<'a>,
+        mut input_stream: Stream<'a>,
         allocated_id: NodeId,
         data_key: Option<&AccessKey>,
     ) -> ParserResult<'a, Self> {
         tracing::trace!(allocated_id, "begin");
+        let start = input_stream.checkpoint();
 
-        let (input, cid) = Cid::parse(input)?;
+        let (input, cid) = Cid::parse(input_stream)?;
         let (input, node_data_len) = le_u32.parse_peek(input)?;
 
         let node_data_start = input;
@@ -306,13 +311,21 @@ impl Node {
             "consumed to little or too much during parse based on the node's data_len field"
         );
 
+        input_stream.reset(&start);
+        let (input_stream, encoded): (_, Vec<u8>) = repeat(
+            node_data_len as usize + Cid::size() + size_of::<u32>(),
+            u8::<Partial<&[u8]>, ErrMode<ContextError<Partial<&[u8]>>>>,
+        )
+        .parse_peek(input_stream)
+        .unwrap();
+
         let node = Self {
             id: allocated_id,
             parent_id,
             permanent_id,
             owner_id,
 
-            encoded_cache: EncodedCache::empty(),
+            encoded_cache: EncodedCache::new(encoded),
             vector_clock,
 
             created_at,
@@ -324,7 +337,7 @@ impl Node {
             inner,
         };
 
-        Ok((input, node))
+        Ok((input_stream, node))
     }
 
     #[allow(dead_code)]

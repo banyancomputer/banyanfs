@@ -13,6 +13,10 @@ use parking_lot::{
 pub(crate) struct EncodedCache(Arc<RwLock<Option<Vec<u8>>>>);
 
 impl EncodedCache {
+    pub(crate) fn new(encoded: Vec<u8>) -> Self {
+        Self(Arc::new(RwLock::new(Some(encoded))))
+    }
+
     pub(crate) fn empty() -> Self {
         Self(Arc::new(RwLock::new(None)))
     }

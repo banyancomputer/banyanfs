@@ -5,8 +5,16 @@ fn main() {}
 #[tokio::main]
 async fn main() {
     use tokio_util::compat::TokioAsyncReadCompatExt;
+    let subscriber = tracing_subscriber::FmtSubscriber::builder()
+        .with_level(true)
+        .with_span_events(FmtSpan::ACTIVE)
+        .with_max_level(LevelFilter::from_level(Level::TRACE))
+        .finish();
+    tracing::subscriber::set_global_default(subscriber).unwrap();
 
     use banyanfs::prelude::*;
+    use tracing::{level_filters::LevelFilter, Level};
+    use tracing_subscriber::fmt::format::FmtSpan;
 
     println!("running banyanfs {}", full_version());
 
@@ -78,6 +86,7 @@ async fn main() {
         .unwrap()
         .compat();
 
+    tracing::info!("about to encode");
     drive
         .encode(&mut rng, ContentOptions::everything(), &mut fh)
         .await
@@ -90,6 +99,7 @@ async fn main() {
 
     let drive_loader = DriveLoader::new(&signing_key);
 
+    tracing::info!("about to load");
     let loaded_drive = drive_loader.from_reader(&mut fh).await.unwrap();
     let mut root_dir = loaded_drive.root().await.unwrap();
 

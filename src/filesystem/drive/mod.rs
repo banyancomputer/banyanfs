@@ -64,6 +64,7 @@ pub struct Drive {
 }
 
 impl Drive {
+    #[tracing::instrument(skip(self, rng, writer))]
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         rng: &mut impl CryptoRngCore,
@@ -77,6 +78,7 @@ impl Drive {
         }
     }
 
+    #[tracing::instrument(skip(self, rng, writer))]
     async fn encode_private<W: AsyncWrite + Unpin + Send>(
         &self,
         rng: &mut impl CryptoRngCore,
@@ -123,6 +125,7 @@ impl Drive {
                 .and_then(|pk| pk.filesystem.as_ref())
                 .ok_or(StdError::new(StdErrorKind::Other, "no filesystem key"))?
                 .clone();
+            drop(inner_read);
 
             written_bytes += self
                 .inner

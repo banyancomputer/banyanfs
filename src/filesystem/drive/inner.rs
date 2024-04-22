@@ -96,11 +96,13 @@ impl InnerDrive {
         Ok(permanent_id)
     }
 
+    #[tracing::instrument(skip(self, writer, context))]
     pub(crate) async fn encode<W: AsyncWrite + Unpin + Send, T: NodeContext + Clone>(
         &mut self,
         writer: &mut W,
         context: T,
     ) -> std::io::Result<usize> {
+        tracing::info!("Entering inner::enode()");
         let mut written_bytes = 0;
 
         // We want to walk the nodes in a consistent depth first order to provide a total ordering
@@ -147,7 +149,9 @@ impl InnerDrive {
         let mut referenced_data_cids = HashSet::new();
         let mut node_buffer = Vec::new();
 
+        tracing::info!("about to start encoding nodes");
         while let Some(node_pid) = ordered_ids.pop() {
+            tracing::info!("encoding node {:?}", node_pid);
             let node = self
                 .by_perm_id_mut(&node_pid)
                 .map_err(|_| std_io_err("missing node PID"))?;
