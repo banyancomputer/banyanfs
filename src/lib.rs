@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+//#![warn(missing_docs)]
 #![doc = include_str!("../README.md")]
 
 #[cfg(feature = "banyan-api")]

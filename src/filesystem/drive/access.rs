@@ -26,12 +26,16 @@ pub struct DriveAccess {
 }
 
 impl DriveAccess {
+    /// Queries the drive instance for the specific actor's current permissions. If the actor
+    /// doesn't have any permissions this will return None.
     pub fn actor_access(&self, actor_id: ActorId) -> Option<AccessMask> {
         self.actor_settings
             .get(&actor_id)
             .map(|settings| settings.access())
     }
 
+    /// Get the full [`VerifyingKey`] for a specific actor. If the actor doesn't have access to the
+    /// drive this will return None.
     pub fn actor_key(&self, actor_id: &ActorId) -> Option<VerifyingKey> {
         self.actor_settings
             .get(actor_id)
@@ -69,6 +73,35 @@ impl DriveAccess {
         Ok(written_bytes)
     }
 
+    /// Checks whether the requested actor is able to read and write access to the data referenced
+    /// inside the filesystem. This requires both access to see the structure of the filesystem
+    /// (which will provide access to file specific key) and the data key (which will decrypt the
+    /// file specific key, providing the key for the relevant data blocks).
+    ///
+    /// Historical keys will always return false.
+    ///
+    /// With access to the complete data block store, this effectively is access to the entirety of
+    /// the current version of the filesystem. File and directory specific permissions may cause
+    /// other actors to reject changes when they don't appropriate write permissions.
+    pub fn has_data_access(&self, actor_id: ActorId) -> bool {
+        let access = match self.actor_settings.get(&actor_id) {
+            Some(s) => s.access(),
+            None => return false,
+        };
+
+        if access.is_historical() {
+            return false;
+        }
+
+        access.has_filesystem_key() && access.has_data_key()
+    }
+
+    /// Checks whether the requested actor is able to read the the structure of the filesystem and
+    /// the associated attributes with its contents. This does not check whether the actor is able
+    /// to read data from files or associated data nodes. To check whether the Actor can read data
+    /// as well you'll want to use [`DriveAccess::has_data_access`].
+    ///
+    /// Historical keys will always return false.
     pub fn has_read_access(&self, actor_id: ActorId) -> bool {
         let access = match self.actor_settings.get(&actor_id) {
             Some(s) => s.access(),
@@ -173,13 +206,20 @@ impl DriveAccess {
         self.permission_keys.as_ref()
     }
 
+    /// Adds a new actor (via their [`VerifyingKey`]) to the drive with the provided permissions.
     pub fn register_actor(&mut self, key: VerifyingKey, access_mask: AccessMask) {
+        // todo(sstelfox): need to add a check that prevents a user from granting privileges beyond
+        // their own (they couldn't anyways as they don't have access to the symmetric keys
+        // necessary, but we should prevent invalid construction in general).
         let actor_id = key.actor_id();
         let actor_settings = ActorSettings::new(key, access_mask);
 
         self.actor_settings.insert(actor_id, actor_settings);
     }
 
+    /// Returns all the available [`ActorSettings`] associated with the current drive instance
+    /// sorted by each configured actor's [`KeyId`]. This is used for consistency in encoding
+    /// drives and provides a level of obscurity over the order that keys were added to a drive.
     pub fn sorted_actor_settings(&self) -> Vec<&ActorSettings> {
         let mut actors: Vec<(&ActorId, &ActorSettings)> = self.actor_settings.iter().collect();
         actors.sort_by(|(aid, _), (bid, _)| aid.key_id().cmp(&bid.key_id()));

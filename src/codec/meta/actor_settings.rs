@@ -1,7 +1,4 @@
-use futures::io::{AsyncWrite, AsyncWriteExt};
-use winnow::binary::le_u8;
-use winnow::token::take;
-use winnow::Parser;
+use futures::io::AsyncWrite;
 
 use crate::codec::crypto::VerifyingKey;
 use crate::codec::header::AccessMask;
