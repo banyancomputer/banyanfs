@@ -170,15 +170,8 @@ impl Drive {
 
         trace!(?actor_id, ?filesystem_id, "drive::initializing_private");
 
-        let access_mask = AccessMaskBuilder::full_access()
-            .set_owner()
-            .set_protected()
-            .build();
-
-        let mut access = DriveAccess::init_private(rng, actor_id);
-        access.register_actor(verifying_key, access_mask);
-
-        let inner = InnerDrive::initialize(rng, actor_id, access.clone())?;
+        let access = DriveAccess::initialize(rng, verifying_key);
+        let inner = InnerDrive::initialize(rng, actor_id, access)?;
 
         let drive = Self {
             current_key,

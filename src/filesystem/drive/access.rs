@@ -5,7 +5,7 @@ use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::AsyncWrite;
 
 use crate::codec::crypto::{KeyId, PermissionKeys, SigningKey, VerifyingKey};
-use crate::codec::header::AccessMask;
+use crate::codec::header::{AccessMask, AccessMaskBuilder};
 use crate::codec::{ActorId, ActorSettings, ParserResult, Stream};
 
 /// [`DriveAccess`] maintains a mapping of [`ActorId`] instances to their available permissions
@@ -115,6 +115,19 @@ impl DriveAccess {
         access.has_filesystem_key()
     }
 
+    /// Checks whether the current user is allowed to make changes to the filesystem. While many
+    /// operations that only change filesystem metadata could be written without data access, we
+    /// currently don't handle that edge case and its of limited use (you would be able to rename
+    /// or change permissions but not read or write file data).
+    ///
+    /// This only checks whether the user has access to the cryptographic keys needed to perform
+    /// this kind of operation and does not guarantee other particpants operating on the filesystem
+    /// will accept the updates from others. Individual file and directories have permissions that
+    /// determine which actors are allowed to make more fine grained changes and are implemented
+    /// when consuming journal streams (which will reject delta updates from actor's that ignore
+    /// file or directory permissions).
+    ///
+    /// Historical keys will always return false.
     pub fn has_write_access(&self, actor_id: ActorId) -> bool {
         let access = match self.actor_settings.get(&actor_id) {
             Some(s) => s.access(),
@@ -128,15 +141,27 @@ impl DriveAccess {
         access.has_filesystem_key() && access.has_data_key() && access.has_maintenance_key()
     }
 
-    pub fn init_private(rng: &mut impl CryptoRngCore, current_actor_id: ActorId) -> Self {
-        Self {
+    /// Create a new DriveAccess instance with the provided actor as an owner with full
+    /// permissions.
+    pub(crate) fn initialize(rng: &mut impl CryptoRngCore, verifying_key: VerifyingKey) -> Self {
+        let current_actor_id = verifying_key.actor_id();
+
+        let mut access = Self {
             current_actor_id,
             actor_settings: HashMap::new(),
             permission_keys: Some(PermissionKeys::generate(rng)),
-        }
+        };
+
+        let access_mask = AccessMaskBuilder::full_access()
+            .set_owner()
+            .set_protected()
+            .build();
+        access.register_actor(verifying_key, access_mask);
+
+        access
     }
 
-    pub fn new(current_actor_id: ActorId) -> Self {
+    pub(crate) fn new(current_actor_id: ActorId) -> Self {
         Self {
             current_actor_id,
             actor_settings: HashMap::new(),
