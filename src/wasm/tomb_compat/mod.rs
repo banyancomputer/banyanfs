@@ -29,9 +29,9 @@ use zeroize::Zeroize;
 // This section should effectively be a consumer of the normal API calls, nothing in here should
 // have a namespace conflict with anything exported in the prelude, as nothing in this or any
 // submodules should be exported in the prelude.
-use crate::prelude::*;
-
+use crate::api::platform;
 use crate::api::platform::{DriveKind, StorageClass};
+use crate::prelude::*;
 use crate::wasm::data_storage::{initialize_store, WasmDataStorage};
 
 use models::TombBucket;
@@ -61,15 +61,19 @@ impl TombCompat {
 #[wasm_bindgen(js_class = TombWasm)]
 impl TombCompat {
     // new transfered and checked
-    #[wasm_bindgen(js_name = approveDeviceApiKey)]
-    pub async fn approve_device_api_key(&mut self, public_pem: String) -> BanyanFsResult<()> {
+    #[wasm_bindgen(js_name = createUserKey)]
+    pub async fn create_user_key(
+        &mut self,
+        name: String,
+        public_pem: String,
+    ) -> BanyanFsResult<()> {
         let public_key = match VerifyingKey::from_spki(&public_pem) {
             Ok(key) => key,
             Err(err) => return Err(format!("failed to load public key: {err}").into()),
         };
 
         tracing::warn!("using broken API key registration, needs to be reworked");
-        platform::account::register_api_key(&self.client, &public_key).await?;
+        platform::account::create_user_key(&self.client, &name, &public_key).await?;
 
         Ok(())
     }
@@ -132,7 +136,7 @@ impl TombCompat {
             return Err("only interactive buckets are allowed to be created".into());
         }
 
-        let id = platform::drives::create(&self.client, &name, &public_key.fingerprint()).await?;
+        let id = platform::drives::create(&self.client, &name, &public_key).await?;
 
         let wasm_bucket = WasmBucket(TombBucket::from_components(id.clone(), name, sc, dk));
         let wasm_mount =
