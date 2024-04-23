@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use async_std::sync::RwLock;
 use futures::{AsyncRead, AsyncReadExt};
-use reqwest::header;
 use tracing::{debug, trace};
 use winnow::binary::le_u64;
 use winnow::error::ErrMode;

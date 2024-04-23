@@ -10,13 +10,22 @@ use crate::api::storage_host::auth::{register_grant, who_am_i};
 use crate::codec::crypto::SigningKey;
 
 #[derive(Default)]
-pub(crate) struct StorageHostAuth {
+pub struct StorageHostAuth {
     active_tokens: HashMap<Url, ExpiringToken>,
     authenticated_storage_hosts: HashSet<Url>,
     pending_grants: HashMap<Url, String>,
 }
 
 impl StorageHostAuth {
+    /// Reset any cached authentication details stored for the provided Url. Expects the base URL
+    /// of the specific storage host. The URL is both case and scheme specific.
+    pub fn clear_authentication(&mut self, storage_host_url: &Url) {
+        self.active_tokens.remove(storage_host_url);
+        self.authenticated_storage_hosts.remove(storage_host_url);
+    }
+
+    /// Attempts to retrieve a current Bearer token if one is available. If there is a token an its
+    /// expired or the storage host is unknown, this will return None.
     fn current_token(&self, storage_host_url: &Url) -> Option<String> {
         self.active_tokens
             .get(storage_host_url)
@@ -127,11 +136,6 @@ impl StorageHostAuth {
         // that is about to happen, but its unlikely to succeed.
         tracing::warn!("falling back to storage host token that may not be authorized for access");
         Ok(new_token)
-    }
-
-    pub(crate) fn clear_authentication(&mut self, storage_host_url: &Url) {
-        self.active_tokens.remove(storage_host_url);
-        self.authenticated_storage_hosts.remove(storage_host_url);
     }
 
     pub fn record_grant(&mut self, storage_host_url: Url, grant: String) {

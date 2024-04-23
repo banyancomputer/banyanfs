@@ -2,7 +2,6 @@ use std::cmp::PartialEq;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-use async_std::sync::RwLock;
 use futures::{AsyncWrite, AsyncWriteExt};
 use winnow::{binary::le_u64, Parser};
 
