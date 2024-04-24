@@ -67,12 +67,13 @@ impl InnerDrive {
         let mut node_id = node_id;
         self.dirty_nodes.push(node_id);
         while let Some(parent_perm_id) = self.by_id(node_id)?.parent_id() {
-            if parent_perm_id.as_bytes() != PermanentId::zeroes().as_bytes() {
-                node_id = self.lookup_internal_id(&parent_perm_id)?;
-                self.dirty_nodes.push(node_id);
-            } else {
+            // Setting a node's parent ID to its own ID is done in some operations such as moving a node
+            // to temporarily orphan it. Obviously this would cause an infinite loop and needs to be caught
+            if parent_perm_id == self.by_id(node_id)?.permanent_id() {
                 break;
             }
+            node_id = self.lookup_internal_id(&parent_perm_id)?;
+            self.dirty_nodes.push(node_id);
         }
         Ok(())
     }

@@ -57,7 +57,6 @@ async fn main() {
         // get a fresh handle on the root directory
         let mut root = drive.root().await.unwrap();
         let _contents = root.ls(&["testing", "paths", "deeply"]).await.unwrap();
-        tracing::trace!("{:?}", root.ls(&[]).await.unwrap());
 
         root.write(
             &mut rng,
@@ -73,7 +72,6 @@ async fn main() {
             .await
             .unwrap();
 
-        tracing::trace!("{:?}", root.ls(&[]).await.unwrap());
         assert_eq!(file_data, b"a filesystem was born");
     }
 

@@ -284,7 +284,7 @@ impl DirectoryHandle {
 
         let src_name = src_node.name();
         let src_perm_id = src_node.permanent_id();
-        src_node.set_parent_id(PermanentId::zeroes()).await;
+        src_node.set_parent_id(src_perm_id).await;
 
         let src_parent_node = inner_write.by_perm_id_mut(&src_parent_perm_id)?;
         match src_parent_node.data_mut().await {
