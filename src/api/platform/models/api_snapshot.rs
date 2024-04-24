@@ -1,12 +1,16 @@
 use serde::{Deserialize, Serialize};
 
-use crate::api::platform::ApiMetadataId;
+use crate::api::platform::{ApiDriveId, ApiMetadataId};
 
 // note(sstelfox): This api should return a bucket ID as well
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct ApiSnapshot {
     id: ApiSnapshotId,
+
+    #[serde(rename = "bucket_id")]
+    drive_id: ApiDriveId,
+
     metadata_id: ApiMetadataId,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -18,6 +22,10 @@ pub struct ApiSnapshot {
 impl ApiSnapshot {
     pub fn created_at(&self) -> i64 {
         self.created_at
+    }
+
+    pub fn drive_id(&self) -> ApiDriveId {
+        self.drive_id.clone()
     }
 
     pub fn id(&self) -> ApiSnapshotId {
