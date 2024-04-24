@@ -2,10 +2,10 @@ use std::ops::Deref;
 
 use chacha20poly1305::XNonce as ChaChaNonce;
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
 use rand::Rng;
+use winnow::{token::take, Parser};
 
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 const NONCE_LENGTH: usize = 24;
 
@@ -29,8 +29,8 @@ impl Nonce {
         Self(rng.gen())
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
-        let (remaining, slice) = take(NONCE_LENGTH)(input)?;
+    pub fn parse(input: Stream) -> ParserResult<Self> {
+        let (remaining, slice) = take(NONCE_LENGTH).parse_peek(input)?;
 
         let mut bytes = [0u8; NONCE_LENGTH];
         bytes.copy_from_slice(slice);
@@ -63,9 +63,9 @@ mod tests {
     async fn test_nonce_parsing() {
         let mut rng = rand::thread_rng();
         let input: [u8; NONCE_LENGTH + 4] = rng.gen();
-        let (remaining, nonce) = Nonce::parse(&input).unwrap();
+        let (remaining, nonce) = Nonce::parse(Stream::new(&input)).unwrap();
 
-        assert_eq!(remaining, &input[NONCE_LENGTH..]);
+        assert_eq!(remaining.into_inner(), &input[NONCE_LENGTH..]);
         assert_eq!(nonce.as_bytes(), &input[..NONCE_LENGTH]);
     }
 
@@ -73,7 +73,7 @@ mod tests {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_nonce_parsing_stream_too_short() {
         let input = [0u8; NONCE_LENGTH - 1];
-        let result = Nonce::parse(&input);
-        assert!(matches!(result, Err(nom::Err::Incomplete(_))));
+        let result = Nonce::parse(Stream::new(&input));
+        assert!(matches!(result, Err(winnow::error::ErrMode::Incomplete(_))));
     }
 }

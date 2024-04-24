@@ -1,7 +1,7 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
+use winnow::{token::take, Parser};
 
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 const ECC_PRESENT_BIT: u8 = 0x02;
 
@@ -46,13 +46,16 @@ impl PublicSettings {
         }
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
-        let (input, settings_byte) = take(1u8)(input)?;
+    pub fn parse(input: Stream) -> ParserResult<Self> {
+        let (input, settings_byte) = take(1u8).parse_peek(input)?;
         let settings_byte = settings_byte[0];
 
         if cfg!(feature = "strict") && (settings_byte & RESERVED_BITS) != 0 {
-            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-            return Err(nom::Err::Failure(err));
+            let err = winnow::error::ParserError::from_error_kind(
+                &input,
+                winnow::error::ErrorKind::Verify,
+            );
+            return Err(winnow::error::ErrMode::Cut(err));
         }
 
         let ecc_present = (settings_byte & ECC_PRESENT_BIT) == ECC_PRESENT_BIT;
@@ -84,7 +87,7 @@ mod tests {
         // Manually construct a correct header according to the RFC
         let source = vec![0b0000_0000];
 
-        let (remaining, parsed) = PublicSettings::parse(&source).unwrap();
+        let (remaining, parsed) = PublicSettings::parse(Stream::new(&source)).unwrap();
         assert!(remaining.is_empty());
         assert_eq!(
             parsed,
@@ -105,7 +108,7 @@ mod tests {
         // Manually construct a correct header according to the RFC
         let source = vec![0b0000_0010];
 
-        let (remaining, parsed) = PublicSettings::parse(&source).unwrap();
+        let (remaining, parsed) = PublicSettings::parse(Stream::new(&source)).unwrap();
         assert!(remaining.is_empty());
         assert_eq!(
             parsed,
@@ -126,7 +129,7 @@ mod tests {
         // Manually construct a correct header according to the RFC
         let source = vec![0b0000_0001];
 
-        let (remaining, parsed) = PublicSettings::parse(&source).unwrap();
+        let (remaining, parsed) = PublicSettings::parse(Stream::new(&source)).unwrap();
         assert!(remaining.is_empty());
         assert_eq!(
             parsed,
@@ -147,7 +150,7 @@ mod tests {
         // Manually construct a correct header according to the RFC
         let source = vec![0b0000_0011];
 
-        let (remaining, parsed) = PublicSettings::parse(&source).unwrap();
+        let (remaining, parsed) = PublicSettings::parse(Stream::new(&source)).unwrap();
         assert!(remaining.is_empty());
         assert_eq!(
             parsed,
@@ -167,6 +170,6 @@ mod tests {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_invalid() {
         let source = vec![0b0100_0000];
-        assert!(PublicSettings::parse(&source).is_err());
+        assert!(PublicSettings::parse(Stream::new(&source)).is_err());
     }
 }

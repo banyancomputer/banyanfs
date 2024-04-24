@@ -1,7 +1,7 @@
 use futures::io::AsyncWrite;
 
 use crate::codec::meta::{Cid, VectorClock};
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 #[derive(Clone, Debug)]
 pub struct JournalCheckpoint {
@@ -29,7 +29,7 @@ impl JournalCheckpoint {
         }
     }
 
-    pub fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, merkle_root_cid) = Cid::parse(input)?;
         let (input, vector) = VectorClock::parse(input)?;
 

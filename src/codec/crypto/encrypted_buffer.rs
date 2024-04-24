@@ -2,11 +2,12 @@ use std::ops::{Deref, DerefMut};
 
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
-use nom::bytes::streaming::take;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
+use winnow::token::take;
+use winnow::Parser;
 
 use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce};
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 #[derive(Default)]
 pub(crate) struct EncryptedBuffer {
@@ -15,21 +16,24 @@ pub(crate) struct EncryptedBuffer {
 
 impl EncryptedBuffer {
     pub fn parse_and_decrypt<'a>(
-        input: &'a [u8],
+        input: Stream<'a>,
         payload_size: usize,
         authenticated_data: &[u8],
         access_key: &AccessKey,
     ) -> ParserResult<'a, Vec<u8>> {
         let (input, nonce) = Nonce::parse(input)?;
-        let (input, encrypted_slice) = take(payload_size)(input)?;
+        let (input, encrypted_slice) = take(payload_size).parse_peek(input)?;
         let (input, tag) = AuthenticationTag::parse(input)?;
 
         let mut buffer = encrypted_slice.to_vec();
 
         if let Err(err) = access_key.decrypt_buffer(nonce, authenticated_data, &mut buffer, tag) {
             tracing::error!("failed to decrypt permission buffer: {err}");
-            let err = nom::error::make_error(input, nom::error::ErrorKind::Verify);
-            return Err(nom::Err::Failure(err));
+            let err = winnow::error::ParserError::from_error_kind(
+                &input,
+                winnow::error::ErrorKind::Verify,
+            );
+            return Err(winnow::error::ErrMode::Cut(err));
         }
 
         Ok((input, buffer))

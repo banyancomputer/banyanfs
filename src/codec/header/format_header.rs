@@ -1,7 +1,6 @@
 use futures::AsyncWrite;
-use nom::sequence::tuple;
 
-use crate::codec::ParserResult;
+use crate::codec::{ParserResult, Stream};
 
 use crate::codec::header::{IdentityHeader, PublicSettings};
 use crate::codec::FilesystemId;
@@ -29,14 +28,10 @@ impl FormatHeader {
         Ok(written_bytes)
     }
 
-    pub fn parse_with_magic(input: &[u8]) -> ParserResult<Self> {
-        let mut header_parser = tuple((
-            IdentityHeader::parse_with_magic,
-            FilesystemId::parse,
-            PublicSettings::parse,
-        ));
-
-        let (input, (_, filesystem_id, settings)) = header_parser(input)?;
+    pub fn parse_with_magic(input: Stream) -> ParserResult<Self> {
+        let (input, _) = IdentityHeader::parse_with_magic(input)?;
+        let (input, filesystem_id) = FilesystemId::parse(input)?;
+        let (input, settings) = PublicSettings::parse(input)?;
 
         let header = FormatHeader {
             ecc_present: settings.ecc_present(),
@@ -74,7 +69,7 @@ mod tests {
         // A public non-ECC header
         source.extend(&[0x00]);
 
-        let (remaining, parsed) = FormatHeader::parse_with_magic(&source).unwrap();
+        let (remaining, parsed) = FormatHeader::parse_with_magic(Stream::new(&source)).unwrap();
         assert!(remaining.is_empty());
         assert_eq!(
             parsed,

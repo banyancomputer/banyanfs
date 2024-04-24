@@ -2,9 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
-use nom::number::streaming::le_u64;
 use slab::Slab;
 use tracing::instrument;
+use winnow::binary::le_u64;
+use winnow::Parser;
 
 use crate::codec::crypto::AccessKey;
 use crate::codec::*;
@@ -239,7 +240,7 @@ impl InnerDrive {
     }
 
     pub(crate) fn parse<'a>(
-        input: &'a [u8],
+        input: Stream<'a>,
         drive_access: DriveAccess,
         journal_start: JournalCheckpoint,
         data_key: Option<&AccessKey>,
@@ -249,7 +250,7 @@ impl InnerDrive {
         let (remaining, root_pid) = PermanentId::parse(input)?;
         let bytes_read = input.len() - remaining.len();
 
-        let (remaining, node_count) = le_u64(remaining)?;
+        let (remaining, node_count) = le_u64.parse_peek(remaining)?;
         let bytes_read = input.len() - remaining.len() - bytes_read;
         tracing::trace!(node_count, bytes_read,
             remaining_len = ?remaining.len(),
@@ -289,9 +290,9 @@ impl InnerDrive {
         }
 
         let root_node_id = *permanent_id_map.get(&root_pid).ok_or_else(|| {
-            nom::Err::Failure(nom::error::make_error(
-                node_input,
-                nom::error::ErrorKind::Verify,
+            winnow::error::ErrMode::Cut(winnow::error::ParserError::from_error_kind(
+                &node_input,
+                winnow::error::ErrorKind::Verify,
             ))
         })?;
 
@@ -368,6 +369,7 @@ mod test {
     use super::*;
     use crate::filesystem::NodeName;
     use rand::rngs::OsRng;
+    use winnow::Partial;
 
     #[test]
     fn initialize() {
@@ -425,8 +427,13 @@ mod test {
         let encoding_res = inner.encode(&mut encoded).await;
         assert!(encoding_res.is_ok());
 
-        let (remaining, parsed) =
-            InnerDrive::parse(encoded.as_slice(), access.to_owned(), journal, None).unwrap();
+        let (remaining, parsed) = InnerDrive::parse(
+            Partial::new(encoded.as_slice()),
+            access.to_owned(),
+            journal,
+            None,
+        )
+        .unwrap();
         assert!(remaining.is_empty());
         assert_eq!(inner.nodes.len(), parsed.nodes.len());
         for (_, node) in inner.nodes {

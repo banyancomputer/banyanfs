@@ -2,10 +2,11 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use futures::{AsyncWrite, AsyncWriteExt};
-use nom::number::streaming::{le_u16, le_u64};
+use winnow::binary::{le_u16, le_u64};
+use winnow::Parser;
 
 use crate::codec::filesystem::{DirectoryPermissions, FilePermissions};
-use crate::codec::{Cid, ParserResult, PermanentId};
+use crate::codec::{Cid, ParserResult, PermanentId, Stream};
 use crate::filesystem::nodes::{NodeKind, NodeName};
 use crate::filesystem::FileContent;
 
@@ -129,7 +130,7 @@ impl NodeData {
         }
     }
 
-    pub(crate) fn parse(input: &[u8]) -> ParserResult<Self> {
+    pub(crate) fn parse(input: Stream) -> ParserResult<Self> {
         let (input, kind) = NodeKind::parse(input)?;
 
         match kind {
@@ -149,7 +150,7 @@ impl NodeData {
             //NodeKind::AssociatedData => {}
             NodeKind::Directory => {
                 let (data_buf, permissions) = DirectoryPermissions::parse(input)?;
-                let (data_buf, children_size) = le_u64(data_buf)?;
+                let (data_buf, children_size) = le_u64.parse_peek(data_buf)?;
                 let (data_buf, children) = parse_children(data_buf)?;
 
                 let data = NodeData::Directory {
@@ -281,8 +282,8 @@ async fn encode_children<W: AsyncWrite + Unpin + Send>(
     Ok(written_bytes)
 }
 
-fn parse_children(input: &[u8]) -> ParserResult<HashMap<NodeName, PermanentId>> {
-    let (data_buf, children_count) = le_u16(input)?;
+fn parse_children(input: Stream) -> ParserResult<HashMap<NodeName, PermanentId>> {
+    let (data_buf, children_count) = le_u16.parse_peek(input)?;
 
     let mut children = HashMap::new();
     let mut child_buf = data_buf;
