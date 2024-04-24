@@ -238,18 +238,3 @@ pub enum DriveError {
     #[error("operation on the drive failed due to an error: {0}")]
     OperationError(#[from] OperationError),
 }
-
-#[cfg(test)]
-mod tests {
-
-    #[cfg(target_arch = "wasm32")]
-    use wasm_bindgen_test::wasm_bindgen_test;
-
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
-    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
-    #[ignore]
-    async fn test_drive_lifecycle() {
-        let mut _rng = crate::utils::crypto_rng();
-        todo!()
-    }
-}
