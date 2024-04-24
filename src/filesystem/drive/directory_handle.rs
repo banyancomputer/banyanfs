@@ -67,10 +67,14 @@ impl DirectoryHandle {
         unimplemented!()
     }
 
+    /// Changes the owner of the target node. Currently not implemented
     pub async fn chown(&self, _path: &[&str], _owner: ActorId) -> Result<(), OperationError> {
         unimplemented!()
     }
 
+    /// Retrieve the contents of a directory as a Vector of `DirectoryEntry`
+    /// Passed in path is relative to the current working directory, if path is empty it will
+    /// list contents of current working directory
     #[instrument(level = Level::DEBUG, skip(self))]
     pub async fn ls(&self, path: &[&str]) -> Result<Vec<DirectoryEntry>, OperationError> {
         trace!(cwd_id = self.cwd_id, "directory::ls");
@@ -157,7 +161,7 @@ impl DirectoryHandle {
         let new_permanent_id = inner_write
             .create_node(rng, owner_id, parent_permanent_id, build_node)
             .await?;
-
+        inner_write.clean_drive().await;
         Ok(new_permanent_id)
     }
 
@@ -280,7 +284,7 @@ impl DirectoryHandle {
 
         let src_name = src_node.name();
         let src_perm_id = src_node.permanent_id();
-        src_node.set_parent_id(src_perm_id).await;
+        src_node.set_parent_id(PermanentId::zeroes()).await;
 
         let src_parent_node = inner_write.by_perm_id_mut(&src_parent_perm_id)?;
         match src_parent_node.data_mut().await {
@@ -321,6 +325,8 @@ impl DirectoryHandle {
         tgt_node.set_parent_id(dst_parent_perm_id).await;
         tgt_node.set_name(new_dst_name).await;
 
+        inner_write.clean_drive().await;
+
         Ok(())
     }
 
@@ -349,6 +355,7 @@ impl DirectoryHandle {
             }
         }
 
+        inner_write.clean_drive().await;
         Ok(())
     }
 
@@ -651,6 +658,7 @@ impl DirectoryHandle {
             FileContent::encrypted(locked_key, plaintext_cid, data_size, content_references);
         *node_data = NodeData::full_file(file_content);
 
+        inner_write.clean_drive().await;
         Ok(())
     }
 }

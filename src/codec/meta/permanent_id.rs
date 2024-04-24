@@ -15,6 +15,10 @@ impl PermanentId {
         &self.0
     }
 
+    pub fn zeroes() -> Self {
+        Self([0; PERMANENT_ID_SIZE])
+    }
+
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,

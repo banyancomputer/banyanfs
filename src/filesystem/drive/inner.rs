@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
+use itertools::Itertools;
 use slab::Slab;
 use tracing::instrument;
 use winnow::binary::le_u64;
@@ -11,7 +12,10 @@ use crate::codec::crypto::AccessKey;
 use crate::codec::*;
 use crate::filesystem::drive::DriveAccess;
 use crate::filesystem::nodes::{Node, NodeBuilder, NodeId};
+use crate::prelude::nodes::NodeData;
 use crate::utils::std_io_err;
+
+use self::filesystem::NodeKind;
 
 use super::OperationError;
 
@@ -23,13 +27,19 @@ pub(crate) struct InnerDrive {
 
     nodes: Slab<Node>,
     permanent_id_map: HashMap<PermanentId, NodeId>,
+
+    dirty_nodes: Vec<NodeId>,
 }
 
 impl InnerDrive {
+    /// Returns an immutable reference to the [`DriveAccess`] of this [`InnerDrive`]
     pub(crate) fn access(&self) -> &DriveAccess {
         &self.access
     }
 
+    /// Returns an immutable reference to the contained [`Node`] with the passed in [`NodeId`]
+    /// # Error
+    /// - [`OperationError::InternalCorruption`] if the [`NodeId`] is not found
     pub(crate) fn by_id(&self, node_id: NodeId) -> Result<&Node, OperationError> {
         self.nodes
             .get(node_id)
@@ -39,7 +49,11 @@ impl InnerDrive {
             ))
     }
 
+    /// Returns an mutable reference to the contained [`Node`] with the passed in [`NodeId`]
+    /// # Error
+    /// - [`OperationError::InternalCorruption`] if the [`NodeId`] is not found
     pub(crate) fn by_id_mut(&mut self, node_id: NodeId) -> Result<&mut Node, OperationError> {
+        self.mark_ancestors_dirty(node_id)?;
         self.nodes
             .get_mut(node_id)
             .ok_or(OperationError::InternalCorruption(
@@ -48,11 +62,74 @@ impl InnerDrive {
             ))
     }
 
+    fn mark_ancestors_dirty(&mut self, node_id: NodeId) -> Result<(), OperationError> {
+        // Changes have happened in `node_id` walk up its parents to root marking nodes as dirty
+        let mut node_id = node_id;
+        self.dirty_nodes.push(node_id);
+        while let Some(parent_perm_id) = self.by_id(node_id)?.parent_id() {
+            if parent_perm_id.as_bytes() != PermanentId::zeroes().as_bytes() {
+                node_id = self.lookup_internal_id(&parent_perm_id)?;
+                self.dirty_nodes.push(node_id);
+            } else {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) async fn clean_drive(&mut self) {
+        // Not being able to find a Node should not necessarily be an error
+        // Should this take PermanentId? Can the node Id shift out from underneath me?
+
+        // Take the dirty node list (replacing it with an empty Vec)
+        // Reverse the list and then remove duplicates
+        // (can't use Vec::dedup since that only removes consecutive duplicates)
+        let mut dirty = std::mem::take(&mut self.dirty_nodes);
+        dirty.reverse();
+        let mut node_list: Vec<_> = dirty.iter().unique().collect();
+
+        // Pop elements from back and update their size and Cid
+        while let Some(node_id) = node_list.pop() {
+            // Because of the work above we can assume that once we get here all of a nodes children are up to date
+            // The only error we can get from [`Self::by_id_mut`] is [`OperationError::InternalCorruption()`]
+            // which indicates the `NodeId` was not found. In our case that is fine, it just means it was deleted and
+            // we don't have to do anything
+            let node = self.by_id(*node_id);
+            if node.is_err() {
+                continue;
+            }
+            let node = node.unwrap();
+
+            // Update Size:
+            let new_children_size = node.ordered_child_pids().iter().fold(0, |acc, child_pid| {
+                let child_size = self.by_perm_id(child_pid).ok().map_or(0, Node::size);
+                acc + child_size
+            });
+            let node_mut = self.by_id_mut(*node_id).unwrap();
+            match node_mut.data_mut().await {
+                NodeData::Directory { children_size, .. } => *children_size = new_children_size,
+                NodeData::File {
+                    associated_size, ..
+                } => *associated_size = new_children_size,
+                _ => {}
+            }
+            // Update Cid:
+        }
+    }
+
+    /// Returns an immutable reference to the contained [`Node`] with the passed in [`PermanentId`]
+    /// # Error
+    /// - [`OperationError::MissingPermanentId`] if the [`PermanentId`] is not found
+    /// - [`OperationError::InternalCorruption`] if the [`PermanentId`] maps to a [`NodeId`] that no longer exists
     pub(crate) fn by_perm_id(&self, permanent_id: &PermanentId) -> Result<&Node, OperationError> {
         let node_id = self.lookup_internal_id(permanent_id)?;
         self.by_id(node_id)
     }
 
+    /// Returns an mutable reference to the contained [`Node`] with the passed in [`PermanentId`]
+    /// # Error
+    /// - [`OperationError::MissingPermanentId`] if the [`PermanentId`] is not found
+    /// - [`OperationError::InternalCorruption`] if the [`PermanentId`] maps to a [`NodeId`] that no longer exists
     pub(crate) fn by_perm_id_mut(
         &mut self,
         permanent_id: &PermanentId,
@@ -61,6 +138,7 @@ impl InnerDrive {
         self.by_id_mut(node_id)
     }
 
+    /// Creates a new [`Node`] using the passed in builder function
     #[instrument(level = tracing::Level::TRACE, skip(self, rng, build_node))]
     pub(crate) async fn create_node<'a, R, F, Fut>(
         &mut self,
@@ -216,6 +294,7 @@ impl InnerDrive {
             nodes,
             root_pid,
             permanent_id_map,
+            dirty_nodes: Vec::new(),
         };
 
         Ok(inner)
@@ -235,6 +314,7 @@ impl InnerDrive {
             .ok_or(OperationError::MissingPermanentId(*perm_id))
     }
 
+    /// Returns an iterator of immutable references to every [`Node`] in this [`InnerDrive`]
     pub(crate) fn node_iter(&self) -> impl Iterator<Item = &Node> {
         self.nodes.iter().map(|(_, node)| node)
     }
@@ -304,6 +384,7 @@ impl InnerDrive {
             root_pid,
             nodes,
             permanent_id_map,
+            dirty_nodes: Vec::new(),
         };
 
         Ok((node_input, inner_drive))
