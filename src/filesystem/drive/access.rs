@@ -255,3 +255,29 @@ impl DriveAccess {
         KeyId::size() + ActorSettings::size() + PermissionKeys::size()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::*;
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_empty_encoding_produces_error() {
+        todo!()
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_single_encoding_roundtrips() {
+        todo!()
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_multiple_encoding_roundtrips() {
+        todo!()
+    }
+}

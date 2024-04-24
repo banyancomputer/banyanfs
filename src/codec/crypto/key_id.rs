@@ -14,6 +14,10 @@ use crate::codec::{ParserResult, Stream};
 /// that have access to a particular key will be able to find themselves quickly among all the
 /// associated keys, but can be denied being present as the u16 space is highly likely to have
 /// collisions matching keys other than your own.
+///
+/// For canonical identification of a particular public/private key pair a [`Fingerprint`] or
+/// [`ActorId`] is more appropriate but should be restricted in their use to only private or
+/// encrypted references when the Drive itself is encrypted.
 #[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
 pub struct KeyId(u16);
 

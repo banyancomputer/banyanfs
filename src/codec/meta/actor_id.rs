@@ -24,8 +24,8 @@ impl ActorId {
     }
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
-        let (remaining, fingerprint) = Fingerprint::parse(input)?;
-        Ok((remaining, ActorId(fingerprint)))
+        Fingerprint::parse(input)
+            .map(|(remaining, fingerprint)| (remaining, Self::from(fingerprint)))
     }
 
     pub const fn size() -> usize {
