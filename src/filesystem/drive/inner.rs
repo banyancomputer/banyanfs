@@ -78,7 +78,7 @@ impl InnerDrive {
         Ok(())
     }
 
-    pub(crate) async fn clean_drive(&mut self) {
+    pub(crate) async fn clean_drive(&mut self) -> Result<(), OperationError> {
         // Not being able to find a Node should not necessarily be an error
         // Should this take PermanentId? Can the node Id shift out from underneath me?
 
@@ -95,11 +95,7 @@ impl InnerDrive {
             // The only error we can get from [`Self::by_id_mut`] is [`OperationError::InternalCorruption()`]
             // which indicates the `NodeId` was not found. In our case that is fine, it just means it was deleted and
             // we don't have to do anything
-            let node = self.by_id(*node_id);
-            if node.is_err() {
-                continue;
-            }
-            let node = node.unwrap();
+            let node = self.by_id(*node_id)?;
 
             // Update Size:
             let new_children_size = node.ordered_child_pids().iter().fold(0, |acc, child_pid| {
@@ -116,6 +112,7 @@ impl InnerDrive {
             }
             // Update Cid:
         }
+        Ok(())
     }
 
     /// Returns an immutable reference to the contained [`Node`] with the passed in [`PermanentId`]

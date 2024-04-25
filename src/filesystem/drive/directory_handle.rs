@@ -161,7 +161,7 @@ impl DirectoryHandle {
         let new_permanent_id = inner_write
             .create_node(rng, owner_id, parent_permanent_id, build_node)
             .await?;
-        inner_write.clean_drive().await;
+        inner_write.clean_drive().await?;
         Ok(new_permanent_id)
     }
 
@@ -325,7 +325,7 @@ impl DirectoryHandle {
         tgt_node.set_parent_id(dst_parent_perm_id).await;
         tgt_node.set_name(new_dst_name).await;
 
-        inner_write.clean_drive().await;
+        inner_write.clean_drive().await?;
 
         Ok(())
     }
@@ -355,7 +355,7 @@ impl DirectoryHandle {
             }
         }
 
-        inner_write.clean_drive().await;
+        inner_write.clean_drive().await?;
         Ok(())
     }
 
@@ -658,7 +658,7 @@ impl DirectoryHandle {
             FileContent::encrypted(locked_key, plaintext_cid, data_size, content_references);
         *node_data = NodeData::full_file(file_content);
 
-        inner_write.clean_drive().await;
+        inner_write.clean_drive().await?;
         Ok(())
     }
 }
