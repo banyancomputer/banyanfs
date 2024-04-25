@@ -13,7 +13,6 @@ use crate::filesystem::FileContent;
 pub enum NodeData {
     File {
         permissions: FilePermissions,
-        associated_size: u64,
         associated_data: HashMap<NodeName, PermanentId>,
         content: FileContent,
     },
@@ -79,14 +78,10 @@ impl NodeData {
             }
             NodeData::File {
                 permissions,
-                associated_size,
                 associated_data,
                 content,
             } => {
                 written_bytes += permissions.encode(writer).await?;
-                let associated_bytes = associated_size.to_le_bytes();
-                writer.write_all(&associated_bytes).await?;
-                written_bytes += associated_bytes.len();
                 written_bytes += encode_children(associated_data, writer).await?;
                 written_bytes += content.encode(writer).await?;
 
@@ -141,13 +136,11 @@ impl NodeData {
         match kind {
             NodeKind::File => {
                 let (data_buf, permissions) = FilePermissions::parse(input)?;
-                let (data_buf, associated_size) = le_u64.parse_peek(data_buf)?;
                 let (data_buf, associated_data) = parse_children(data_buf)?;
                 let (data_buf, content) = FileContent::parse(data_buf)?;
 
                 let data = NodeData::File {
                     permissions,
-                    associated_size,
                     associated_data,
                     content,
                 };
@@ -231,7 +224,6 @@ impl NodeData {
             }
             NodeData::File {
                 associated_data,
-                associated_size,
                 content,
                 ..
             } => {
@@ -241,7 +233,7 @@ impl NodeData {
                     .iter()
                     .fold(0, |acc, (name, _)| acc + name.size() + PermanentId::size());
 
-                (base_size + associated_map_size) as u64 + content.size() + associated_size
+                (base_size + associated_map_size) as u64 + content.size()
             }
         }
     }
@@ -249,7 +241,6 @@ impl NodeData {
     pub(crate) fn full_file(content: FileContent) -> Self {
         Self::File {
             permissions: FilePermissions::default(),
-            associated_size: 0,
             associated_data: HashMap::new(),
             content,
         }
@@ -258,7 +249,6 @@ impl NodeData {
     pub(crate) fn stub_file(data_size: u64) -> Self {
         Self::File {
             permissions: FilePermissions::default(),
-            associated_size: 0,
             associated_data: HashMap::new(),
             content: FileContent::Stub { data_size },
         }

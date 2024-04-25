@@ -14,8 +14,6 @@ use crate::filesystem::nodes::{Node, NodeBuilder, NodeId};
 use crate::prelude::nodes::NodeData;
 use crate::utils::std_io_err;
 
-use self::filesystem::NodeKind;
-
 use super::OperationError;
 
 pub(crate) struct InnerDrive {
@@ -103,9 +101,6 @@ impl InnerDrive {
             let node_mut = self.by_id_mut(node_id).unwrap();
             match node_mut.data_mut().await {
                 NodeData::Directory { children_size, .. } => *children_size = new_children_size,
-                NodeData::File {
-                    associated_size, ..
-                } => *associated_size = new_children_size,
                 _ => {}
             }
             // Update Cid:
