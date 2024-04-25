@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
-use itertools::Itertools;
 use slab::Slab;
 use tracing::instrument;
 use winnow::binary::le_u64;
@@ -79,27 +78,29 @@ impl InnerDrive {
     }
 
     pub(crate) async fn clean_drive(&mut self) -> Result<(), OperationError> {
-        // Not being able to find a Node should not necessarily be an error
-        // Should this take PermanentId? Can the node Id shift out from underneath me?
-
         // Take the dirty node list (replacing it with an empty Vec)
-        // Reverse the list and then remove duplicates
-        // (can't use Vec::dedup since that only removes consecutive duplicates)
         let mut dirty = std::mem::take(&mut self.dirty_nodes);
-        dirty.reverse();
-        let mut node_list: Vec<_> = dirty.iter().unique().collect();
+
+        // Popping from back push NodeIds into `node_list`. Only pushing if the list does
+        // not already contain that nodeId.
+        let mut node_list = Vec::new();
+        while let Some(node_id) = dirty.pop() {
+            if !node_list.contains(&node_id) {
+                node_list.push(node_id);
+            }
+        }
 
         // Pop elements from back and update their size and Cid
         while let Some(node_id) = node_list.pop() {
             // Because of the work above we can assume that once we get here all of a nodes children are up to date
-            let node = self.by_id(*node_id)?;
+            let node = self.by_id(node_id)?;
 
             // Update Size:
             let new_children_size = node.ordered_child_pids().iter().fold(0, |acc, child_pid| {
                 let child_size = self.by_perm_id(child_pid).ok().map_or(0, Node::size);
                 acc + child_size
             });
-            let node_mut = self.by_id_mut(*node_id).unwrap();
+            let node_mut = self.by_id_mut(node_id).unwrap();
             match node_mut.data_mut().await {
                 NodeData::Directory { children_size, .. } => *children_size = new_children_size,
                 NodeData::File {
