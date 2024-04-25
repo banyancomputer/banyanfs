@@ -403,13 +403,12 @@ mod tests {
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
-    #[ignore]
     async fn test_single_encoding_roundtrips() {
         let mut rng = crate::utils::crypto_rng();
         let key = SigningKey::generate(&mut rng);
         let verifying_key = key.verifying_key();
 
-        let mut access = DriveAccess::initialize(&mut rng, verifying_key);
+        let access = DriveAccess::initialize(&mut rng, verifying_key);
 
         let mut buffer = Vec::new();
         access.encode(&mut rng, &mut buffer).await.unwrap();
@@ -430,6 +429,12 @@ mod tests {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     #[ignore]
+    async fn test_multiple_actor_encoding_roundtrips() {
+        todo!()
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_initial_key_has_correct_privileges() {
         let mut rng = crate::utils::crypto_rng();
         let key = SigningKey::generate(&mut rng);
@@ -448,9 +453,18 @@ mod tests {
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
-    #[ignore]
-    async fn test_last_owner_cant_be_removed() {
-        todo!()
+    async fn test_cant_remove_self() {
+        let mut rng = crate::utils::crypto_rng();
+        let key = SigningKey::generate(&mut rng);
+        let verifying_key = key.verifying_key();
+
+        let actor_id = verifying_key.actor_id();
+        let mut access = DriveAccess::initialize(&mut rng, verifying_key);
+
+        assert!(matches!(
+            access.remove_actor(&actor_id).unwrap_err(),
+            DriveAccessError::SelfProtected
+        ));
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
@@ -469,8 +483,25 @@ mod tests {
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
-    #[ignore]
-    async fn test_multiple_encoding_roundtrips() {
-        todo!()
+    async fn test_register_basic_actor() {
+        let mut rng = crate::utils::crypto_rng();
+        let actor1_key = SigningKey::generate(&mut rng);
+        let actor1_verifying_key = actor1_key.verifying_key();
+
+        let actor1_id = actor1_verifying_key.actor_id();
+        let mut access = DriveAccess::initialize(&mut rng, actor1_verifying_key);
+
+        let actor2_key = SigningKey::generate(&mut rng);
+        let actor2_verifying_key = actor2_key.verifying_key();
+        let actor2_id = actor2_verifying_key.actor_id();
+        let actor2_access_mask = AccessMaskBuilder::full_access().build();
+
+        access.register_actor(actor2_verifying_key, actor2_access_mask);
+
+        // Original actor should still have access
+        assert!(access.has_write_access(&actor1_id));
+
+        // New actor should have access
+        assert!(access.has_write_access(&actor2_id));
     }
 }
