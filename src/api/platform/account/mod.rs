@@ -17,6 +17,8 @@ use crate::api::client::{ApiClient, ApiError};
 use crate::api::platform::ApiKeyId;
 use crate::codec::crypto::VerifyingKey;
 
+use super::ApiUserKeyAccess;
+
 pub async fn current_usage(client: &ApiClient) -> Result<CurrentUsageResponse, ApiError> {
     client.platform_request_full(CurrentUsage).await
 }
@@ -54,6 +56,9 @@ pub async fn create_user_key(
 }
 
 /// Provide the client with a list of User Keys that should be visible to them
-pub async fn user_key_access(client: &ApiClient) -> Result<UserKeyAccessResponse, ApiError> {
-    client.platform_request_full(UserKeyAccess).await
+pub async fn user_key_access(client: &ApiClient) -> Result<Vec<ApiUserKeyAccess>, ApiError> {
+    client
+        .platform_request_full(UserKeyAccess)
+        .await
+        .map(|response| response.0)
 }

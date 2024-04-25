@@ -8,11 +8,8 @@ use crate::api::{
 
 pub(crate) struct UserKeyAccess;
 
-type BucketId = String;
 #[derive(Deserialize)]
-pub struct UserKeyAccessResponse {
-    key_access: Vec<ApiUserKeyAccess>,
-}
+pub struct UserKeyAccessResponse(pub(crate) Vec<ApiUserKeyAccess>);
 
 #[async_trait]
 impl ApiRequest for UserKeyAccess {

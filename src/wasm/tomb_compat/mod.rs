@@ -8,6 +8,8 @@ mod wasm_mount;
 mod wasm_node_metadata;
 mod wasm_shared_file;
 mod wasm_snapshot;
+mod wasm_user_key;
+mod wasm_user_key_access;
 
 pub use wasm_bucket::WasmBucket;
 pub use wasm_bucket_key::WasmBucketAccess;
@@ -18,6 +20,8 @@ pub use wasm_mount::WasmMount;
 pub use wasm_node_metadata::WasmNodeMetadata;
 pub use wasm_shared_file::WasmSharedFile;
 pub use wasm_snapshot::WasmSnapshot;
+pub use wasm_user_key::WasmUserKey;
+pub use wasm_user_key_access::WasmUserKeyAccess;
 
 use std::str::FromStr;
 use std::sync::Arc;
@@ -79,9 +83,12 @@ impl TombCompat {
     }
 
     #[wasm_bindgen(js_name = userKeyAccess)]
-    pub async fn user_key_access(&mut self) -> BanyanFsResult<()> {
-        platform::account::user_key_access(&self.client).await?;
-        Ok(())
+    pub async fn user_key_access(&mut self) -> BanyanFsResult<js_sys::Array> {
+        Ok(platform::account::user_key_access(&self.client)
+            .await?
+            .into_iter()
+            .map(|uka| JsValue::from(WasmUserKeyAccess(uka)))
+            .collect::<js_sys::Array>())
     }
 
     // appears to no longer be present, likely migrated to create_bucket_and_mount
