@@ -3,6 +3,8 @@ use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::AsyncWrite;
+use winnow::token::take;
+use winnow::Parser;
 
 use crate::codec::crypto::{KeyId, PermissionKeys, SigningKey, VerifyingKey};
 use crate::codec::header::{AccessMask, AccessMaskBuilder};
@@ -226,24 +228,13 @@ impl DriveAccess {
 
         let mut actor_settings = HashMap::new();
         let mut permission_keys = None;
-
         let mut buf_slice = input;
 
         for _ in 0..key_count {
-            let (i, key_id) = KeyId::parse(buf_slice).map_err(|_| {
-                winnow::error::ErrMode::Cut(winnow::error::ParserError::from_error_kind(
-                    &input,
-                    winnow::error::ErrorKind::Verify,
-                ))
-            })?;
+            let (i, key_id) = KeyId::parse(buf_slice)?;
             buf_slice = i;
 
-            let (i, settings) = ActorSettings::parse(buf_slice).map_err(|_| {
-                winnow::error::ErrMode::Cut(winnow::error::ParserError::from_error_kind(
-                    &input,
-                    winnow::error::ErrorKind::Verify,
-                ))
-            })?;
+            let (i, settings) = ActorSettings::parse(buf_slice)?;
             buf_slice = i;
 
             let verifying_key = settings.verifying_key();
@@ -251,14 +242,13 @@ impl DriveAccess {
             actor_settings.insert(actor_id, settings);
 
             if key_id == verifying_key.key_id() {
-                match PermissionKeys::parse(buf_slice, signing_key) {
-                    Ok((i, keys)) => {
-                        permission_keys = Some(keys);
-                        buf_slice = i;
-                        continue;
-                    }
-                    Err(err) => tracing::error!("failed to access permission keys: {err}"),
-                };
+                let (i, keys) = PermissionKeys::parse(buf_slice, signing_key)?;
+                permission_keys = Some(keys);
+                buf_slice = i;
+            } else {
+                todo!("need to store the encoded permission keys for re-encoding in case we don't have access to all of them");
+                //let (i, _) = take(PermissionKeys::size()).parse_peek(buf_slice)?;
+                //buf_slice = i;
             }
         }
 

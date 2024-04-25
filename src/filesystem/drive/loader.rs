@@ -158,21 +158,21 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                     "drive_loader::encrypted_header"
                 );
 
-                let mut header_stream = Stream::new(header_buffer.as_slice());
+                let hdr_stream = Stream::new(header_buffer.as_slice());
 
-                let (header_stream, drive_access) =
-                    DriveAccess::parse(header_stream, **key_count, self.signing_key)?;
+                let (hdr_stream, access) =
+                    DriveAccess::parse(hdr_stream, **key_count, self.signing_key)?;
                 trace!("drive_loader::encrypted_header::drive_access");
 
-                let (header_stream, content_options) = ContentOptions::parse(header_stream)?;
+                let (hdr_stream, content_options) = ContentOptions::parse(hdr_stream)?;
                 trace!("drive_loader::encrypted_header::content_options");
 
-                let (header_stream, journal_start) = JournalCheckpoint::parse(header_stream)?;
+                let (hdr_stream, journal_start) = JournalCheckpoint::parse(hdr_stream)?;
                 trace!("drive_loader::encrypted_header::journal_checkpoint");
 
-                debug_assert!(header_stream.is_empty());
+                debug_assert!(hdr_stream.is_empty());
 
-                self.drive_access = Some(drive_access);
+                self.drive_access = Some(access);
                 self.state = DriveLoaderState::PrivateContent(content_options, journal_start);
 
                 let bytes_read = buffer.len() - input.len();
