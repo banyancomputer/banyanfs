@@ -8,6 +8,7 @@ use create_user_key::CreateUserKey;
 use current_usage::{CurrentUsage, CurrentUsageResponse};
 use current_usage_limit::{CurrentUsageLimit, CurrentUsageLimitResponse};
 use get_storage_grant::{GetStorageGrant, GetStorageGrantResponse};
+use user_key_access::{UserKeyAccess, UserKeyAccessResponse};
 
 use url::Url;
 
@@ -52,5 +53,7 @@ pub async fn create_user_key(
     Ok(response.id().clone())
 }
 
-/// Provide the client with
-pub async fn list_user_key_access(client: &ApiClient) {}
+/// Provide the client with a list of User Keys that should be visible to them
+pub async fn user_key_access(client: &ApiClient) -> Result<UserKeyAccessResponse, ApiError> {
+    client.platform_request_full(UserKeyAccess).await
+}

@@ -78,6 +78,12 @@ impl TombCompat {
         Ok(())
     }
 
+    #[wasm_bindgen(js_name = userKeyAccess)]
+    pub async fn user_key_access(&mut self) -> BanyanFsResult<()> {
+        platform::account::user_key_access(&self.client).await?;
+        Ok(())
+    }
+
     // appears to no longer be present, likely migrated to create_bucket_and_mount
     //#[wasm_bindgen(js_name = createBucket)]
     //pub async fn create_bucket(

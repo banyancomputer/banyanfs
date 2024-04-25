@@ -6,20 +6,20 @@ use crate::api::{
     platform::ApiUserKeyAccess,
 };
 
-pub(crate) struct ListUserKeyAccess;
+pub(crate) struct UserKeyAccess;
 
 type BucketId = String;
 #[derive(Deserialize)]
-pub struct ListUserKeyAccessResponse {
+pub struct UserKeyAccessResponse {
     key_access: Vec<ApiUserKeyAccess>,
 }
 
 #[async_trait]
-impl ApiRequest for ListUserKeyAccess {
-    type Response = ListUserKeyAccessResponse;
+impl ApiRequest for UserKeyAccess {
+    type Response = UserKeyAccessResponse;
     fn path(&self) -> String {
         "/api/v1/auth/user_key_access".to_string()
     }
 }
 
-impl PlatformApiRequest for ListUserKeyAccess {}
+impl PlatformApiRequest for UserKeyAccess {}

@@ -4,7 +4,7 @@ use reqwest::{Method, RequestBuilder};
 use serde::Serialize;
 
 use crate::api::client::{ApiError, ApiRequest, PlatformApiRequest};
-use crate::api::platform::ApiKey;
+use crate::api::platform::ApiUserKey;
 use crate::codec::crypto::VerifyingKey;
 
 // todo(sstelfox): currently we support registering any key with permissions to the account, then
@@ -29,7 +29,7 @@ impl CreateUserKey {
 
 #[async_trait(?Send)]
 impl ApiRequest for CreateUserKey {
-    type Response = ApiKey;
+    type Response = ApiUserKey;
 
     const METHOD: Method = Method::POST;
 
