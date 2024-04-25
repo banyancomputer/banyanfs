@@ -92,9 +92,6 @@ impl InnerDrive {
         // Pop elements from back and update their size and Cid
         while let Some(node_id) = node_list.pop() {
             // Because of the work above we can assume that once we get here all of a nodes children are up to date
-            // The only error we can get from [`Self::by_id_mut`] is [`OperationError::InternalCorruption()`]
-            // which indicates the `NodeId` was not found. In our case that is fine, it just means it was deleted and
-            // we don't have to do anything
             let node = self.by_id(*node_id)?;
 
             // Update Size:
