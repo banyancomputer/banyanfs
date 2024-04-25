@@ -26,11 +26,26 @@ pub struct DriveAccess {
 }
 
 impl DriveAccess {
+    /// Similar to [`DriveAccess::actor_access`], this performs an additional check to reject
+    /// historical keys limiting queries to the common case of keys that should currently have some
+    /// level of access.
+    pub fn active_actor_access(&self, actor_id: &ActorId) -> Option<AccessMask> {
+        let access = self
+            .actor_settings
+            .get(actor_id)
+            .map(|settings| settings.access());
+
+        match access {
+            Some(a) if a.is_historical() => None,
+            _ => access,
+        }
+    }
+
     /// Queries the drive instance for the specific actor's current permissions. If the actor
     /// doesn't have any permissions this will return None.
-    pub fn actor_access(&self, actor_id: ActorId) -> Option<AccessMask> {
+    pub fn actor_access(&self, actor_id: &ActorId) -> Option<AccessMask> {
         self.actor_settings
-            .get(&actor_id)
+            .get(actor_id)
             .map(|settings| settings.access())
     }
 
@@ -41,6 +56,12 @@ impl DriveAccess {
             .get(actor_id)
             .map(|settings| settings.verifying_key())
             .clone()
+    }
+
+    /// A user is allowed to fork off a copy of a drive if they have read access to the data and
+    /// the filesystem. At the time, this is equivalent of [`DriveAccess::has_data_access`].
+    pub fn can_fork(&self, actor_id: &ActorId) -> bool {
+        self.has_data_access(actor_id)
     }
 
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
@@ -83,15 +104,11 @@ impl DriveAccess {
     /// With access to the complete data block store, this effectively is access to the entirety of
     /// the current version of the filesystem. File and directory specific permissions may cause
     /// other actors to reject changes when they don't appropriate write permissions.
-    pub fn has_data_access(&self, actor_id: ActorId) -> bool {
-        let access = match self.actor_settings.get(&actor_id) {
-            Some(s) => s.access(),
+    pub fn has_data_access(&self, actor_id: &ActorId) -> bool {
+        let access = match self.active_actor_access(&actor_id) {
+            Some(a) => a,
             None => return false,
         };
-
-        if access.is_historical() {
-            return false;
-        }
 
         access.has_filesystem_key() && access.has_data_key()
     }
@@ -102,15 +119,11 @@ impl DriveAccess {
     /// as well you'll want to use [`DriveAccess::has_data_access`].
     ///
     /// Historical keys will always return false.
-    pub fn has_read_access(&self, actor_id: ActorId) -> bool {
-        let access = match self.actor_settings.get(&actor_id) {
-            Some(s) => s.access(),
+    pub fn has_read_access(&self, actor_id: &ActorId) -> bool {
+        let access = match self.active_actor_access(&actor_id) {
+            Some(a) => a,
             None => return false,
         };
-
-        if access.is_historical() {
-            return false;
-        }
 
         access.has_filesystem_key()
     }
@@ -128,15 +141,11 @@ impl DriveAccess {
     /// file or directory permissions).
     ///
     /// Historical keys will always return false.
-    pub fn has_write_access(&self, actor_id: ActorId) -> bool {
-        let access = match self.actor_settings.get(&actor_id) {
-            Some(s) => s.access(),
+    pub fn has_write_access(&self, actor_id: &ActorId) -> bool {
+        let access = match self.active_actor_access(&actor_id) {
+            Some(a) => a,
             None => return false,
         };
-
-        if access.is_historical() {
-            return false;
-        }
 
         access.has_filesystem_key() && access.has_data_key() && access.has_maintenance_key()
     }
@@ -156,11 +165,43 @@ impl DriveAccess {
             .set_owner()
             .set_protected()
             .build();
+
         access.register_actor(verifying_key, access_mask);
 
         access
     }
 
+    /// Checks whether the actor is currently marked as an owner of the drive in the access
+    /// settings. Actors with this permission have a bit of in-built protection against certain
+    /// kinds of access changes and are allowed to bypass normal access checks on file and
+    /// directory permissions.
+    ///
+    /// The exception to this is any actor that has the historical flag marked on them. These are
+    /// actors that used to be an owner but have since had their access duly revoked by an
+    /// authorized user.
+    pub fn is_owner(&self, actor_id: &ActorId) -> bool {
+        match self.active_actor_access(actor_id) {
+            Some(a) => a.is_owner(),
+            None => return false,
+        }
+    }
+
+    /// Checks whether the actor is currently marked as protected. Changes to protected keys can
+    /// only be made by the actor that owns the key or owners. Deletion or marking as historical
+    /// needs to have its protected flag removed first even when the actor is an owner.
+    ///
+    /// It is invalid for a protected key to be marked as historical, but in the event that
+    /// internal state is represented, the protected flag will be ignored and this will return
+    /// false.
+    pub fn is_protected(&self, actor_id: &ActorId) -> bool {
+        match self.active_actor_access(actor_id) {
+            Some(a) => a.is_protected(),
+            None => return false,
+        }
+    }
+
+    // todo(sstelfox): remove this, we shouldn't allow the creation of this struct without a
+    // key even for tests.
     pub(crate) fn new(current_actor_id: ActorId) -> Self {
         Self {
             current_actor_id,
@@ -174,6 +215,15 @@ impl DriveAccess {
         key_count: u8,
         signing_key: &SigningKey,
     ) -> ParserResult<'a, Self> {
+        if key_count == 0 {
+            return Err(winnow::error::ErrMode::Cut(
+                winnow::error::ParserError::from_error_kind(
+                    &input,
+                    winnow::error::ErrorKind::Verify,
+                ),
+            ));
+        }
+
         let mut actor_settings = HashMap::new();
         let mut permission_keys = None;
 
@@ -236,10 +286,37 @@ impl DriveAccess {
         // todo(sstelfox): need to add a check that prevents a user from granting privileges beyond
         // their own (they couldn't anyways as they don't have access to the symmetric keys
         // necessary, but we should prevent invalid construction in general).
+        //
+        // todo(sstelfox): should produce an error if an actor is added twice
         let actor_id = key.actor_id();
         let actor_settings = ActorSettings::new(key, access_mask);
 
         self.actor_settings.insert(actor_id, actor_settings);
+    }
+
+    pub fn remove_actor(&mut self, actor_id: &ActorId) -> Result<(), &str> {
+        let permissions = self
+            .active_actor_access(&self.current_actor_id)
+            .ok_or("current actor doesn't have any permissions in the filesystem")?;
+
+        let target_actor = self
+            .actor_settings
+            .get_mut(actor_id)
+            .ok_or("unable to remove unknown actor")?;
+
+        if target_actor.access().is_protected() {
+            return Err("protected keys can't be removed");
+        }
+
+        if !(permissions.has_filesystem_key() && permissions.has_maintenance_key()) {
+            return Err("must be able to record changes to remove an actor");
+        }
+
+        if target_actor.access().is_owner() && !permissions.is_owner() {
+            return Err("only owners can remove owner keys");
+        }
+
+        todo!()
     }
 
     /// Returns all the available [`ActorSettings`] associated with the current drive instance
@@ -266,17 +343,75 @@ mod tests {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_empty_encoding_produces_error() {
-        todo!()
+        let mut rng = crate::utils::crypto_rng();
+        let current_actor_id = ActorId::arbitrary(&mut rng);
+
+        let empty_access = DriveAccess {
+            current_actor_id,
+            actor_settings: HashMap::new(),
+            permission_keys: None,
+        };
+
+        let mut buffer = Vec::new();
+        assert!(empty_access.encode(&mut rng, &mut buffer).await.is_err());
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    #[ignore]
     async fn test_single_encoding_roundtrips() {
+        let mut rng = crate::utils::crypto_rng();
+        let key = SigningKey::generate(&mut rng);
+        let verifying_key = key.verifying_key();
+
+        let mut access = DriveAccess::initialize(&mut rng, verifying_key);
+
         todo!()
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    #[ignore]
+    async fn test_initial_key_has_correct_privileges() {
+        let mut rng = crate::utils::crypto_rng();
+        let key = SigningKey::generate(&mut rng);
+        let verifying_key = key.verifying_key();
+
+        let actor_id = verifying_key.actor_id();
+        let mut access = DriveAccess::initialize(&mut rng, verifying_key);
+
+        assert!(access.has_read_access(&actor_id));
+        assert!(access.has_write_access(&actor_id));
+        assert!(access.has_data_access(&actor_id));
+
+        assert!(access.is_owner(&actor_id));
+        assert!(access.is_protected(&actor_id));
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    #[ignore]
+    async fn test_last_owner_cant_be_removed() {
+        todo!()
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    #[ignore]
+    async fn test_only_owner_can_remove_owner_keys() {
+        todo!()
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    #[ignore]
+    async fn test_protected_keys_cant_be_removed() {
+        todo!()
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    #[ignore]
     async fn test_multiple_encoding_roundtrips() {
         todo!()
     }

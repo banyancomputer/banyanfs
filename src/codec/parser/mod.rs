@@ -15,8 +15,7 @@ pub type Stream<'a> = Partial<&'a [u8]>;
 pub type ParserResult<'a, T> =
     winnow::IResult<Stream<'a>, T, winnow::error::ContextError<Stream<'a>>>;
 
-pub type CompleteParserResult<'a, T> =
-    winnow::IResult<&'a [u8], T, winnow::error::ContextError<&'a [u8]>>;
+pub type CompleteParserResult<'a, T> = winnow::PResult<&'a [u8], T>;
 
 #[cfg(not(debug_assertions))]
 pub type ParserResult<'a, T> = winnow::IResult<Stream<'a>, T>;

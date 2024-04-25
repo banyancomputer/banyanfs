@@ -375,7 +375,7 @@ impl DirectoryHandle {
 
         let inner_read = self.inner.read().await;
         let actor_id = self.current_key.actor_id();
-        if !inner_read.access().has_read_access(actor_id) {
+        if !inner_read.access().has_read_access(&actor_id) {
             return Err(OperationError::AccessDenied);
         }
         drop(inner_read);
@@ -482,7 +482,7 @@ impl DirectoryHandle {
 
         let inner_read = self.inner.read().await;
         let actor_id = self.current_key.actor_id();
-        if !inner_read.access().has_write_access(actor_id) {
+        if !inner_read.access().has_write_access(&actor_id) {
             return Err(OperationError::AccessDenied);
         }
 

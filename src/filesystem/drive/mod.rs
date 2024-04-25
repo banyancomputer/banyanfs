@@ -136,12 +136,12 @@ impl Drive {
         Ok(written_bytes)
     }
 
-    pub async fn has_read_access(&self, actor_id: ActorId) -> bool {
+    pub async fn has_read_access(&self, actor_id: &ActorId) -> bool {
         let inner = self.inner.read().await;
         inner.access().has_read_access(actor_id)
     }
 
-    pub async fn has_write_access(&self, actor_id: ActorId) -> bool {
+    pub async fn has_write_access(&self, actor_id: &ActorId) -> bool {
         let inner = self.inner.read().await;
         inner.access().has_write_access(actor_id)
     }

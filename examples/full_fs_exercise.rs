@@ -20,11 +20,11 @@ async fn main() {
 
     let drive = Drive::initialize_private(&mut rng, signing_key.clone()).unwrap();
     assert!(
-        drive.has_read_access(actor_id).await,
+        drive.has_read_access(&actor_id).await,
         "creation key to have read access"
     );
 
-    if drive.has_write_access(actor_id).await {
+    if drive.has_write_access(&actor_id).await {
         let mut root = drive.root().await.unwrap();
 
         root.mkdir(&mut rng, &["testing", "paths", "deeply", "@#($%*%)"], true)

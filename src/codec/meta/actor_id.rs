@@ -38,3 +38,16 @@ impl From<Fingerprint> for ActorId {
         Self(fingerprint)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use elliptic_curve::rand_core::CryptoRngCore;
+
+    use super::*;
+
+    impl ActorId {
+        pub(crate) fn arbitrary(rng: &mut impl CryptoRngCore) -> Self {
+            Self(Fingerprint::arbitrary(rng))
+        }
+    }
+}
