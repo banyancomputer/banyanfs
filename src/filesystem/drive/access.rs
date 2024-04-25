@@ -5,7 +5,7 @@ use futures::io::AsyncWrite;
 
 use crate::codec::crypto::{AccessKey, KeyId, SigningKey, VerifyingKey};
 use crate::codec::header::{AccessMask, AccessMaskBuilder};
-use crate::codec::{ActorId, ActorSettings, ParserResult, Stream};
+use crate::codec::{ActorId, ActorSettings, ActorSettingsError, ParserResult, Stream};
 
 /// [`DriveAccess`] maintains a mapping of [`ActorId`] instances to their available permissions
 /// within the drive itself. When loaded this holds on to copies of any of the general keys the
@@ -232,7 +232,8 @@ impl DriveAccess {
         let mut buf_slice = input;
 
         for _ in 0..key_count {
-            let (i, key_id) = KeyId::parse(buf_slice)?;
+            // todo(sstelfox): we don't need this anymore but its a breaking change to remove it
+            let (i, _key_id) = KeyId::parse(buf_slice)?;
             buf_slice = i;
 
             let (i, settings) = ActorSettings::parse(buf_slice)?;
@@ -350,10 +351,27 @@ impl DriveAccess {
         actors.into_iter().map(|(_, settings)| settings).collect()
     }
 
-    pub fn unlock_keys(&mut self, key: &SigningKey) -> Result<(), DriveAccessError> {
-        let actor_id = key.verifying_key().actor_id();
+    pub fn unlock_keys(&mut self, actor_key: &SigningKey) -> Result<(), DriveAccessError> {
+        let actor_id = actor_key.verifying_key().actor_id();
 
-        todo!()
+        let settings = self
+            .actor_settings
+            .get(&actor_id)
+            .ok_or(DriveAccessError::UnknownActorId(actor_id))?;
+
+        self.filesystem_key = settings
+            .filesystem_key(actor_key)
+            .map_err(DriveAccessError::UnlockFailed)?;
+
+        self.data_key = settings
+            .data_key(actor_key)
+            .map_err(DriveAccessError::UnlockFailed)?;
+
+        self.maintenance_key = settings
+            .maintenance_key(actor_key)
+            .map_err(DriveAccessError::UnlockFailed)?;
+
+        Ok(())
     }
 
     pub const fn size() -> usize {
@@ -373,7 +391,7 @@ pub enum DriveAccessError {
     UnknownActorId(ActorId),
 
     #[error("failed to unlock permission keys: {0}")]
-    UnlockFailed(String),
+    UnlockFailed(ActorSettingsError),
 }
 
 #[cfg(test)]

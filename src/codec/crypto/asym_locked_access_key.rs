@@ -31,6 +31,7 @@ impl AsymLockedAccessKey {
 
         Ok(written_bytes)
     }
+
     pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, (dh_exchange_key, nonce, raw_cipher_text, tag)) = (
             unpeek(VerifyingKey::parse),

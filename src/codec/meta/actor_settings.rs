@@ -3,7 +3,9 @@ use winnow::binary::le_u8;
 use winnow::token::take;
 use winnow::Parser;
 
-use crate::codec::crypto::{AsymLockedAccessKey, VerifyingKey};
+use crate::codec::crypto::{
+    AccessKey, AsymLockedAccessKey, AsymLockedAccessKeyError, SigningKey, VerifyingKey,
+};
 use crate::codec::header::AccessMask;
 use crate::codec::meta::{UserAgent, VectorClock};
 use crate::codec::{ParserResult, Stream};
@@ -28,6 +30,26 @@ impl ActorSettings {
         self.access_mask.clone()
     }
 
+    pub fn data_key(
+        &self,
+        actor_key: &SigningKey,
+    ) -> Result<Option<AccessKey>, ActorSettingsError> {
+        if !self.access_mask.has_data_key() {
+            return Ok(None);
+        }
+
+        let locked_key = self
+            .data_key
+            .as_ref()
+            .ok_or(ActorSettingsError::ExpectedKeyMissing)?;
+
+        let open_key = locked_key
+            .unlock(actor_key)
+            .map_err(ActorSettingsError::UnlockFailed)?;
+
+        Ok(Some(open_key))
+    }
+
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
@@ -44,6 +66,46 @@ impl ActorSettings {
         written_bytes += encode_optional_key(writer, &self.maintenance_key).await?;
 
         Ok(written_bytes)
+    }
+
+    pub fn filesystem_key(
+        &self,
+        actor_key: &SigningKey,
+    ) -> Result<Option<AccessKey>, ActorSettingsError> {
+        if !self.access_mask.has_filesystem_key() {
+            return Ok(None);
+        }
+
+        let locked_key = self
+            .filesystem_key
+            .as_ref()
+            .ok_or(ActorSettingsError::ExpectedKeyMissing)?;
+
+        let open_key = locked_key
+            .unlock(actor_key)
+            .map_err(ActorSettingsError::UnlockFailed)?;
+
+        Ok(Some(open_key))
+    }
+
+    pub fn maintenance_key(
+        &self,
+        actor_key: &SigningKey,
+    ) -> Result<Option<AccessKey>, ActorSettingsError> {
+        if !self.access_mask.has_data_key() {
+            return Ok(None);
+        }
+
+        let locked_key = self
+            .maintenance_key
+            .as_ref()
+            .ok_or(ActorSettingsError::ExpectedKeyMissing)?;
+
+        let open_key = locked_key
+            .unlock(actor_key)
+            .map_err(ActorSettingsError::UnlockFailed)?;
+
+        Ok(Some(open_key))
     }
 
     pub fn new(verifying_key: VerifyingKey, access_mask: AccessMask) -> Self {
@@ -111,6 +173,15 @@ impl ActorSettings {
     pub fn verifying_key(&self) -> VerifyingKey {
         self.verifying_key.clone()
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ActorSettingsError {
+    #[error("actor has permissions to access a key that wasn't present")]
+    ExpectedKeyMissing,
+
+    #[error("access key failed to unlock with actor's key")]
+    UnlockFailed(AsymLockedAccessKeyError),
 }
 
 fn decode_optional_key(input: Stream) -> ParserResult<Option<AsymLockedAccessKey>> {

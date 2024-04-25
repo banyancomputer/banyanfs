@@ -10,7 +10,7 @@ mod user_agent;
 mod vector_clock;
 
 pub use actor_id::ActorId;
-pub use actor_settings::ActorSettings;
+pub use actor_settings::{ActorSettings, ActorSettingsError};
 pub use block_size::{BlockSize, BlockSizeError};
 pub use cid::Cid;
 pub use filesystem_id::FilesystemId;

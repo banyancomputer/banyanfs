@@ -14,7 +14,7 @@ mod verifying_key;
 pub(crate) use encrypted_buffer::EncryptedBuffer;
 
 pub use access_key::AccessKey;
-pub use asym_locked_access_key::AsymLockedAccessKey;
+pub use asym_locked_access_key::{AsymLockedAccessKey, AsymLockedAccessKeyError};
 pub use authentication_tag::AuthenticationTag;
 pub use fingerprint::Fingerprint;
 pub use hash::Hash;
