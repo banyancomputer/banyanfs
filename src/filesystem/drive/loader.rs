@@ -194,14 +194,11 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                         }
                     };
 
-                    let permission_keys = drive_access.permission_keys();
-
-                    let filesystem_key = permission_keys
-                        .filesystem
-                        .as_ref()
+                    let filesystem_key = drive_access
+                        .filesystem_key()
                         .ok_or(DriveLoaderError::KeyNotAvailable("filesystem key missing"))?;
 
-                    let data_key = permission_keys.data.as_ref();
+                    let data_key = drive_access.data_key();
 
                     // todo(sstelfox): we ideally want to stream this data and selectively parse
                     // things, but that has impacts on the encryption which would need to be managed

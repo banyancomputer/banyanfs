@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::AsyncWrite;
 
-use crate::codec::crypto::{KeyId, PermissionKeys, SigningKey, VerifyingKey};
+use crate::codec::crypto::{AccessKey, KeyId, SigningKey, VerifyingKey};
 use crate::codec::header::{AccessMask, AccessMaskBuilder};
 use crate::codec::{ActorId, ActorSettings, ParserResult, Stream};
 
@@ -12,15 +12,17 @@ use crate::codec::{ActorId, ActorSettings, ParserResult, Stream};
 /// current actor has access to.
 ///
 /// Access within the drive is broken up based on which internal symmetric keys the current user
-/// has access to. These keys are held within the [`PermissionKeys`] struct and consist of a
-/// filesystem key (which grants access to read the structure and metadata of the filesystem), a
-/// data key which protects the per-file encryption key needed to access the data contained in any
-/// blocks stored), and a maintenance key (which is only used to read block lifecycle information
-/// found in different metadata version syncs).
+/// has access to. These keys consist of a filesystem key (which grants access to read the
+/// structure and metadata of the filesystem), a data key which protects the per-file encryption
+/// key needed to access the data contained in any blocks stored), and a maintenance key (which is
+/// only used to read block lifecycle information found in different metadata version syncs).
 #[derive(Clone, Debug)]
 pub struct DriveAccess {
     actor_settings: HashMap<ActorId, ActorSettings>,
-    permission_keys: PermissionKeys,
+
+    filesystem_key: Option<AccessKey>,
+    data_key: Option<AccessKey>,
+    maintenance_key: Option<AccessKey>,
 }
 
 impl DriveAccess {
@@ -62,6 +64,10 @@ impl DriveAccess {
         self.has_data_access(actor_id)
     }
 
+    pub(crate) fn data_key(&self) -> Option<&AccessKey> {
+        self.data_key.as_ref()
+    }
+
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         _rng: &mut impl CryptoRngCore,
@@ -82,22 +88,16 @@ impl DriveAccess {
 
             written_bytes += key_id.encode(writer).await?;
 
-            // todo(sstelfox): reset the agent version somewhere else... maybe during unlock?
-            //let reset_agent_version = self.current_actor_id == verifying_key.actor_id();
+            // todo(sstelfox): user agent version was being updated here and that isn't happening
+            // anywhere now. We need to move that up to the Drive encoder
             written_bytes += settings.encode(writer).await?;
-
-            // todo(sstelfox): need to move the permission key encoding into the settings and
-            // handle cached versions when encoding and decoding
-
-            // todo(sstelfox): the current user may not have access to all of the keys, we need to
-            // keep the escrowed versions around for other users.
-            //written_bytes += self
-            //    .permission_keys
-            //    .encode_for(rng, writer, &access, &verifying_key)
-            //    .await?;
         }
 
         Ok(written_bytes)
+    }
+
+    pub(crate) fn filesystem_key(&self) -> Option<&AccessKey> {
+        self.filesystem_key.as_ref()
     }
 
     /// Checks whether the requested actor is able to read and write access to the data referenced
@@ -161,7 +161,10 @@ impl DriveAccess {
     pub(crate) fn initialize(rng: &mut impl CryptoRngCore, verifying_key: VerifyingKey) -> Self {
         let mut access = Self {
             actor_settings: HashMap::new(),
-            permission_keys: PermissionKeys::generate(rng),
+
+            filesystem_key: Some(AccessKey::generate(rng)),
+            data_key: Some(AccessKey::generate(rng)),
+            maintenance_key: Some(AccessKey::generate(rng)),
         };
 
         let access_mask = AccessMaskBuilder::full_access()
@@ -203,6 +206,10 @@ impl DriveAccess {
         }
     }
 
+    pub(crate) fn maintenance_key(&self) -> Option<&AccessKey> {
+        self.maintenance_key.as_ref()
+    }
+
     pub fn parse<'a>(
         input: Stream<'a>,
         key_count: u8,
@@ -222,7 +229,6 @@ impl DriveAccess {
         // header. It'd just be a breaking format change
 
         let mut actor_settings = HashMap::new();
-        let mut permission_keys = None;
         let mut buf_slice = input;
 
         for _ in 0..key_count {
@@ -232,48 +238,30 @@ impl DriveAccess {
             let (i, settings) = ActorSettings::parse(buf_slice)?;
             buf_slice = i;
 
-            let verifying_key = settings.verifying_key();
-            let actor_id = verifying_key.actor_id();
+            let actor_id = settings.verifying_key().actor_id();
             actor_settings.insert(actor_id, settings);
-
-            if key_id == verifying_key.key_id() {
-                let (i, keys) = PermissionKeys::parse(buf_slice, signing_key)?;
-                permission_keys = Some(keys);
-                buf_slice = i;
-            } else {
-                todo!("need to store the encoded permission keys for re-encoding in case we don't have access to all of them");
-                //let (i, _) = take(PermissionKeys::size()).parse_peek(buf_slice)?;
-                //buf_slice = i;
-            }
         }
 
-        let permission_keys = match permission_keys {
-            Some(pk) => pk,
-            None => {
-                tracing::warn!("no matching permission keys found for provided key");
-
-                return Err(winnow::error::ErrMode::Cut(
-                    winnow::error::ParserError::from_error_kind(
-                        &buf_slice,
-                        winnow::error::ErrorKind::Verify,
-                    ),
-                ));
-            }
-        };
-
-        let drive_access = Self {
+        let mut drive_access = Self {
             actor_settings,
-            permission_keys,
+
+            filesystem_key: None,
+            data_key: None,
+            maintenance_key: None,
         };
+
+        if let Err(err) = drive_access.unlock_keys(signing_key) {
+            tracing::error!("failed to unlock permission keys: {}", err);
+
+            return Err(winnow::error::ErrMode::Cut(
+                winnow::error::ParserError::from_error_kind(
+                    &input,
+                    winnow::error::ErrorKind::Verify,
+                ),
+            ));
+        }
 
         Ok((buf_slice, drive_access))
-    }
-
-    /// Retrieves the unencrypted symmetric keys the current actor has available used to access the
-    /// various permission levels. A user must have access to a permission key to grant that
-    /// permission to others.
-    pub fn permission_keys(&self) -> &PermissionKeys {
-        &self.permission_keys
     }
 
     /// Adds a new actor (via their [`VerifyingKey`]) to the drive with the provided permissions.
@@ -284,7 +272,7 @@ impl DriveAccess {
         //
         // todo(sstelfox): should produce an error if an actor is added twice
         //
-        // todo(sstelfox): need to grant the actor access to the permission keys
+        // todo(sstelfox): need to grant the actor access to the various permission keys
         let actor_id = key.actor_id();
         let actor_settings = ActorSettings::new(key, access_mask);
 
@@ -362,8 +350,14 @@ impl DriveAccess {
         actors.into_iter().map(|(_, settings)| settings).collect()
     }
 
+    pub fn unlock_keys(&mut self, key: &SigningKey) -> Result<(), DriveAccessError> {
+        let actor_id = key.verifying_key().actor_id();
+
+        todo!()
+    }
+
     pub const fn size() -> usize {
-        KeyId::size() + ActorSettings::size() + PermissionKeys::size()
+        KeyId::size() + ActorSettings::size()
     }
 }
 
@@ -377,6 +371,9 @@ pub enum DriveAccessError {
 
     #[error("unknown actor id: {}", .0.as_hex())]
     UnknownActorId(ActorId),
+
+    #[error("failed to unlock permission keys: {0}")]
+    UnlockFailed(String),
 }
 
 #[cfg(test)]
@@ -393,11 +390,10 @@ mod tests {
 
         let empty_access = DriveAccess {
             actor_settings: HashMap::new(),
-            permission_keys: PermissionKeys {
-                filesystem: None,
-                data: None,
-                maintenance: None,
-            },
+
+            filesystem_key: None,
+            data_key: None,
+            maintenance_key: None,
         };
 
         let mut buffer = Vec::new();
@@ -416,15 +412,14 @@ mod tests {
         let mut buffer = Vec::new();
         access.encode(&mut rng, &mut buffer).await.unwrap();
 
-        let parsed = DriveAccess::parse(Stream::new(&buffer), 1, &key).unwrap().1;
+        let (remaining, parsed) = DriveAccess::parse(Stream::new(&buffer), 1, &key).unwrap();
+        assert!(remaining.is_empty());
 
         for (key, settings) in access.actor_settings.iter() {
             let parsed_settings = parsed.actor_settings.get(key).unwrap();
             assert_eq!(settings.verifying_key(), parsed_settings.verifying_key());
             assert_eq!(settings.access(), parsed_settings.access());
         }
-
-        assert_eq!(access.permission_keys, parsed.permission_keys);
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]

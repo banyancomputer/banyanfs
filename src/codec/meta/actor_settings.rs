@@ -1,15 +1,25 @@
-use futures::io::AsyncWrite;
+use futures::{AsyncWrite, AsyncWriteExt};
+use winnow::binary::le_u8;
+use winnow::token::take;
+use winnow::Parser;
 
-use crate::codec::crypto::VerifyingKey;
+use crate::codec::crypto::{AsymLockedAccessKey, VerifyingKey};
 use crate::codec::header::AccessMask;
 use crate::codec::meta::{UserAgent, VectorClock};
 use crate::codec::{ParserResult, Stream};
+
+const KEY_PRESENT_BIT: u8 = 0b0000_0001;
 
 #[derive(Clone, Debug)]
 pub struct ActorSettings {
     verifying_key: VerifyingKey,
     vector_clock: VectorClock,
+
     access_mask: AccessMask,
+    filesystem_key: Option<AsymLockedAccessKey>,
+    data_key: Option<AsymLockedAccessKey>,
+    maintenance_key: Option<AsymLockedAccessKey>,
+
     user_agent: UserAgent,
 }
 
@@ -29,6 +39,10 @@ impl ActorSettings {
         written_bytes += self.access_mask.encode(writer).await?;
         written_bytes += self.user_agent().encode(writer).await?;
 
+        written_bytes += encode_optional_key(writer, &self.filesystem_key).await?;
+        written_bytes += encode_optional_key(writer, &self.data_key).await?;
+        written_bytes += encode_optional_key(writer, &self.maintenance_key).await?;
+
         Ok(written_bytes)
     }
 
@@ -38,8 +52,13 @@ impl ActorSettings {
 
         Self {
             verifying_key,
-            access_mask,
             vector_clock,
+
+            access_mask,
+            filesystem_key: None,
+            data_key: None,
+            maintenance_key: None,
+
             user_agent,
         }
     }
@@ -50,10 +69,19 @@ impl ActorSettings {
         let (input, access_mask) = AccessMask::parse(input)?;
         let (input, user_agent) = UserAgent::parse(input)?;
 
+        let (input, filesystem_key) = decode_optional_key(input)?;
+        let (input, data_key) = decode_optional_key(input)?;
+        let (input, maintenance_key) = decode_optional_key(input)?;
+
         let actor_settings = Self {
             verifying_key,
             vector_clock,
+
             access_mask,
+            filesystem_key,
+            data_key,
+            maintenance_key,
+
             user_agent,
         };
 
@@ -61,7 +89,11 @@ impl ActorSettings {
     }
 
     pub const fn size() -> usize {
-        VerifyingKey::size() + VectorClock::size() + AccessMask::size() + UserAgent::size()
+        VerifyingKey::size()
+            + VectorClock::size()
+            + AccessMask::size()
+            + UserAgent::size()
+            + 3 * (1 + AsymLockedAccessKey::size())
     }
 
     pub fn update_user_agent(&mut self) {
@@ -79,4 +111,43 @@ impl ActorSettings {
     pub fn verifying_key(&self) -> VerifyingKey {
         self.verifying_key.clone()
     }
+}
+
+fn decode_optional_key(input: Stream) -> ParserResult<Option<AsymLockedAccessKey>> {
+    let (input, presence_flag) = le_u8.parse_peek(input)?;
+
+    if presence_flag & KEY_PRESENT_BIT != 0 {
+        let (input, key) = AsymLockedAccessKey::parse(input)?;
+        Ok((input, Some(key)))
+    } else {
+        // still need to advance the input
+        let (input, _blank) = take(AsymLockedAccessKey::size()).parse_peek(input)?;
+        Ok((input, None))
+    }
+}
+
+async fn encode_optional_key<W: AsyncWrite + Unpin + Send>(
+    writer: &mut W,
+    key: &Option<AsymLockedAccessKey>,
+) -> std::io::Result<usize> {
+    let mut written_bytes = 0;
+
+    match key {
+        Some(key) => {
+            writer.write_all(&[0x01]).await?;
+            written_bytes += 1;
+
+            written_bytes += key.encode(writer).await?;
+        }
+        None => {
+            writer.write_all(&[0x00]).await?;
+            written_bytes += 1;
+
+            let empty_key = [0u8; AsymLockedAccessKey::size()];
+            writer.write_all(&empty_key).await?;
+            written_bytes += AsymLockedAccessKey::size();
+        }
+    }
+
+    Ok(written_bytes)
 }

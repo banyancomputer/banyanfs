@@ -403,7 +403,7 @@ impl DirectoryHandle {
                 .data_key()
                 .map_err(|_| OperationError::AccessDenied)?;
 
-            let data_key = match inner_read.access().permission_keys().data.as_ref() {
+            let data_key = match inner_read.access().data_key() {
                 Some(data_key) => data_key,
                 None => return Err(OperationError::AccessDenied),
             };
@@ -482,7 +482,7 @@ impl DirectoryHandle {
             return Err(OperationError::AccessDenied);
         }
 
-        let data_key = match inner_read.access().permission_keys().data.as_ref() {
+        let data_key = match inner_read.access().data_key() {
             Some(data_key) => data_key.clone(),
             None => return Err(OperationError::AccessDenied),
         };
