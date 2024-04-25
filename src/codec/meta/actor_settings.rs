@@ -21,19 +21,13 @@ impl ActorSettings {
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
-        overwrite_version: bool,
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
 
         written_bytes += self.verifying_key.encode(writer).await?;
         written_bytes += self.vector_clock.encode(writer).await?;
         written_bytes += self.access_mask.encode(writer).await?;
-
-        if overwrite_version {
-            written_bytes += UserAgent::current().encode(writer).await?;
-        } else {
-            written_bytes += self.user_agent().encode(writer).await?;
-        }
+        written_bytes += self.user_agent().encode(writer).await?;
 
         Ok(written_bytes)
     }
@@ -68,6 +62,10 @@ impl ActorSettings {
 
     pub const fn size() -> usize {
         VerifyingKey::size() + VectorClock::size() + AccessMask::size() + UserAgent::size()
+    }
+
+    pub fn update_user_agent(&mut self) {
+        self.user_agent = UserAgent::current();
     }
 
     pub fn user_agent(&self) -> UserAgent {

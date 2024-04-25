@@ -19,7 +19,6 @@ use crate::codec::{ActorId, ActorSettings, ParserResult, Stream};
 /// found in different metadata version syncs).
 #[derive(Clone, Debug)]
 pub struct DriveAccess {
-    current_actor_id: ActorId,
     actor_settings: HashMap<ActorId, ActorSettings>,
     permission_keys: PermissionKeys,
 }
@@ -65,7 +64,7 @@ impl DriveAccess {
 
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
-        rng: &mut impl CryptoRngCore,
+        _rng: &mut impl CryptoRngCore,
         writer: &mut W,
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
@@ -83,14 +82,19 @@ impl DriveAccess {
 
             written_bytes += key_id.encode(writer).await?;
 
-            let reset_agent_version = self.current_actor_id == verifying_key.actor_id();
-            written_bytes += settings.encode(writer, reset_agent_version).await?;
+            // todo(sstelfox): reset the agent version somewhere else... maybe during unlock?
+            //let reset_agent_version = self.current_actor_id == verifying_key.actor_id();
+            written_bytes += settings.encode(writer).await?;
 
-            let access = settings.access();
-            written_bytes += self
-                .permission_keys
-                .encode_for(rng, writer, &access, &verifying_key)
-                .await?;
+            // todo(sstelfox): need to move the permission key encoding into the settings and
+            // handle cached versions when encoding and decoding
+
+            // todo(sstelfox): the current user may not have access to all of the keys, we need to
+            // keep the escrowed versions around for other users.
+            //written_bytes += self
+            //    .permission_keys
+            //    .encode_for(rng, writer, &access, &verifying_key)
+            //    .await?;
         }
 
         Ok(written_bytes)
@@ -155,10 +159,7 @@ impl DriveAccess {
     /// Create a new DriveAccess instance with the provided actor as an owner with full
     /// permissions.
     pub(crate) fn initialize(rng: &mut impl CryptoRngCore, verifying_key: VerifyingKey) -> Self {
-        let current_actor_id = verifying_key.actor_id();
-
         let mut access = Self {
-            current_actor_id,
             actor_settings: HashMap::new(),
             permission_keys: PermissionKeys::generate(rng),
         };
@@ -260,10 +261,7 @@ impl DriveAccess {
             }
         };
 
-        let current_actor_id = signing_key.actor_id();
-
         let drive_access = Self {
-            current_actor_id,
             actor_settings,
             permission_keys,
         };
@@ -311,14 +309,21 @@ impl DriveAccess {
     /// An intentional consequence of being unable to remove yourself, and requiring an owner to
     /// change other owner keys is that there is guaranteed to always be at least one owner key
     /// remaining after this operation.
-    pub fn remove_actor(&mut self, actor_id: &ActorId) -> Result<(), DriveAccessError> {
-        if &self.current_actor_id == actor_id {
+    pub fn remove_actor(
+        &mut self,
+        current_key: &SigningKey,
+        actor_id: &ActorId,
+    ) -> Result<(), DriveAccessError> {
+        let current_actor_id = current_key.verifying_key().actor_id();
+        if &current_actor_id == actor_id {
             return Err(DriveAccessError::SelfProtected);
         }
 
-        let mut permissions = self.active_actor_access(&self.current_actor_id).ok_or(
-            DriveAccessError::AccessDenied("current actor has no access"),
-        )?;
+        let mut permissions =
+            self.active_actor_access(&current_actor_id)
+                .ok_or(DriveAccessError::AccessDenied(
+                    "current actor has no access",
+                ))?;
 
         let target_actor = self
             .actor_settings
@@ -385,10 +390,8 @@ mod tests {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_empty_encoding_produces_error() {
         let mut rng = crate::utils::crypto_rng();
-        let current_actor_id = ActorId::arbitrary(&mut rng);
 
         let empty_access = DriveAccess {
-            current_actor_id,
             actor_settings: HashMap::new(),
             permission_keys: PermissionKeys {
                 filesystem: None,
@@ -414,8 +417,6 @@ mod tests {
         access.encode(&mut rng, &mut buffer).await.unwrap();
 
         let parsed = DriveAccess::parse(Stream::new(&buffer), 1, &key).unwrap().1;
-
-        assert_eq!(access.current_actor_id, parsed.current_actor_id);
 
         for (key, settings) in access.actor_settings.iter() {
             let parsed_settings = parsed.actor_settings.get(key).unwrap();
@@ -462,7 +463,7 @@ mod tests {
         let mut access = DriveAccess::initialize(&mut rng, verifying_key);
 
         assert!(matches!(
-            access.remove_actor(&actor_id).unwrap_err(),
+            access.remove_actor(&key, &actor_id).unwrap_err(),
             DriveAccessError::SelfProtected
         ));
     }
