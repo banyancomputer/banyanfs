@@ -2,8 +2,6 @@ use std::collections::HashMap;
 
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::AsyncWrite;
-use winnow::token::take;
-use winnow::Parser;
 
 use crate::codec::crypto::{KeyId, PermissionKeys, SigningKey, VerifyingKey};
 use crate::codec::header::{AccessMask, AccessMaskBuilder};

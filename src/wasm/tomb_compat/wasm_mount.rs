@@ -8,7 +8,6 @@ use crate::prelude::*;
 use js_sys::{Array, ArrayBuffer, Uint8Array};
 use wasm_bindgen::prelude::*;
 
-use crate::codec::Cid;
 use crate::utils::crypto_rng;
 use crate::wasm::tomb_compat::{
     TombCompat, WasmBucket, WasmBucketMetadata, WasmFsMetadataEntry, WasmSnapshot,
