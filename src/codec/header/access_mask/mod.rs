@@ -95,6 +95,14 @@ impl AccessMask {
         Ok((input, Self::from(byte)))
     }
 
+    pub(crate) fn set_historical(&mut self, historical: bool) {
+        self.historical = historical;
+    }
+
+    pub(crate) fn set_protected(&mut self, protected: bool) {
+        self.protected = protected;
+    }
+
     pub const fn size() -> usize {
         1
     }

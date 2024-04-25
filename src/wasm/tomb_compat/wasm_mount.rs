@@ -462,12 +462,8 @@ impl WasmMount {
         // HashSet.
         let mut data_block_cids = HashSet::new();
 
-        fn get_node_data_cids(node: &Node) -> Result<Option<Vec<Cid>>, OperationError> {
-            Ok(node.data_cids().clone())
-        }
-
         let cid_groups = unlocked_drive
-            .for_each_node(get_node_data_cids)
+            .for_each_node(|n| Ok(n.data_cids()))
             .await
             .map_err(|e| format!("unable to extract data cids from drive: {e}"))?;
 

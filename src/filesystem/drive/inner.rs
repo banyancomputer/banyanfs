@@ -369,33 +369,41 @@ impl InnerDrive {
 
 #[cfg(test)]
 mod test {
-    use self::crypto::Fingerprint;
     use crate::filesystem::nodes::NodeName;
+    use crate::prelude::*;
+
     use rand::rngs::OsRng;
     use winnow::Partial;
 
     use super::*;
 
+    fn initialize_inner_drive() -> (ActorId, InnerDrive) {
+        let mut rng = crate::utils::crypto_rng();
+
+        let signing_key = SigningKey::generate(&mut rng);
+        let verifying_key = signing_key.verifying_key();
+        let actor_id = verifying_key.actor_id();
+
+        let access = DriveAccess::initialize(&mut rng, verifying_key);
+
+        (
+            actor_id,
+            InnerDrive::initialize(&mut rng, actor_id, access).unwrap(),
+        )
+    }
+
     #[test]
-    fn initialize() {
-        let mut rng = OsRng {};
-        let actor_id = ActorId::from(Fingerprint::from([0u8; Fingerprint::size()]));
-        let access = DriveAccess::new(actor_id);
-        let inner = InnerDrive::initialize(&mut rng, actor_id, access);
-
-        let inner = inner.unwrap();
-
+    fn test_drive_initialization() {
+        let (_, inner) = initialize_inner_drive();
         assert!(inner.nodes.capacity() == 32);
         assert!(inner.nodes.len() == 1);
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
-    async fn create_node() {
-        let mut rng = OsRng {};
-        let actor_id = ActorId::from(Fingerprint::from([0u8; Fingerprint::size()]));
-        let access = DriveAccess::new(actor_id);
-        let mut inner = InnerDrive::initialize(&mut rng, actor_id, access).unwrap();
+    async fn test_node_creation() {
+        let mut rng = crate::utils::crypto_rng();
+        let (actor_id, mut inner) = initialize_inner_drive();
 
         let create_node_res = inner
             .create_node(
@@ -423,8 +431,9 @@ mod test {
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
-    async fn encode_to_parse() {
-        let inner = interesting_inner().await;
+    async fn test_drive_round_tripping() {
+        let inner = build_interesting_inner().await;
+
         let access = inner.access();
         let journal = inner.journal_start();
         let mut encoded = Vec::new();
@@ -448,11 +457,9 @@ mod test {
     }
 
     // A fixture to make a relatively interesting inner
-    async fn interesting_inner() -> InnerDrive {
-        let mut rng = OsRng {};
-        let actor_id = ActorId::from(Fingerprint::from([0u8; Fingerprint::size()]));
-        let access = DriveAccess::new(actor_id);
-        let mut inner = InnerDrive::initialize(&mut rng, actor_id, access).unwrap();
+    async fn build_interesting_inner() -> InnerDrive {
+        let mut rng = crate::utils::crypto_rng();
+        let (actor_id, mut inner) = initialize_inner_drive();
 
         //           -----file_1
         //         /

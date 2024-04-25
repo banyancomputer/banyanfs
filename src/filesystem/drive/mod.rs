@@ -116,7 +116,8 @@ impl Drive {
             let filesystem_key = inner_read
                 .access()
                 .permission_keys()
-                .and_then(|pk| pk.filesystem.as_ref())
+                .filesystem
+                .as_ref()
                 .ok_or(StdError::new(StdErrorKind::Other, "no filesystem key"))?
                 .clone();
 

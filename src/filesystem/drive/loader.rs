@@ -187,18 +187,21 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                     let encrypted_size = encrypted_size as usize;
                     let payload_size = encrypted_size - (Nonce::size() + AuthenticationTag::size());
 
-                    let filesystem_key = self
-                        .drive_access
+                    let drive_access = match &self.drive_access {
+                        Some(da) => da,
+                        None => {
+                            return Err(DriveLoaderError::KeyNotAvailable("drive access missing"))
+                        }
+                    };
+
+                    let permission_keys = drive_access.permission_keys();
+
+                    let filesystem_key = permission_keys
+                        .filesystem
                         .as_ref()
-                        .and_then(|a| a.permission_keys())
-                        .and_then(|pk| pk.filesystem.as_ref())
                         .ok_or(DriveLoaderError::KeyNotAvailable("filesystem key missing"))?;
 
-                    let data_key = self
-                        .drive_access
-                        .as_ref()
-                        .and_then(|a| a.permission_keys())
-                        .and_then(|pk| pk.data.as_ref());
+                    let data_key = permission_keys.data.as_ref();
 
                     // todo(sstelfox): we ideally want to stream this data and selectively parse
                     // things, but that has impacts on the encryption which would need to be managed
@@ -220,11 +223,10 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                         payload_size,
                         "drive_loader::private_content::decrypt_successful"
                     );
-                    let drive_access = self.drive_access.clone().expect("to have been set");
 
                     let (remaining, inner_drive) = InnerDrive::parse(
                         Stream::new(fs_buffer.as_slice()),
-                        drive_access,
+                        drive_access.clone(),
                         journal_start.clone(),
                         data_key,
                     )
