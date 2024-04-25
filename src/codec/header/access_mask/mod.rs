@@ -19,7 +19,7 @@ pub(crate) const DATA_KEY_PRESENT_BIT: u8 = 0b0000_0010;
 
 pub(crate) const MAINTENANCE_KEY_PRESENT_BIT: u8 = 0b0000_0001;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct AccessMask {
     protected: bool,
     owner: bool,

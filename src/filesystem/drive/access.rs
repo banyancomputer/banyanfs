@@ -70,6 +70,13 @@ impl DriveAccess {
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
 
+        if self.actor_settings.len() == 0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "drive must have at least one registered actor",
+            ));
+        }
+
         for settings in self.sorted_actor_settings().iter() {
             let verifying_key = settings.verifying_key();
             let key_id = verifying_key.key_id();
@@ -209,6 +216,10 @@ impl DriveAccess {
             ));
         }
 
+        // todo(sstelfox): It would be much easier on encoders/parsers if the key count was present
+        // here... It's one extra byte and would allow us to omit historical keys from the outer
+        // header. It'd just be a breaking format change
+
         let mut actor_settings = HashMap::new();
         let mut permission_keys = None;
         let mut buf_slice = input;
@@ -300,30 +311,36 @@ impl DriveAccess {
     /// An intentional consequence of being unable to remove yourself, and requiring an owner to
     /// change other owner keys is that there is guaranteed to always be at least one owner key
     /// remaining after this operation.
-    pub fn remove_actor(&mut self, actor_id: &ActorId) -> Result<(), &str> {
+    pub fn remove_actor(&mut self, actor_id: &ActorId) -> Result<(), DriveAccessError> {
         if &self.current_actor_id == actor_id {
-            return Err("can't remove the current actor from the drive");
+            return Err(DriveAccessError::SelfProtected);
         }
 
-        let mut permissions = self
-            .active_actor_access(&self.current_actor_id)
-            .ok_or("current actor doesn't have any permissions in the filesystem")?;
+        let mut permissions = self.active_actor_access(&self.current_actor_id).ok_or(
+            DriveAccessError::AccessDenied("current actor has no access"),
+        )?;
 
         let target_actor = self
             .actor_settings
             .get_mut(actor_id)
-            .ok_or("unable to remove unknown actor")?;
+            .ok_or_else(|| DriveAccessError::UnknownActorId(actor_id.clone()))?;
 
         if target_actor.access().is_protected() {
-            return Err("protected keys can't be removed");
+            return Err(DriveAccessError::AccessDenied(
+                "protected keys can't be removed",
+            ));
         }
 
         if !(permissions.has_maintenance_key()) {
-            return Err("must be able to record changes to remove an actor");
+            return Err(DriveAccessError::AccessDenied(
+                "must be able to record changes to remove an actor",
+            ));
         }
 
         if target_actor.access().is_owner() && !permissions.is_owner() {
-            return Err("only owners can remove owner keys");
+            return Err(DriveAccessError::AccessDenied(
+                "only owners can remove owner keys",
+            ));
         }
 
         permissions.set_historical(true);
@@ -343,6 +360,18 @@ impl DriveAccess {
     pub const fn size() -> usize {
         KeyId::size() + ActorSettings::size() + PermissionKeys::size()
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum DriveAccessError {
+    #[error("access denied: {0}")]
+    AccessDenied(&'static str),
+
+    #[error("unable to remove the current actor from the drive")]
+    SelfProtected,
+
+    #[error("unknown actor id: {}", .0.as_hex())]
+    UnknownActorId(ActorId),
 }
 
 #[cfg(test)]
@@ -382,7 +411,20 @@ mod tests {
 
         let mut access = DriveAccess::initialize(&mut rng, verifying_key);
 
-        todo!()
+        let mut buffer = Vec::new();
+        access.encode(&mut rng, &mut buffer).await.unwrap();
+
+        let parsed = DriveAccess::parse(Stream::new(&buffer), 1, &key).unwrap().1;
+
+        assert_eq!(access.current_actor_id, parsed.current_actor_id);
+
+        for (key, settings) in access.actor_settings.iter() {
+            let parsed_settings = parsed.actor_settings.get(key).unwrap();
+            assert_eq!(settings.verifying_key(), parsed_settings.verifying_key());
+            assert_eq!(settings.access(), parsed_settings.access());
+        }
+
+        assert_eq!(access.permission_keys, parsed.permission_keys);
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]

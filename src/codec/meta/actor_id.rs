@@ -9,6 +9,10 @@ use crate::codec::{ParserResult, Stream};
 pub struct ActorId(Fingerprint);
 
 impl ActorId {
+    pub fn as_hex(&self) -> String {
+        self.0.as_hex()
+    }
+
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
