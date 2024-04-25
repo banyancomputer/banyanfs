@@ -2,6 +2,7 @@ mod create_user_key;
 mod current_usage;
 mod current_usage_limit;
 mod get_storage_grant;
+mod user_key_access;
 
 use create_user_key::CreateUserKey;
 use current_usage::{CurrentUsage, CurrentUsageResponse};
@@ -50,3 +51,6 @@ pub async fn create_user_key(
 
     Ok(response.id().clone())
 }
+
+/// Provide the client with
+pub async fn list_user_key_access(client: &ApiClient) {}
