@@ -4,7 +4,7 @@ use crate::codec::crypto::{Fingerprint, KeyId};
 use crate::codec::{ParserResult, Stream};
 
 /// Actors are unique parties for accessing a specific drive and are uniquely defined by the
-/// fingerprint from the Actor's public key (via a [`VerifyingKey`]).
+/// fingerprint from the Actor's public key (via a [`crate::codec::crypto::VerifyingKey`]).
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct ActorId(Fingerprint);
 
