@@ -75,7 +75,7 @@ impl DriveAccess {
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
 
-        if self.actor_settings.len() == 0 {
+        if self.actor_settings.is_empty() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "drive must have at least one registered actor",
@@ -111,7 +111,7 @@ impl DriveAccess {
     /// the current version of the filesystem. File and directory specific permissions may cause
     /// other actors to reject changes when they don't appropriate write permissions.
     pub fn has_data_access(&self, actor_id: &ActorId) -> bool {
-        let access = match self.active_actor_access(&actor_id) {
+        let access = match self.active_actor_access(actor_id) {
             Some(a) => a,
             None => return false,
         };
@@ -126,7 +126,7 @@ impl DriveAccess {
     ///
     /// Historical keys will always return false.
     pub fn has_read_access(&self, actor_id: &ActorId) -> bool {
-        let access = match self.active_actor_access(&actor_id) {
+        let access = match self.active_actor_access(actor_id) {
             Some(a) => a,
             None => return false,
         };
@@ -148,7 +148,7 @@ impl DriveAccess {
     ///
     /// Historical keys will always return false.
     pub fn has_write_access(&self, actor_id: &ActorId) -> bool {
-        let access = match self.active_actor_access(&actor_id) {
+        let access = match self.active_actor_access(actor_id) {
             Some(a) => a,
             None => return false,
         };
@@ -191,7 +191,7 @@ impl DriveAccess {
     pub fn is_owner(&self, actor_id: &ActorId) -> bool {
         match self.active_actor_access(actor_id) {
             Some(a) => a.is_owner(),
-            None => return false,
+            None => false,
         }
     }
 
@@ -205,7 +205,7 @@ impl DriveAccess {
     pub fn is_protected(&self, actor_id: &ActorId) -> bool {
         match self.active_actor_access(actor_id) {
             Some(a) => a.is_protected(),
-            None => return false,
+            None => false,
         }
     }
 
@@ -365,7 +365,7 @@ impl DriveAccess {
         let target_actor = self
             .actor_settings
             .get_mut(actor_id)
-            .ok_or_else(|| DriveAccessError::UnknownActorId(actor_id.clone()))?;
+            .ok_or(DriveAccessError::UnknownActorId(*actor_id))?;
 
         if target_actor.access().is_protected() {
             return Err(DriveAccessError::AccessDenied(
@@ -482,7 +482,7 @@ mod tests {
         let key = SigningKey::generate(&mut rng);
         let verifying_key = key.verifying_key();
 
-        let access = DriveAccess::initialize(&mut rng, verifying_key);
+        let access = DriveAccess::initialize(&mut rng, verifying_key).unwrap();
 
         let mut buffer = Vec::new();
         access.encode(&mut rng, &mut buffer).await.unwrap();
@@ -518,7 +518,7 @@ mod tests {
         let verifying_key = key.verifying_key();
 
         let actor_id = verifying_key.actor_id();
-        let access = DriveAccess::initialize(&mut rng, verifying_key);
+        let access = DriveAccess::initialize(&mut rng, verifying_key).unwrap();
 
         assert!(access.has_read_access(&actor_id));
         assert!(access.has_write_access(&actor_id));
@@ -536,7 +536,7 @@ mod tests {
         let verifying_key = key.verifying_key();
 
         let actor_id = verifying_key.actor_id();
-        let mut access = DriveAccess::initialize(&mut rng, verifying_key);
+        let mut access = DriveAccess::initialize(&mut rng, verifying_key).unwrap();
 
         assert!(matches!(
             access.remove_actor(&key, &actor_id).unwrap_err(),
@@ -566,7 +566,7 @@ mod tests {
         let actor1_verifying_key = actor1_key.verifying_key();
 
         let actor1_id = actor1_verifying_key.actor_id();
-        let mut access = DriveAccess::initialize(&mut rng, actor1_verifying_key);
+        let mut access = DriveAccess::initialize(&mut rng, actor1_verifying_key).unwrap();
 
         let actor2_key = SigningKey::generate(&mut rng);
         let actor2_verifying_key = actor2_key.verifying_key();

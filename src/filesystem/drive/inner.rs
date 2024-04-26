@@ -385,7 +385,7 @@ mod test {
         let verifying_key = signing_key.verifying_key();
         let actor_id = verifying_key.actor_id();
 
-        let access = DriveAccess::initialize(&mut rng, verifying_key);
+        let access = DriveAccess::initialize(&mut rng, verifying_key).unwrap();
 
         (
             actor_id,

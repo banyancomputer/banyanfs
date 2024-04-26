@@ -28,7 +28,7 @@ pub struct ActorSettings {
 
 impl ActorSettings {
     pub fn access(&self) -> AccessMask {
-        self.access_mask.clone()
+        self.access_mask
     }
 
     pub fn data_key(

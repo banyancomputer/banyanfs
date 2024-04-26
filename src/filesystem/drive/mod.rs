@@ -129,7 +129,7 @@ impl Drive {
             written_bytes += length_bytes.len();
 
             written_bytes += fs_buffer
-                .encrypt_and_encode(rng, writer, &[], &filesystem_key)
+                .encrypt_and_encode(rng, writer, &[], filesystem_key)
                 .await?;
         }
 
@@ -243,7 +243,7 @@ impl Drive {
 #[derive(Debug, thiserror::Error)]
 pub enum DriveError {
     #[error("a failure occurred attempting to modify drive access controls: {0}")]
-    AccessError(#[from] DriveAccessError),
+    AccessChangeFailure(#[from] DriveAccessError),
 
     #[error("failed to build a drive entry: {0}")]
     NodeBuilderError(#[from] NodeBuilderError),
