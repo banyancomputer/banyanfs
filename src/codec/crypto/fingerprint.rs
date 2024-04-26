@@ -70,8 +70,6 @@ impl From<&VerifyingKey> for Fingerprint {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use elliptic_curve::rand_core::CryptoRngCore;
-
     use super::*;
 
     #[cfg(target_arch = "wasm32")]
@@ -97,13 +95,5 @@ pub(crate) mod tests {
         let fingerprint = Fingerprint::from(*REFERENCE_FINGERPRINT_BYTES);
         let key_id = fingerprint.key_id();
         assert_eq!(key_id, KeyId::from(0x5555));
-    }
-
-    impl Fingerprint {
-        pub(crate) fn arbitrary(rng: &mut impl CryptoRngCore) -> Self {
-            let mut bytes = [0u8; FINGERPRINT_SIZE];
-            rng.fill_bytes(&mut bytes);
-            Self::from(bytes)
-        }
     }
 }

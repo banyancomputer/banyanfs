@@ -57,31 +57,43 @@ impl AccessMask {
         self.0 & PROTECTED_BIT != 0
     }
 
-    pub fn parse(input: Stream) -> ParserResult<Self> {
-        let (input, byte) = le_u8.parse_peek(input)?;
-        Ok((input, Self::from(byte)))
-    }
-
-    pub(crate) fn set_historical(&mut self, historical: bool) {
-        self.modify_bit(HISTORICAL_BIT, historical)
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn set_owner(&mut self, owner: bool) {
-        self.modify_bit(OWNER_BIT, owner)
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn set_protected(&mut self, protected: bool) {
-        self.modify_bit(PROTECTED_BIT, protected)
-    }
-
     fn modify_bit(&mut self, mask: u8, set: bool) {
         if set {
             self.0 |= mask;
         } else {
             self.0 &= !mask;
         }
+    }
+
+    pub fn parse(input: Stream) -> ParserResult<Self> {
+        let (input, byte) = le_u8.parse_peek(input)?;
+        Ok((input, Self::from(byte)))
+    }
+
+    pub(crate) fn set_data_key_present(&mut self, value: bool) {
+        self.modify_bit(DATA_KEY_PRESENT_BIT, value)
+    }
+
+    pub(crate) fn set_filesystem_key_present(&mut self, value: bool) {
+        self.modify_bit(FILESYSTEM_KEY_PRESENT_BIT, value)
+    }
+
+    pub(crate) fn set_maintenance_key_present(&mut self, value: bool) {
+        self.modify_bit(MAINTENANCE_KEY_PRESENT_BIT, value)
+    }
+
+    pub(crate) fn set_historical(&mut self, value: bool) {
+        self.modify_bit(HISTORICAL_BIT, value)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn set_owner(&mut self, value: bool) {
+        self.modify_bit(OWNER_BIT, value)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn set_protected(&mut self, value: bool) {
+        self.modify_bit(PROTECTED_BIT, value)
     }
 
     pub const fn size() -> usize {
@@ -92,5 +104,51 @@ impl AccessMask {
 impl From<u8> for AccessMask {
     fn from(value: u8) -> Self {
         Self(value & ALL_SETTINGS_MASK)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_setting_toggles() {
+        let mut access = AccessMask::from(0);
+
+        assert!(!access.has_data_key());
+        access.set_data_key_present(true);
+        assert!(access.has_data_key());
+        access.set_data_key_present(false);
+        assert!(!access.has_data_key());
+
+        assert!(!access.has_filesystem_key());
+        access.set_filesystem_key_present(true);
+        assert!(access.has_filesystem_key());
+        access.set_filesystem_key_present(false);
+        assert!(!access.has_filesystem_key());
+
+        assert!(!access.has_maintenance_key());
+        access.set_maintenance_key_present(true);
+        assert!(access.has_maintenance_key());
+        access.set_maintenance_key_present(false);
+        assert!(!access.has_maintenance_key());
+
+        assert!(!access.is_historical());
+        access.set_historical(true);
+        assert!(access.is_historical());
+        access.set_historical(false);
+        assert!(!access.is_historical());
+
+        assert!(!access.is_owner());
+        access.set_owner(true);
+        assert!(access.is_owner());
+        access.set_owner(false);
+        assert!(!access.is_owner());
+
+        assert!(!access.is_protected());
+        access.set_protected(true);
+        assert!(access.is_protected());
+        access.set_protected(false);
+        assert!(!access.is_protected());
     }
 }

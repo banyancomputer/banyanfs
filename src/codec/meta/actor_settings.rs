@@ -31,6 +31,25 @@ impl ActorSettings {
         self.access_mask
     }
 
+    pub(crate) fn access_mut(&mut self) -> &mut AccessMask {
+        &mut self.access_mask
+    }
+
+    pub fn clear_data_key(&mut self) {
+        self.data_key = None;
+        self.access_mask.set_data_key_present(false);
+    }
+
+    pub fn clear_filesystem_key(&mut self) {
+        self.filesystem_key = None;
+        self.access_mask.set_filesystem_key_present(false);
+    }
+
+    pub fn clear_maintenance_key(&mut self) {
+        self.data_key = None;
+        self.access_mask.set_data_key_present(false);
+    }
+
     pub fn data_key(
         &self,
         actor_key: &SigningKey,
@@ -99,6 +118,7 @@ impl ActorSettings {
             .map_err(|_| ActorSettingsError::KeyEscrowError)?;
 
         self.data_key = Some(locked_key);
+        self.access_mask.set_data_key_present(true);
 
         Ok(())
     }
@@ -113,6 +133,7 @@ impl ActorSettings {
             .map_err(|_| ActorSettingsError::KeyEscrowError)?;
 
         self.filesystem_key = Some(locked_key);
+        self.access_mask.set_filesystem_key_present(true);
 
         Ok(())
     }
@@ -127,6 +148,7 @@ impl ActorSettings {
             .map_err(|_| ActorSettingsError::KeyEscrowError)?;
 
         self.maintenance_key = Some(locked_key);
+        self.access_mask.set_maintenance_key_present(true);
 
         Ok(())
     }

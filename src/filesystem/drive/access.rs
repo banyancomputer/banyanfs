@@ -30,15 +30,8 @@ impl DriveAccess {
     /// historical keys limiting queries to the common case of keys that should currently have some
     /// level of access.
     pub fn active_actor_access(&self, actor_id: &ActorId) -> Option<AccessMask> {
-        let access = self
-            .actor_settings
-            .get(actor_id)
-            .map(|settings| settings.access());
-
-        match access {
-            Some(a) if a.is_historical() => None,
-            _ => access,
-        }
+        self.actor_access(actor_id)
+            .filter(|access| !access.is_historical())
     }
 
     /// Queries the drive instance for the specific actor's current permissions. If the actor
@@ -174,6 +167,13 @@ impl DriveAccess {
         access.register_actor(rng, verifying_key, access_mask)?;
 
         Ok(access)
+    }
+
+    pub fn is_historical(&self, actor_id: &ActorId) -> bool {
+        match self.active_actor_access(actor_id) {
+            Some(a) => a.is_historical(),
+            None => false,
+        }
     }
 
     /// Checks whether the actor is currently marked as an owner of the drive in the access
@@ -353,7 +353,7 @@ impl DriveAccess {
             return Err(DriveAccessError::SelfProtected);
         }
 
-        let mut permissions =
+        let current_permissions =
             self.active_actor_access(&current_actor_id)
                 .ok_or(DriveAccessError::AccessDenied(
                     "current actor has no access",
@@ -370,19 +370,19 @@ impl DriveAccess {
             ));
         }
 
-        if !(permissions.has_maintenance_key()) {
+        if !(current_permissions.has_maintenance_key()) {
             return Err(DriveAccessError::AccessDenied(
                 "must be able to record changes to remove an actor",
             ));
         }
 
-        if target_actor.access().is_owner() && !permissions.is_owner() {
+        if target_actor.access().is_owner() && !current_permissions.is_owner() {
             return Err(DriveAccessError::AccessDenied(
                 "only owners can remove owner keys",
             ));
         }
 
-        permissions.set_historical(true);
+        target_actor.access_mut().set_historical(true);
 
         Ok(())
     }
@@ -592,7 +592,28 @@ mod tests {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_removal_leaves_key_as_historical() {
-        todo!()
+        let mut rng = crate::utils::crypto_rng();
+
+        let actor1_key = SigningKey::generate(&mut rng);
+        let actor1_verifying_key = actor1_key.verifying_key();
+
+        let mut access = DriveAccess::initialize(&mut rng, actor1_verifying_key).unwrap();
+
+        let actor2_key = SigningKey::generate(&mut rng);
+        let actor2_verifying_key = actor2_key.verifying_key();
+        let actor2_id = actor2_verifying_key.actor_id();
+
+        let actor2_access_mask = AccessMaskBuilder::full_access().build();
+        access
+            .register_actor(&mut rng, actor2_verifying_key, actor2_access_mask)
+            .unwrap();
+
+        assert!(access.active_actor_access(&actor2_id).is_some());
+        access.remove_actor(&actor1_key, &actor2_id).unwrap();
+        assert!(access.active_actor_access(&actor2_id).is_none());
+
+        let actor2_access = access.actor_access(&actor2_id).unwrap();
+        assert!(actor2_access.is_historical());
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
