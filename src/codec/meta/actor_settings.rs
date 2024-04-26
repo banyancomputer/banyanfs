@@ -23,6 +23,9 @@ pub struct ActorSettings {
     data_key: Option<AsymLockedAccessKey>,
     maintenance_key: Option<AsymLockedAccessKey>,
 
+    // todo(sstelfox): this would be a breaking change but this should be optional. When granting
+    // access to a new key, we only know what user agent the _current_ user is not the one being
+    // granted access. Recording our own as the user's agent is an error.
     user_agent: UserAgent,
 }
 
