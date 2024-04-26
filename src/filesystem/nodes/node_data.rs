@@ -16,9 +16,8 @@ pub enum NodeData {
         associated_data: HashMap<NodeName, PermanentId>,
         content: FileContent,
     },
-    AssociatedData {
-        content: FileContent,
-    },
+    #[allow(dead_code)]
+    AssociatedData { content: FileContent },
     Directory {
         permissions: DirectoryPermissions,
         children_size: u64,

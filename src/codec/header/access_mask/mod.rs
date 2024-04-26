@@ -63,26 +63,24 @@ impl AccessMask {
     }
 
     pub(crate) fn set_historical(&mut self, historical: bool) {
-        if historical {
-            self.0 |= HISTORICAL_BIT;
-        } else {
-            self.0 &= !HISTORICAL_BIT;
-        }
+        self.modify_bit(HISTORICAL_BIT, historical)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn set_owner(&mut self, owner: bool) {
-        if owner {
-            self.0 |= OWNER_BIT;
-        } else {
-            self.0 &= !OWNER_BIT;
-        }
+        self.modify_bit(OWNER_BIT, owner)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn set_protected(&mut self, protected: bool) {
-        if protected {
-            self.0 |= PROTECTED_BIT;
+        self.modify_bit(PROTECTED_BIT, protected)
+    }
+
+    fn modify_bit(&mut self, mask: u8, set: bool) {
+        if set {
+            self.0 |= mask;
         } else {
-            self.0 &= !PROTECTED_BIT;
+            self.0 &= !mask;
         }
     }
 

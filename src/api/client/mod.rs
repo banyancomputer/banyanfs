@@ -173,8 +173,8 @@ impl ApiClient {
         }
     }
 
-    pub(crate) async fn record_storage_grant(&self, storage_host_url: Url, auth_token: &str) {
-        tracing::debug!(?storage_host_url, "registered storage grant");
+    pub async fn record_storage_grant(&self, storage_host_url: Url, auth_token: &str) {
+        tracing::debug!(?storage_host_url, "recording storage grant");
 
         self.auth
             .record_storage_grant(storage_host_url, auth_token)

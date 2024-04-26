@@ -28,6 +28,16 @@ impl AccessMaskBuilder {
         Self { bits }
     }
 
+    /// Set the historical bit for the actor. This effectively removes all the effective access
+    /// but otherwise preserves the current permissions bits. An actor with this set remains
+    /// present so signatures used by that actor can still be validated.
+    ///
+    /// Marking an actor as historical must not be done on a protected actor.
+    pub fn historical(mut self) -> Self {
+        self.bits |= HISTORICAL_BIT;
+        self
+    }
+
     /// Crate a new instance that only access to maintenance information. This key provides access
     /// to underlying block add/remove operations details. This does not provide access to the
     /// filesystem structure, attributes, or to any data within the filesystem.
@@ -39,19 +49,9 @@ impl AccessMaskBuilder {
         Self { bits }
     }
 
-    /// Set the historical bit for the actor. This effectively removes all the effective access
-    /// but otherwise preserves the current permissions bits. An actor with this set remains
-    /// present so signatures used by that actor can still be validated.
-    ///
-    /// Marking an actor as historical must not be done on a protected actor.
-    pub fn set_historical(mut self) -> Self {
-        self.bits |= HISTORICAL_BIT;
-        self
-    }
-
     /// Set the owner bit for the actor. This grants full access to the filesystem and grants the
     /// ability to manage all the access of the filesystem as well.
-    pub fn set_owner(mut self) -> Self {
+    pub fn owner(mut self) -> Self {
         self.bits |= OWNER_BIT;
         self
     }
@@ -62,7 +62,7 @@ impl AccessMaskBuilder {
     ///
     /// The invalid states are not currently enforced, it is up to the caller to ensure they don't
     /// create an invalid access mask.
-    pub fn set_protected(mut self) -> Self {
+    pub fn protected(mut self) -> Self {
         self.bits |= PROTECTED_BIT;
         self
     }

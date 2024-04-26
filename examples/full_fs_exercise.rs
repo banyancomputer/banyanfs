@@ -68,7 +68,7 @@ async fn main() {
         let additional_key = std::sync::Arc::new(SigningKey::generate(&mut rng));
         let additional_pubkey = additional_key.verifying_key();
 
-        let access = AccessMaskBuilder::maintenance().set_owner().build();
+        let access = AccessMaskBuilder::maintenance().protected().build();
         drive
             .authorize_key(&mut rng, additional_pubkey, access)
             .await

@@ -170,11 +170,7 @@ impl DriveAccess {
             maintenance_key: Some(AccessKey::generate(rng)),
         };
 
-        let access_mask = AccessMaskBuilder::full_access()
-            .set_owner()
-            .set_protected()
-            .build();
-
+        let access_mask = AccessMaskBuilder::full_access().owner().protected().build();
         access.register_actor(rng, verifying_key, access_mask)?;
 
         Ok(access)
@@ -209,6 +205,7 @@ impl DriveAccess {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn maintenance_key(&self) -> Option<&AccessKey> {
         self.maintenance_key.as_ref()
     }
@@ -391,14 +388,19 @@ impl DriveAccess {
     }
 
     /// Returns all the available [`ActorSettings`] associated with the current drive instance
-    /// sorted by each configured actor's [`KeyId`]. This is used for consistency in encoding
-    /// drives and provides a level of obscurity over the order that keys were added to a drive.
-    pub fn sorted_actor_settings(&self) -> Vec<&ActorSettings> {
+    /// sorted by each configured actor's [`ActorId`]. We ultimately want this sorted by [`KeyId`]
+    /// for consistent encoding which requires sorting by [`KeyId`], by sorting on the full
+    /// [`ActorId`] we ensure the order is consistent in the face of the desired and highly likely
+    /// collisions of the [`KeyId`].
+    pub(crate) fn sorted_actor_settings(&self) -> Vec<&ActorSettings> {
         let mut actors: Vec<(&ActorId, &ActorSettings)> = self.actor_settings.iter().collect();
-        actors.sort_by(|(aid, _), (bid, _)| aid.key_id().cmp(&bid.key_id()));
+        actors.sort_by(|(aid, _), (bid, _)| aid.cmp(bid));
         actors.into_iter().map(|(_, settings)| settings).collect()
     }
 
+    /// Attempts to get a handle on the unlocked copies of any escrowed permission keys. The
+    /// provided [`SigningKey`] is expected to already have been granted access. Unknown keys will
+    /// produce an error when the unlock is attempted.
     pub fn unlock_keys(&mut self, actor_key: &SigningKey) -> Result<(), DriveAccessError> {
         let actor_id = actor_key.verifying_key().actor_id();
 
@@ -487,17 +489,11 @@ mod tests {
         let mut buffer = Vec::new();
         access.encode(&mut rng, &mut buffer).await.unwrap();
 
-        let (remaining, parsed) = match DriveAccess::parse(Stream::new(&buffer), 1, &key) {
-            Ok(tup) => tup,
-            Err(err) => {
-                panic!("failed to parse: {}", err);
-            }
-        };
-
+        let (remaining, parsed) = DriveAccess::parse(Stream::new(&buffer), 1, &key).unwrap();
         assert!(remaining.is_empty());
 
-        for (key, settings) in access.actor_settings.iter() {
-            let parsed_settings = parsed.actor_settings.get(key).unwrap();
+        for (actor_id, settings) in access.actor_settings.iter() {
+            let parsed_settings = parsed.actor_settings.get(actor_id).unwrap();
             assert_eq!(settings.verifying_key(), parsed_settings.verifying_key());
             assert_eq!(settings.access(), parsed_settings.access());
         }
@@ -505,9 +501,32 @@ mod tests {
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
-    #[ignore]
     async fn test_multiple_actor_encoding_roundtrips() {
-        todo!()
+        let mut rng = crate::utils::crypto_rng();
+        let key = SigningKey::generate(&mut rng);
+        let verifying_key = key.verifying_key();
+
+        let mut access = DriveAccess::initialize(&mut rng, verifying_key).unwrap();
+
+        let second_key = SigningKey::generate(&mut rng);
+        let second_verifying_key = second_key.verifying_key();
+
+        let access_mask = AccessMaskBuilder::structural().build();
+        access
+            .register_actor(&mut rng, second_verifying_key, access_mask)
+            .unwrap();
+
+        let mut buffer = Vec::new();
+        access.encode(&mut rng, &mut buffer).await.unwrap();
+
+        let (remaining, parsed) = DriveAccess::parse(Stream::new(&buffer), 2, &key).unwrap();
+        assert!(remaining.is_empty());
+
+        for (actor_id, settings) in access.actor_settings.iter() {
+            let parsed_settings = parsed.actor_settings.get(actor_id).unwrap();
+            assert_eq!(settings.verifying_key(), parsed_settings.verifying_key());
+            assert_eq!(settings.access(), parsed_settings.access());
+        }
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
@@ -546,16 +565,59 @@ mod tests {
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
-    #[ignore]
     async fn test_only_owner_can_remove_owner_keys() {
+        let mut rng = crate::utils::crypto_rng();
+
+        let actor1_key = SigningKey::generate(&mut rng);
+        let actor1_verifying_key = actor1_key.verifying_key();
+        let actor1_id = actor1_verifying_key.actor_id();
+
+        // actor1 implicitly gets owner privileges here
+        let mut access = DriveAccess::initialize(&mut rng, actor1_verifying_key).unwrap();
+
+        let actor2_key = SigningKey::generate(&mut rng);
+        let actor2_verifying_key = actor2_key.verifying_key();
+
+        // actor2 gets full access but is critically _not_ an owner
+        let actor2_access_mask = AccessMaskBuilder::full_access().build();
+        access
+            .register_actor(&mut rng, actor2_verifying_key, actor2_access_mask)
+            .unwrap();
+
+        let removal_error = access.remove_actor(&actor2_key, &actor1_id).unwrap_err();
+
+        assert!(matches!(removal_error, DriveAccessError::AccessDenied(_)));
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_removal_leaves_key_as_historical() {
         todo!()
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
-    #[ignore]
     async fn test_protected_keys_cant_be_removed() {
-        todo!()
+        let mut rng = crate::utils::crypto_rng();
+
+        let actor1_key = SigningKey::generate(&mut rng);
+        let actor1_verifying_key = actor1_key.verifying_key();
+        let actor1_id = actor1_verifying_key.actor_id();
+
+        // actor1 implicitly gets owner privileges here, which should be sufficient
+        let mut access = DriveAccess::initialize(&mut rng, actor1_verifying_key).unwrap();
+
+        let actor2_key = SigningKey::generate(&mut rng);
+        let actor2_verifying_key = actor2_key.verifying_key();
+
+        let actor2_access_mask = AccessMaskBuilder::full_access().protected().build();
+        access
+            .register_actor(&mut rng, actor2_verifying_key, actor2_access_mask)
+            .unwrap();
+
+        let removal_error = access.remove_actor(&actor2_key, &actor1_id).unwrap_err();
+
+        assert!(matches!(removal_error, DriveAccessError::AccessDenied(_)));
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
@@ -573,7 +635,9 @@ mod tests {
         let actor2_id = actor2_verifying_key.actor_id();
         let actor2_access_mask = AccessMaskBuilder::full_access().build();
 
-        access.register_actor(&mut rng, actor2_verifying_key, actor2_access_mask);
+        access
+            .register_actor(&mut rng, actor2_verifying_key, actor2_access_mask)
+            .unwrap();
 
         // Original actor should still have access
         assert!(access.has_write_access(&actor1_id));

@@ -57,6 +57,7 @@ impl FileContent {
 
     /// Return the CID over the plaintext content of the file. Be careful not to confuse these with
     /// the data CIDs which are the CIDs of the stored data blocks.
+    #[allow(dead_code)]
     pub fn cid(&self) -> Option<Cid> {
         match self {
             Self::Encrypted { cid, .. } | Self::Public { cid, .. } => Some(cid.clone()),

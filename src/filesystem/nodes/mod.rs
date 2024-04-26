@@ -85,6 +85,7 @@ impl Node {
     /// requires fully encoding the node to calculate. That method caches the result of that
     /// encoding if it needed to generate it. This consumes that cached encoding if we have it and
     /// is mostly used as an optimization that is described in the [`Node::cid`] documentation.
+    #[allow(dead_code)]
     pub(crate) async fn cached_encoding(&self) -> Option<Vec<u8>> {
         self.cid.take_cached().await
     }
