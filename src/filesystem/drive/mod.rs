@@ -6,7 +6,7 @@ mod loader;
 mod operations;
 mod walk_state;
 
-pub use access::DriveAccess;
+pub use access::{DriveAccess, DriveAccessError};
 pub use directory_entry::DirectoryEntry;
 pub use directory_handle::DirectoryHandle;
 pub use loader::{DriveLoader, DriveLoaderError};
@@ -116,13 +116,13 @@ impl Drive {
             let filesystem_key = inner_read
                 .access()
                 .filesystem_key()
-                .as_ref()
-                .ok_or(StdError::new(StdErrorKind::Other, "no filesystem key"))?
-                .clone();
+                .ok_or(StdError::new(StdErrorKind::Other, "no filesystem key"))?;
 
             written_bytes += inner_read.encode(&mut *fs_buffer).await?;
 
-            // todo: use filesystem ID and encoded length bytes as AD
+            // todo(sstelfox): use filesystem ID and encoded length bytes as AD, but this is a
+            // breaking change...
+
             let buffer_length = fs_buffer.encrypted_len() as u64;
             let length_bytes = buffer_length.to_le_bytes();
             writer.write_all(&length_bytes).await?;
@@ -170,7 +170,7 @@ impl Drive {
 
         trace!(?actor_id, ?filesystem_id, "drive::initializing_private");
 
-        let access = DriveAccess::initialize(rng, verifying_key);
+        let access = DriveAccess::initialize(rng, verifying_key)?;
         let inner = InnerDrive::initialize(rng, actor_id, access)?;
 
         let drive = Self {
@@ -183,9 +183,19 @@ impl Drive {
         Ok(drive)
     }
 
-    pub async fn authorize_key(&self, key: VerifyingKey, access_mask: AccessMask) {
+    /// Registers a new key as an actor with the provided AccessMask. Will produce an error if used
+    /// to attempt to change the permissions of an existing key.
+    pub async fn authorize_key(
+        &self,
+        rng: &mut impl CryptoRngCore,
+        key: VerifyingKey,
+        access_mask: AccessMask,
+    ) -> Result<(), DriveAccessError> {
         let mut inner_write = self.inner.write().await;
-        inner_write.access_mut().register_actor(key, access_mask);
+        inner_write
+            .access_mut()
+            .register_actor(rng, key, access_mask)?;
+        Ok(())
     }
 
     pub async fn for_each_node<F, R>(&self, operation: F) -> Result<Vec<R>, OperationError>
@@ -232,6 +242,9 @@ impl Drive {
 
 #[derive(Debug, thiserror::Error)]
 pub enum DriveError {
+    #[error("a failure occurred attempting to modify drive access controls: {0}")]
+    AccessError(#[from] DriveAccessError),
+
     #[error("failed to build a drive entry: {0}")]
     NodeBuilderError(#[from] NodeBuilderError),
 

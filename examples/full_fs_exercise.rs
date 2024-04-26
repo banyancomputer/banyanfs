@@ -69,7 +69,10 @@ async fn main() {
         let additional_pubkey = additional_key.verifying_key();
 
         let access = AccessMaskBuilder::maintenance().set_owner().build();
-        drive.authorize_key(additional_pubkey, access).await;
+        drive
+            .authorize_key(&mut rng, additional_pubkey, access)
+            .await
+            .unwrap();
     }
 
     let mut file_opts = tokio::fs::OpenOptions::new();

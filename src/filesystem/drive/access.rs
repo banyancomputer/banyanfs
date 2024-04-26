@@ -158,7 +158,10 @@ impl DriveAccess {
 
     /// Create a new DriveAccess instance with the provided actor as an owner with full
     /// permissions.
-    pub(crate) fn initialize(rng: &mut impl CryptoRngCore, verifying_key: VerifyingKey) -> Self {
+    pub(crate) fn initialize(
+        rng: &mut impl CryptoRngCore,
+        verifying_key: VerifyingKey,
+    ) -> Result<Self, DriveAccessError> {
         let mut access = Self {
             actor_settings: HashMap::new(),
 
@@ -172,9 +175,9 @@ impl DriveAccess {
             .set_protected()
             .build();
 
-        access.register_actor(verifying_key, access_mask);
+        access.register_actor(rng, verifying_key, access_mask)?;
 
-        access
+        Ok(access)
     }
 
     /// Checks whether the actor is currently marked as an owner of the drive in the access
@@ -266,18 +269,63 @@ impl DriveAccess {
     }
 
     /// Adds a new actor (via their [`VerifyingKey`]) to the drive with the provided permissions.
-    pub fn register_actor(&mut self, key: VerifyingKey, access_mask: AccessMask) {
+    /// This will produce an error if you attempt to add an actor that already has access or if the
+    /// current actor doesn't have access to the permissions you're attempting to grant.
+    pub fn register_actor(
+        &mut self,
+        rng: &mut impl CryptoRngCore,
+        key: VerifyingKey,
+        access_mask: AccessMask,
+    ) -> Result<(), DriveAccessError> {
         // todo(sstelfox): need to add a check that prevents a user from granting privileges beyond
         // their own (they couldn't anyways as they don't have access to the symmetric keys
         // necessary, but we should prevent invalid construction in general).
         //
         // todo(sstelfox): should produce an error if an actor is added twice
-        //
-        // todo(sstelfox): need to grant the actor access to the various permission keys
         let actor_id = key.actor_id();
-        let actor_settings = ActorSettings::new(key, access_mask);
+
+        if self.actor_settings.contains_key(&actor_id) {
+            return Err(DriveAccessError::ActorAlreadyPresent);
+        }
+
+        let mut actor_settings = ActorSettings::new(key, access_mask);
+
+        if access_mask.has_data_key() {
+            let key = self
+                .data_key
+                .as_ref()
+                .ok_or(DriveAccessError::PermissionEscalation)?;
+
+            actor_settings
+                .grant_data_key(rng, key)
+                .map_err(DriveAccessError::GrantFailed)?;
+        }
+
+        if access_mask.has_filesystem_key() {
+            let key = self
+                .filesystem_key
+                .as_ref()
+                .ok_or(DriveAccessError::PermissionEscalation)?;
+
+            actor_settings
+                .grant_filesystem_key(rng, key)
+                .map_err(DriveAccessError::GrantFailed)?;
+        }
+
+        if access_mask.has_maintenance_key() {
+            let key = self
+                .maintenance_key
+                .as_ref()
+                .ok_or(DriveAccessError::PermissionEscalation)?;
+
+            actor_settings
+                .grant_maintenance_key(rng, key)
+                .map_err(DriveAccessError::GrantFailed)?;
+        }
 
         self.actor_settings.insert(actor_id, actor_settings);
+
+        Ok(())
     }
 
     /// This removes an actor's access by marking it as historical. The key is intentionally kept
@@ -384,6 +432,15 @@ pub enum DriveAccessError {
     #[error("access denied: {0}")]
     AccessDenied(&'static str),
 
+    #[error("attempted to add an actor that already has access")]
+    ActorAlreadyPresent,
+
+    #[error("failed to grant actor permission key: {0}")]
+    GrantFailed(ActorSettingsError),
+
+    #[error("attempted to grant permission key the actor doesn't have access to")]
+    PermissionEscalation,
+
     #[error("unable to remove the current actor from the drive")]
     SelfProtected,
 
@@ -430,7 +487,13 @@ mod tests {
         let mut buffer = Vec::new();
         access.encode(&mut rng, &mut buffer).await.unwrap();
 
-        let (remaining, parsed) = DriveAccess::parse(Stream::new(&buffer), 1, &key).unwrap();
+        let (remaining, parsed) = match DriveAccess::parse(Stream::new(&buffer), 1, &key) {
+            Ok(tup) => tup,
+            Err(err) => {
+                panic!("failed to parse: {}", err);
+            }
+        };
+
         assert!(remaining.is_empty());
 
         for (key, settings) in access.actor_settings.iter() {
@@ -510,7 +573,7 @@ mod tests {
         let actor2_id = actor2_verifying_key.actor_id();
         let actor2_access_mask = AccessMaskBuilder::full_access().build();
 
-        access.register_actor(actor2_verifying_key, actor2_access_mask);
+        access.register_actor(&mut rng, actor2_verifying_key, actor2_access_mask);
 
         // Original actor should still have access
         assert!(access.has_write_access(&actor1_id));

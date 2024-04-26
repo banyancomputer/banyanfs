@@ -19,75 +19,42 @@ pub(crate) const DATA_KEY_PRESENT_BIT: u8 = 0b0000_0010;
 
 pub(crate) const MAINTENANCE_KEY_PRESENT_BIT: u8 = 0b0000_0001;
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct AccessMask {
-    protected: bool,
-    owner: bool,
-    historical: bool,
+pub(crate) const ALL_SETTINGS_MASK: u8 = 0b1110_0111;
 
-    filesystem_key_present: bool,
-    data_key_present: bool,
-    maintenance_key_present: bool,
-}
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AccessMask(u8);
 
 impl AccessMask {
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
     ) -> std::io::Result<usize> {
-        let mut settings: u8 = 0x00;
-
-        if self.protected {
-            settings |= PROTECTED_BIT;
-        }
-
-        if self.owner {
-            settings |= OWNER_BIT;
-        }
-
-        if self.historical {
-            settings |= HISTORICAL_BIT;
-        }
-
-        if self.filesystem_key_present {
-            settings |= FILESYSTEM_KEY_PRESENT_BIT;
-        }
-
-        if self.data_key_present {
-            settings |= DATA_KEY_PRESENT_BIT;
-        }
-
-        if self.maintenance_key_present {
-            settings |= MAINTENANCE_KEY_PRESENT_BIT;
-        }
-
-        writer.write_all(&[settings]).await?;
-
+        writer.write_all(&[self.0]).await?;
         Ok(1)
     }
 
     pub fn has_data_key(&self) -> bool {
-        self.data_key_present
+        self.0 & DATA_KEY_PRESENT_BIT != 0
     }
 
     pub fn has_filesystem_key(&self) -> bool {
-        self.filesystem_key_present
+        self.0 & FILESYSTEM_KEY_PRESENT_BIT != 0
     }
 
     pub fn has_maintenance_key(&self) -> bool {
-        self.maintenance_key_present
+        self.0 & MAINTENANCE_KEY_PRESENT_BIT != 0
     }
 
     pub fn is_historical(&self) -> bool {
-        self.historical
+        self.0 & HISTORICAL_BIT != 0
     }
 
     pub fn is_owner(&self) -> bool {
-        self.owner
+        self.0 & OWNER_BIT != 0
     }
 
     pub fn is_protected(&self) -> bool {
-        self.protected
+        self.0 & PROTECTED_BIT != 0
     }
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
@@ -96,11 +63,27 @@ impl AccessMask {
     }
 
     pub(crate) fn set_historical(&mut self, historical: bool) {
-        self.historical = historical;
+        if historical {
+            self.0 |= HISTORICAL_BIT;
+        } else {
+            self.0 &= !HISTORICAL_BIT;
+        }
+    }
+
+    pub(crate) fn set_owner(&mut self, owner: bool) {
+        if owner {
+            self.0 |= OWNER_BIT;
+        } else {
+            self.0 &= !OWNER_BIT;
+        }
     }
 
     pub(crate) fn set_protected(&mut self, protected: bool) {
-        self.protected = protected;
+        if protected {
+            self.0 |= PROTECTED_BIT;
+        } else {
+            self.0 &= !PROTECTED_BIT;
+        }
     }
 
     pub const fn size() -> usize {
@@ -110,14 +93,6 @@ impl AccessMask {
 
 impl From<u8> for AccessMask {
     fn from(value: u8) -> Self {
-        Self {
-            protected: value & PROTECTED_BIT != 0,
-            owner: value & OWNER_BIT != 0,
-            historical: value & HISTORICAL_BIT != 0,
-
-            filesystem_key_present: value & FILESYSTEM_KEY_PRESENT_BIT != 0,
-            data_key_present: value & DATA_KEY_PRESENT_BIT != 0,
-            maintenance_key_present: value & MAINTENANCE_KEY_PRESENT_BIT != 0,
-        }
+        Self(value & ALL_SETTINGS_MASK)
     }
 }

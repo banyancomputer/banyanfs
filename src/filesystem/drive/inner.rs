@@ -281,10 +281,12 @@ impl InnerDrive {
                     // have the "backwards" encoding order
 
                     #[cfg(feature = "strict")]
-                    return Err(nom::Err::Failure(nom::error::make_error(
-                        node_input,
-                        nom::error::ErrorKind::Verify,
-                    )));
+                    return Err(winnow::error::ErrMode::Cut(
+                        winnow::error::ParserError::from_error_kind(
+                            &node_input,
+                            winnow::error::ErrorKind::Verify,
+                        ),
+                    ));
                 }
             }
 

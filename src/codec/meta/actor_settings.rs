@@ -1,3 +1,4 @@
+use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
 use winnow::binary::le_u8;
 use winnow::token::take;
@@ -86,6 +87,48 @@ impl ActorSettings {
             .map_err(ActorSettingsError::UnlockFailed)?;
 
         Ok(Some(open_key))
+    }
+
+    pub fn grant_data_key(
+        &mut self,
+        rng: &mut impl CryptoRngCore,
+        key: &AccessKey,
+    ) -> Result<(), ActorSettingsError> {
+        let locked_key = key
+            .lock_for(rng, &self.verifying_key)
+            .map_err(|_| ActorSettingsError::KeyEscrowError)?;
+
+        self.data_key = Some(locked_key);
+
+        Ok(())
+    }
+
+    pub fn grant_filesystem_key(
+        &mut self,
+        rng: &mut impl CryptoRngCore,
+        key: &AccessKey,
+    ) -> Result<(), ActorSettingsError> {
+        let locked_key = key
+            .lock_for(rng, &self.verifying_key)
+            .map_err(|_| ActorSettingsError::KeyEscrowError)?;
+
+        self.filesystem_key = Some(locked_key);
+
+        Ok(())
+    }
+
+    pub fn grant_maintenance_key(
+        &mut self,
+        rng: &mut impl CryptoRngCore,
+        key: &AccessKey,
+    ) -> Result<(), ActorSettingsError> {
+        let locked_key = key
+            .lock_for(rng, &self.verifying_key)
+            .map_err(|_| ActorSettingsError::KeyEscrowError)?;
+
+        self.maintenance_key = Some(locked_key);
+
+        Ok(())
     }
 
     pub fn maintenance_key(
@@ -177,6 +220,9 @@ impl ActorSettings {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ActorSettingsError {
+    #[error("failed to escrow access key for actor")]
+    KeyEscrowError,
+
     #[error("actor has permissions to access a key that wasn't present")]
     ExpectedKeyMissing,
 
