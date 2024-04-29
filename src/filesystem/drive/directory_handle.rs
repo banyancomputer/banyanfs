@@ -237,89 +237,98 @@ impl DirectoryHandle {
         src_path: &[&str],
         dst_path: &[&str],
     ) -> Result<(), OperationError> {
+        // Get the NodeId of the Node we are moving
         let src_node_id = match walk_path(&self.inner, self.cwd_id, src_path, 0).await? {
             WalkState::FoundNode { node_id } => node_id,
             WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
         };
 
-        let dst_parent_id = match walk_path(&self.inner, self.cwd_id, dst_path, 0).await? {
-            WalkState::FoundNode { node_id } => {
-                let inner_read = self.inner.read().await;
-                let found_node = inner_read.by_id(node_id)?;
+        // Get the NodeId of the target node's new parent after the move
+        // as well as the new name of the target (if it is changing)
+        let (dst_parent_id, new_dst_name) =
+            match walk_path(&self.inner, self.cwd_id, dst_path, 0).await? {
+                WalkState::FoundNode { node_id } => {
+                    // Path to a directory was passed in as destination
+                    // the source node will keep its current name
+                    let inner_read = self.inner.read().await;
+                    let found_node = inner_read.by_id(node_id)?;
 
-                if !found_node.supports_children() {
-                    return Err(OperationError::Exists(node_id));
+                    // Make sure the target node is a directory
+                    if found_node.kind() != NodeKind::Directory {
+                        return Err(OperationError::ParentMustBeDirectory);
+                    }
+
+                    (node_id, inner_read.by_id(src_node_id)?.name())
                 }
+                WalkState::MissingComponent {
+                    working_directory_id,
+                    remaining_path,
+                    ..
+                } => {
+                    // Destination was specified with a new name
+                    //
+                    // If remaining path is empty then we are moving into the current working directory
+                    // (of this directory handle). If it is of length 1 then the last element is the
+                    // name of the new parent
+                    //
+                    // If its length is > 1 then we would have to make directories
+                    // which is not permitted
+                    if remaining_path.len() > 1 {
+                        return Err(OperationError::PathNotFound);
+                    }
+                    let inner_read = self.inner.read().await;
+                    let found_node = inner_read.by_id(working_directory_id)?;
 
-                node_id
-            }
-            WalkState::MissingComponent {
-                working_directory_id,
-                remaining_path,
-                ..
-            } => {
-                if !remaining_path.is_empty() {
-                    return Err(OperationError::PathNotFound);
+                    // Make sure the target node is a directory
+                    if found_node.kind() != NodeKind::Directory {
+                        return Err(OperationError::ParentMustBeDirectory);
+                    }
+
+                    (
+                        working_directory_id,
+                        NodeName::named(
+                            dst_path
+                                .last()
+                                .ok_or(OperationError::UnexpectedEmptyPath)? //Maybe should use `expect` as getting here means we know dest had at least one entry
+                                .to_string(),
+                        )?,
+                    )
                 }
-
-                working_directory_id
-            }
-        };
+            };
 
         let mut inner_write = self.inner.write().await;
-
-        //todo(sstelfox): update this to use the new node manipulation API, might allow us to
-        //remove the data() data_mut() functions entirely...
-        let src_node = inner_write.by_id_mut(src_node_id)?;
-        let src_parent_perm_id = src_node
-            .parent_id()
-            .ok_or(OperationError::InternalCorruption(
-                src_node_id,
-                "src node has no parent",
-            ))?;
-
-        let src_name = src_node.name();
-        let src_perm_id = src_node.permanent_id();
-        src_node.set_parent_id(src_perm_id).await;
-
+        let src_node_name = inner_write.by_id(src_node_id)?.name();
+        let src_node_perm_id = inner_write.by_id(src_node_id)?.permanent_id();
+        let src_parent_perm_id = inner_write.by_id(src_node_id)?.parent_id().ok_or(
+            OperationError::InternalCorruption(src_node_id, "src node has no parent"),
+        )?;
         let src_parent_node = inner_write.by_perm_id_mut(&src_parent_perm_id)?;
-        match src_parent_node.data_mut().await {
-            NodeData::Directory { children, .. } => children.remove(&src_name),
-            _ => {
-                return Err(OperationError::InternalCorruption(
+
+        // Remove target node from its current location by removing it as a child from its parent
+        src_parent_node
+            .remove_child(&src_node_name)
+            .await
+            .map_err(|_| {
+                OperationError::InternalCorruption(
                     src_parent_node.id(),
-                    "source node parent is not a directory",
-                ));
-            }
-        };
+                    "Could not remove target from parent",
+                )
+            })?;
 
+        // A Failure from here on would leave the child orphaned or inconsistent, I don't think there is a
+        // good way to make the move an atomic operation though...
+        // The borrow checker won't let us get mutable references to all three nodes at once (src, dst, src_parent)
+        // We could maybe extend `DriveInner` to do this operation internally to make it more atomic
         let dst_parent_node = inner_write.by_id_mut(dst_parent_id)?;
+        let dst_parent_node_perm_id = dst_parent_node.permanent_id();
 
-        let last_dst_element = dst_path.last().ok_or(OperationError::UnexpectedEmptyPath)?;
-        let new_dst_name = NodeName::named(last_dst_element.to_string())?;
+        dst_parent_node
+            .add_child(new_dst_name.clone(), src_node_perm_id)
+            .await?;
 
-        match dst_parent_node.data_mut().await {
-            NodeData::Directory { children, .. } => {
-                if children.insert(new_dst_name.clone(), src_perm_id).is_some() {
-                    return Err(OperationError::InternalCorruption(
-                        dst_parent_id,
-                        "destination parent already had a node with the same name",
-                    ));
-                }
-            }
-            _ => {
-                return Err(OperationError::InternalCorruption(
-                    dst_parent_id,
-                    "destination parent is not a directory",
-                ))
-            }
-        }
-
-        let dst_parent_perm_id = dst_parent_node.permanent_id();
-        let tgt_node = inner_write.by_id_mut(src_node_id)?;
-
-        tgt_node.set_parent_id(dst_parent_perm_id).await;
-        tgt_node.set_name(new_dst_name).await;
+        let src_node = inner_write.by_id_mut(src_node_id)?;
+        src_node.set_parent_id(dst_parent_node_perm_id).await;
+        src_node.set_name(new_dst_name).await;
 
         Ok(())
     }
@@ -712,4 +721,200 @@ fn walk_path<'a>(
         walk_path(inner, next_node_id, remaining_path, depth + 1).await
     }
     .boxed()
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::filesystem::drive::inner::test::interesting_inner;
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn mv_dir_from_dir_to_cwd_specify_name() {
+        let mut rng = crate::utils::crypto_rng();
+        let mut handle = interesting_handle().await;
+        handle
+            .mv(&mut rng, &["dir_1", "dir_2"], &["dir_2_new"])
+            .await
+            .unwrap();
+
+        let cwd_ls = handle.ls(&[]).await.unwrap();
+        assert_eq!(
+            cwd_ls
+                .iter()
+                .filter(|entry| entry.name() == NodeName::try_from("dir_2_new").unwrap())
+                .count(),
+            1
+        );
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn mv_dir_from_dir_to_dir_specify_name() {
+        let mut rng = crate::utils::crypto_rng();
+        let mut handle = interesting_handle().await;
+        handle
+            .mv(
+                &mut rng,
+                &["dir_1", "dir_2", "dir_3"],
+                &["dir_1", "dir_3_new"],
+            )
+            .await
+            .unwrap();
+
+        let cwd_ls = handle.ls(&["dir_1"]).await.unwrap();
+        assert_eq!(
+            cwd_ls
+                .iter()
+                .filter(|entry| entry.name() == NodeName::try_from("dir_3_new").unwrap())
+                .count(),
+            1
+        );
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn mv_file_from_dir_to_cwd_specify_name() {
+        let mut rng = crate::utils::crypto_rng();
+        let mut handle = interesting_handle().await;
+        handle
+            .mv(
+                &mut rng,
+                &["dir_1", "dir_2", "dir_3", "file_3"],
+                &["file_3_new"],
+            )
+            .await
+            .unwrap();
+
+        let cwd_ls = handle.ls(&[]).await.unwrap();
+        assert_eq!(
+            cwd_ls
+                .iter()
+                .filter(|entry| entry.name() == NodeName::try_from("file_3_new").unwrap())
+                .count(),
+            1
+        );
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn mv_file_from_dir_to_dir_specify_name() {
+        let mut rng = crate::utils::crypto_rng();
+        let mut handle = interesting_handle().await;
+        handle
+            .mv(
+                &mut rng,
+                &["dir_1", "dir_2", "dir_3", "file_3"],
+                &["dir_1", "file_3_new"],
+            )
+            .await
+            .unwrap();
+
+        let cwd_ls = handle.ls(&["dir_1"]).await.unwrap();
+        assert_eq!(
+            cwd_ls
+                .iter()
+                .filter(|entry| entry.name() == NodeName::try_from("file_3_new").unwrap())
+                .count(),
+            1
+        );
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn mv_dir_from_dir_to_cwd_no_name() {
+        let mut rng = crate::utils::crypto_rng();
+        let mut handle = interesting_handle().await;
+        handle.mv(&mut rng, &["dir_1", "dir_2"], &[]).await.unwrap();
+
+        let cwd_ls = handle.ls(&[]).await.unwrap();
+        assert_eq!(
+            cwd_ls
+                .iter()
+                .filter(|entry| entry.name() == NodeName::try_from("dir_2").unwrap())
+                .count(),
+            1
+        );
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn mv_dir_from_dir_to_dir_no_name() {
+        let mut rng = crate::utils::crypto_rng();
+        let mut handle = interesting_handle().await;
+        handle
+            .mv(&mut rng, &["dir_1", "dir_2", "dir_3"], &["dir_1"])
+            .await
+            .unwrap();
+
+        let cwd_ls = handle.ls(&["dir_1"]).await.unwrap();
+        assert_eq!(
+            cwd_ls
+                .iter()
+                .filter(|entry| entry.name() == NodeName::try_from("dir_3").unwrap())
+                .count(),
+            1
+        );
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn mv_file_from_dir_to_cwd_no_name() {
+        let mut rng = crate::utils::crypto_rng();
+        let mut handle = interesting_handle().await;
+        handle
+            .mv(&mut rng, &["dir_1", "dir_2", "dir_3", "file_3"], &[])
+            .await
+            .unwrap();
+
+        let cwd_ls = handle.ls(&[]).await.unwrap();
+        assert_eq!(
+            cwd_ls
+                .iter()
+                .filter(|entry| entry.name() == NodeName::try_from("file_3").unwrap())
+                .count(),
+            1
+        );
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn mv_file_from_dir_to_dir_no_name() {
+        let mut rng = crate::utils::crypto_rng();
+        let mut handle = interesting_handle().await;
+        handle
+            .mv(&mut rng, &["dir_1", "dir_2", "dir_3", "file_3"], &["dir_1"])
+            .await
+            .unwrap();
+
+        let cwd_ls = handle.ls(&["dir_1"]).await.unwrap();
+        assert_eq!(
+            cwd_ls
+                .iter()
+                .filter(|entry| entry.name() == NodeName::try_from("file_3").unwrap())
+                .count(),
+            1
+        );
+    }
+
+    async fn interesting_handle() -> DirectoryHandle {
+        //           -----file_1
+        //         /
+        // root ---------file_2
+        //         \
+        //          --------- dir_1 ----- dir_2 ---- dir_3 ---- file_3
+        //                         \
+        //                           --- file_4
+        //                            \
+        //                              ----file_5
+        let mut rng = crate::utils::crypto_rng();
+        let inner = interesting_inner().await;
+        let root_id = inner.root_node().unwrap().id();
+        let inner = Arc::new(RwLock::new(inner));
+        DirectoryHandle {
+            current_key: Arc::new(SigningKey::generate(&mut rng)),
+            inner,
+            cwd_id: root_id,
+        }
+    }
 }
