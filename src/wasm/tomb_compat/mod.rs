@@ -82,6 +82,16 @@ impl TombCompat {
         Ok(())
     }
 
+    #[wasm_bindgen(js_name = revokeBucketAccess)]
+    pub async fn revoke_bucket_access(
+        &mut self,
+        bucket_id: String,
+        fingerprint: String,
+    ) -> BanyanFsResult<()> {
+        platform::drive_access::revoke(&self.client, &bucket_id, &fingerprint).await?;
+        Ok(())
+    }
+
     #[wasm_bindgen(js_name = userKeyAccess)]
     pub async fn user_key_access(&mut self) -> BanyanFsResult<js_sys::Array> {
         Ok(platform::account::user_key_access(&self.client)
