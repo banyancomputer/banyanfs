@@ -39,4 +39,10 @@ impl WasmUserKey {
     pub fn fingerprint(&self) -> String {
         self.0.fingerprint().to_string()
     }
+
+    /// Created at timestamp
+    #[wasm_bindgen(js_name = createdAt)]
+    pub fn created_at(&self) -> String {
+        self.0.created_at().to_string()
+    }
 }

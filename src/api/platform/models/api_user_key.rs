@@ -1,5 +1,5 @@
 use serde::Deserialize;
-
+/// User Key struct handed to us by the API
 #[derive(Clone, Debug, Deserialize)]
 pub struct ApiUserKey {
     id: ApiKeyId,
@@ -8,6 +8,7 @@ pub struct ApiUserKey {
     api_access: bool,
     pem: String,
     fingerprint: String,
+    created_at: String,
 }
 
 impl ApiUserKey {
@@ -39,6 +40,11 @@ impl ApiUserKey {
     /// Public Key Fingerprint
     pub fn fingerprint(&self) -> &str {
         &self.fingerprint
+    }
+
+    /// Created at time
+    pub fn created_at(&self) -> &str {
+        &self.created_at
     }
 }
 
