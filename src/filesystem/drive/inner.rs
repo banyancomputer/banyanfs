@@ -436,7 +436,7 @@ impl InnerDrive {
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
     use self::crypto::Fingerprint;
     use crate::prelude::NodeName;
     use rand::rngs::OsRng;
@@ -516,7 +516,7 @@ mod test {
     }
 
     // A fixture to make a relatively interesting inner
-    async fn interesting_inner() -> InnerDrive {
+    pub(crate) async fn interesting_inner() -> InnerDrive {
         let mut rng = OsRng {};
         let actor_id = ActorId::from(Fingerprint::from([0u8; Fingerprint::size()]));
         let access = DriveAccess::new(actor_id);
