@@ -258,6 +258,15 @@ pub enum ActorSettingsError {
 fn decode_optional_key(input: Stream) -> ParserResult<Option<AsymLockedAccessKey>> {
     let (input, presence_flag) = le_u8.parse_peek(input)?;
 
+    if cfg!(feature = "strict") && presence_flag != 0 && presence_flag != KEY_PRESENT_BIT {
+        return Err(winnow::error::ErrMode::Cut(
+            winnow::error::ParserError::from_error_kind(
+                &input,
+                winnow::error::ErrorKind::Verify,
+            ),
+        ));
+    }
+
     if presence_flag & KEY_PRESENT_BIT != 0 {
         let (input, key) = AsymLockedAccessKey::parse(input)?;
         Ok((input, Some(key)))
@@ -276,7 +285,7 @@ async fn encode_optional_key<W: AsyncWrite + Unpin + Send>(
 
     match key {
         Some(key) => {
-            writer.write_all(&[0x01]).await?;
+            writer.write_all(&[KEY_PRESENT_BIT]).await?;
             written_bytes += 1;
 
             written_bytes += key.encode(writer).await?;
