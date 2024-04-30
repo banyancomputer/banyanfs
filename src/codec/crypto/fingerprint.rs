@@ -26,7 +26,7 @@ impl Fingerprint {
         Ok(self.0.len())
     }
 
-    /// Retrieves the [`KeyId`] for identifying a particular public/private key pair using in
+    /// Retrieves the [`KeyId`] for identifying a particular public/private key pair in
     /// public uses. Should not be used for unique differentiation of different keys. Additional
     /// details of the types usage is documented in the [`KeyId`] documentation.
     pub fn key_id(&self) -> KeyId {
