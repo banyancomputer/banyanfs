@@ -24,7 +24,7 @@ impl StorageHostAuth {
         self.authenticated_storage_hosts.remove(storage_host_url);
     }
 
-    /// Attempts to retrieve a current Bearer token if one is available. If there is a token an its
+    /// Attempts to retrieve a current Bearer token if one is available. If there is a token and it's
     /// expired or the storage host is unknown, this will return None.
     fn current_token(&self, storage_host_url: &Url) -> Option<String> {
         self.active_tokens
