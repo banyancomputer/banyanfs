@@ -9,8 +9,6 @@ pub(crate) use drive::InnerDrive;
 pub(crate) use file_content::{FileContent, FileContentError};
 pub(crate) use nodes::NodeBuilder;
 
-pub(crate) use nodes::{Node, NodeName};
-
 pub use drive::{
     DirectoryEntry, DirectoryHandle, Drive, DriveAccess, DriveLoader, DriveLoaderError,
     OperationError,

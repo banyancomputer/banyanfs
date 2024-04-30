@@ -20,11 +20,11 @@ async fn main() {
 
     let drive = Drive::initialize_private(&mut rng, signing_key.clone()).unwrap();
     assert!(
-        drive.has_read_access(actor_id).await,
+        drive.has_read_access(&actor_id).await,
         "creation key to have read access"
     );
 
-    if drive.has_write_access(actor_id).await {
+    if drive.has_write_access(&actor_id).await {
         let mut root = drive.root().await.unwrap();
 
         root.mkdir(&mut rng, &["testing", "paths", "deeply", "@#($%*%)"], true)
@@ -64,6 +64,19 @@ async fn main() {
             .await
             .unwrap();
         assert_eq!(file_data, b"a filesystem was born");
+
+        let additional_key = std::sync::Arc::new(SigningKey::generate(&mut rng));
+        let additional_pubkey = additional_key.verifying_key();
+
+        let access = AccessMaskBuilder::maintenance()
+            .protected()
+            .build()
+            .unwrap();
+
+        drive
+            .authorize_key(&mut rng, additional_pubkey, access)
+            .await
+            .unwrap();
     }
 
     let mut file_opts = tokio::fs::OpenOptions::new();

@@ -14,7 +14,7 @@ use crate::codec::{ActorId, Stream};
 
 const KEY_SIZE: usize = 49;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct VerifyingKey {
     inner: ecdsa::VerifyingKey<NistP384>,
 }
