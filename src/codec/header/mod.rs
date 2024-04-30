@@ -6,7 +6,7 @@ mod identity_header;
 mod key_count;
 mod public_settings;
 
-pub use access_mask::{AccessMask, AccessMaskBuilder};
+pub use access_mask::{AccessMask, AccessMaskBuilder, AccessMaskError};
 pub use content_options::ContentOptions;
 pub use data_block::DataBlock;
 pub use format_header::FormatHeader;

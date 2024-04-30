@@ -4,7 +4,7 @@ use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::AsyncWrite;
 
 use crate::codec::crypto::{AccessKey, KeyId, SigningKey, VerifyingKey};
-use crate::codec::header::{AccessMask, AccessMaskBuilder};
+use crate::codec::header::{AccessMask, AccessMaskBuilder, AccessMaskError};
 use crate::codec::{ActorId, ActorSettings, ActorSettingsError, ParserResult, Stream};
 
 /// [`DriveAccess`] maintains a mapping of [`ActorId`] instances to their available permissions
@@ -163,7 +163,11 @@ impl DriveAccess {
             maintenance_key: Some(AccessKey::generate(rng)),
         };
 
-        let access_mask = AccessMaskBuilder::full_access().owner().protected().build();
+        let access_mask = AccessMaskBuilder::full_access()
+            .owner()
+            .protected()
+            .build()?;
+
         access.register_actor(rng, verifying_key, access_mask)?;
 
         Ok(access)
@@ -434,6 +438,9 @@ pub enum DriveAccessError {
     #[error("access denied: {0}")]
     AccessDenied(&'static str),
 
+    #[error("access mask was invalid: {0}")]
+    InvalidAccessMask(#[from] AccessMaskError),
+
     #[error("attempted to add an actor that already has access")]
     ActorAlreadyPresent,
 
@@ -511,7 +518,7 @@ mod tests {
         let second_key = SigningKey::generate(&mut rng);
         let second_verifying_key = second_key.verifying_key();
 
-        let access_mask = AccessMaskBuilder::structural().build();
+        let access_mask = AccessMaskBuilder::structural().build().unwrap();
         access
             .register_actor(&mut rng, second_verifying_key, access_mask)
             .unwrap();
@@ -579,7 +586,7 @@ mod tests {
         let actor2_verifying_key = actor2_key.verifying_key();
 
         // actor2 gets full access but is critically _not_ an owner
-        let actor2_access_mask = AccessMaskBuilder::full_access().build();
+        let actor2_access_mask = AccessMaskBuilder::full_access().build().unwrap();
         access
             .register_actor(&mut rng, actor2_verifying_key, actor2_access_mask)
             .unwrap();
@@ -603,7 +610,7 @@ mod tests {
         let actor2_verifying_key = actor2_key.verifying_key();
         let actor2_id = actor2_verifying_key.actor_id();
 
-        let actor2_access_mask = AccessMaskBuilder::full_access().build();
+        let actor2_access_mask = AccessMaskBuilder::full_access().build().unwrap();
         access
             .register_actor(&mut rng, actor2_verifying_key, actor2_access_mask)
             .unwrap();
@@ -631,7 +638,10 @@ mod tests {
         let actor2_key = SigningKey::generate(&mut rng);
         let actor2_verifying_key = actor2_key.verifying_key();
 
-        let actor2_access_mask = AccessMaskBuilder::full_access().protected().build();
+        let actor2_access_mask = AccessMaskBuilder::full_access()
+            .protected()
+            .build()
+            .unwrap();
         access
             .register_actor(&mut rng, actor2_verifying_key, actor2_access_mask)
             .unwrap();
@@ -654,7 +664,7 @@ mod tests {
         let actor2_key = SigningKey::generate(&mut rng);
         let actor2_verifying_key = actor2_key.verifying_key();
         let actor2_id = actor2_verifying_key.actor_id();
-        let actor2_access_mask = AccessMaskBuilder::full_access().build();
+        let actor2_access_mask = AccessMaskBuilder::full_access().build().unwrap();
 
         access
             .register_actor(&mut rng, actor2_verifying_key, actor2_access_mask)

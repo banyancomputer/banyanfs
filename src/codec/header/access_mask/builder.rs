@@ -1,5 +1,5 @@
 use crate::codec::header::access_mask::{
-    AccessMask, DATA_KEY_PRESENT_BIT, FILESYSTEM_KEY_PRESENT_BIT, HISTORICAL_BIT,
+    AccessMask, AccessMaskError, DATA_KEY_PRESENT_BIT, FILESYSTEM_KEY_PRESENT_BIT, HISTORICAL_BIT,
     MAINTENANCE_KEY_PRESENT_BIT, OWNER_BIT, PROTECTED_BIT,
 };
 
@@ -12,8 +12,8 @@ pub struct AccessMaskBuilder {
 
 impl AccessMaskBuilder {
     /// Converts the builder into the final [`AccessMask`] instance.
-    pub fn build(self) -> AccessMask {
-        AccessMask::from(self.bits)
+    pub fn build(self) -> Result<AccessMask, AccessMaskError> {
+        AccessMask::try_from(self.bits)
     }
 
     /// Create a new instance that has access to all of the encryption keys. This doesn't grant

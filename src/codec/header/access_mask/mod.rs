@@ -67,7 +67,15 @@ impl AccessMask {
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, byte) = le_u8.parse_peek(input)?;
-        Ok((input, Self::from(byte)))
+
+        let access_mask = Self::try_from(byte).map_err(|_| {
+            winnow::error::ErrMode::Cut(winnow::error::ParserError::from_error_kind(
+                &input,
+                winnow::error::ErrorKind::Tag,
+            ))
+        })?;
+
+        Ok((input, access_mask))
     }
 
     pub(crate) fn set_data_key_present(&mut self, value: bool) {
@@ -101,10 +109,22 @@ impl AccessMask {
     }
 }
 
-impl From<u8> for AccessMask {
-    fn from(value: u8) -> Self {
-        Self(value & ALL_SETTINGS_MASK)
+impl TryFrom<u8> for AccessMask {
+    type Error = AccessMaskError;
+
+    fn try_from(value: u8) -> Result<Self, AccessMaskError> {
+        if (value & !ALL_SETTINGS_MASK) != 0 {
+            return Err(AccessMaskError::InvalidValue(value));
+        }
+
+        Ok(Self(value & ALL_SETTINGS_MASK))
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum AccessMaskError {
+    #[error("invalid access mask value: {0}")]
+    InvalidValue(u8),
 }
 
 #[cfg(test)]
@@ -113,7 +133,7 @@ mod tests {
 
     #[test]
     fn test_setting_toggles() {
-        let mut access = AccessMask::from(0);
+        let mut access = AccessMask::try_from(0).unwrap();
 
         assert!(!access.has_data_key());
         access.set_data_key_present(true);
