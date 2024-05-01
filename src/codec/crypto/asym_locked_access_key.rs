@@ -6,6 +6,7 @@ use winnow::{unpeek, Parser};
 use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce, SigningKey, VerifyingKey};
 use crate::codec::{ParserResult, Stream};
 
+#[derive(Clone)]
 pub struct AsymLockedAccessKey {
     pub(crate) dh_exchange_key: VerifyingKey,
     pub(crate) nonce: Nonce,
@@ -30,6 +31,7 @@ impl AsymLockedAccessKey {
 
         Ok(written_bytes)
     }
+
     pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, (dh_exchange_key, nonce, raw_cipher_text, tag)) = (
             unpeek(VerifyingKey::parse),

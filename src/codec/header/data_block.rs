@@ -441,6 +441,6 @@ impl DataOptions {
     }
 }
 
-fn banyan_data_magic_tag<'a>(input: Stream) -> ParserResult<&[u8]> {
+fn banyan_data_magic_tag(input: Stream) -> ParserResult<&[u8]> {
     literal(BANYAN_DATA_MAGIC).parse_peek(input)
 }

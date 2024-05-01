@@ -391,7 +391,7 @@ impl DirectoryHandle {
 
         let inner_read = self.inner.read().await;
         let actor_id = self.current_key.actor_id();
-        if !inner_read.access().has_read_access(actor_id) {
+        if !inner_read.access().has_read_access(&actor_id) {
             return Err(OperationError::AccessDenied);
         }
         drop(inner_read);
@@ -419,11 +419,7 @@ impl DirectoryHandle {
                 .data_key()
                 .map_err(|_| OperationError::AccessDenied)?;
 
-            let data_key = match inner_read
-                .access()
-                .permission_keys()
-                .and_then(|pk| pk.data.as_ref())
-            {
+            let data_key = match inner_read.access().data_key() {
                 Some(data_key) => data_key,
                 None => return Err(OperationError::AccessDenied),
             };
@@ -498,15 +494,11 @@ impl DirectoryHandle {
 
         let inner_read = self.inner.read().await;
         let actor_id = self.current_key.actor_id();
-        if !inner_read.access().has_write_access(actor_id) {
+        if !inner_read.access().has_write_access(&actor_id) {
             return Err(OperationError::AccessDenied);
         }
 
-        let data_key = match inner_read
-            .access()
-            .permission_keys()
-            .and_then(|pk| pk.data.as_ref())
-        {
+        let data_key = match inner_read.access().data_key() {
             Some(data_key) => data_key.clone(),
             None => return Err(OperationError::AccessDenied),
         };
@@ -734,7 +726,7 @@ fn walk_path<'a>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::filesystem::drive::inner::test::interesting_inner;
+    use crate::filesystem::drive::inner::test::build_interesting_inner;
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
@@ -916,7 +908,7 @@ mod test {
         //                            \
         //                              ----file_5
         let mut rng = crate::utils::crypto_rng();
-        let inner = interesting_inner().await;
+        let inner = build_interesting_inner().await;
         let root_id = inner.root_node().unwrap().id();
         let inner = Arc::new(RwLock::new(inner));
         DirectoryHandle {

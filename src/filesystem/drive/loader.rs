@@ -158,59 +158,21 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                     "drive_loader::encrypted_header"
                 );
 
-                let mut header = header_buffer.as_slice();
+                let hdr_stream = Stream::new(header_buffer.as_slice());
 
-                let (remaining, drive_access) =
-                    DriveAccess::parse(Stream::new(header), **key_count, self.signing_key)
-                        .map_err(|e| match e {
-                            ErrMode::Incomplete(_) => winnow::error::ErrMode::Cut(
-                                winnow::error::ParserError::from_error_kind(
-                                    &Stream::new(header),
-                                    winnow::error::ErrorKind::Verify,
-                                ),
-                            ),
-                            e => e,
-                        })?;
-                let bytes_read = header.len() - remaining.len();
-                (_, header) = header.split_at(bytes_read);
-                trace!(bytes_read, "drive_loader::encrypted_header::drive_access");
+                let (hdr_stream, access) =
+                    DriveAccess::parse(hdr_stream, **key_count, self.signing_key)?;
+                trace!("drive_loader::encrypted_header::drive_access");
 
-                let (remaining, content_options) = ContentOptions::parse(Stream::new(header))
-                    .map_err(|e| match e {
-                        ErrMode::Incomplete(_) => winnow::error::ErrMode::Cut(
-                            winnow::error::ParserError::from_error_kind(
-                                &Stream::new(header),
-                                winnow::error::ErrorKind::Verify,
-                            ),
-                        ),
-                        e => e,
-                    })?;
-                let bytes_read = header.len() - remaining.len();
-                (_, header) = header.split_at(bytes_read);
-                trace!(
-                    bytes_read,
-                    "drive_loader::encrypted_header::content_options"
-                );
+                let (hdr_stream, content_options) = ContentOptions::parse(hdr_stream)?;
+                trace!("drive_loader::encrypted_header::content_options");
 
-                let (remaining, journal_start) = JournalCheckpoint::parse(Stream::new(header))
-                    .map_err(|e| match e {
-                        ErrMode::Incomplete(_) => winnow::error::ErrMode::Cut(
-                            winnow::error::ParserError::from_error_kind(
-                                &Stream::new(header),
-                                winnow::error::ErrorKind::Verify,
-                            ),
-                        ),
-                        e => e,
-                    })?;
-                let bytes_read = header.len() - remaining.len();
-                trace!(
-                    bytes_read,
-                    "drive_loader::encrypted_header::journal_checkpoint"
-                );
+                let (hdr_stream, journal_start) = JournalCheckpoint::parse(hdr_stream)?;
+                trace!("drive_loader::encrypted_header::journal_checkpoint");
 
-                debug_assert!(remaining.is_empty());
+                debug_assert!(hdr_stream.is_empty());
 
-                self.drive_access = Some(drive_access);
+                self.drive_access = Some(access);
                 self.state = DriveLoaderState::PrivateContent(content_options, journal_start);
 
                 let bytes_read = buffer.len() - input.len();
@@ -225,18 +187,18 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                     let encrypted_size = encrypted_size as usize;
                     let payload_size = encrypted_size - (Nonce::size() + AuthenticationTag::size());
 
-                    let filesystem_key = self
-                        .drive_access
-                        .as_ref()
-                        .and_then(|a| a.permission_keys())
-                        .and_then(|pk| pk.filesystem.as_ref())
+                    let drive_access = match &self.drive_access {
+                        Some(da) => da,
+                        None => {
+                            return Err(DriveLoaderError::KeyNotAvailable("drive access missing"))
+                        }
+                    };
+
+                    let filesystem_key = drive_access
+                        .filesystem_key()
                         .ok_or(DriveLoaderError::KeyNotAvailable("filesystem key missing"))?;
 
-                    let data_key = self
-                        .drive_access
-                        .as_ref()
-                        .and_then(|a| a.permission_keys())
-                        .and_then(|pk| pk.data.as_ref());
+                    let data_key = drive_access.data_key();
 
                     // todo(sstelfox): we ideally want to stream this data and selectively parse
                     // things, but that has impacts on the encryption which would need to be managed
@@ -258,11 +220,10 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                         payload_size,
                         "drive_loader::private_content::decrypt_successful"
                     );
-                    let drive_access = self.drive_access.clone().expect("to have been set");
 
                     let (remaining, inner_drive) = InnerDrive::parse(
                         Stream::new(fs_buffer.as_slice()),
-                        drive_access,
+                        drive_access.clone(),
                         journal_start.clone(),
                         data_key,
                     )

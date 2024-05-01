@@ -3,7 +3,7 @@ use futures::io::AsyncWrite;
 use crate::codec::meta::{Cid, VectorClock};
 use crate::codec::{ParserResult, Stream};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct JournalCheckpoint {
     merkle_root_cid: Cid,
     vector: VectorClock,
@@ -43,5 +43,33 @@ impl JournalCheckpoint {
 
     pub const fn size() -> usize {
         Cid::size() + VectorClock::size()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use winnow::Partial;
+
+    use super::*;
+
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::*;
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_user_agent_roundtrip() {
+        let checkpoint = JournalCheckpoint::initialize();
+
+        let mut buffer = Vec::with_capacity(JournalCheckpoint::size());
+        checkpoint
+            .encode(&mut buffer)
+            .await
+            .expect("encoding success");
+
+        let partial = Partial::new(buffer.as_slice());
+        let (remaining, parsed) = JournalCheckpoint::parse(partial).expect("round trip");
+
+        assert!(remaining.is_empty());
+        assert_eq!(checkpoint, parsed);
     }
 }

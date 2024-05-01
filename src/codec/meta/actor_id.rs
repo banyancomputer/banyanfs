@@ -3,10 +3,16 @@ use futures::AsyncWrite;
 use crate::codec::crypto::{Fingerprint, KeyId};
 use crate::codec::{ParserResult, Stream};
 
+/// Actors are unique parties for accessing a specific drive and are uniquely defined by the
+/// fingerprint from the Actor's public key (via a [`crate::codec::crypto::VerifyingKey`]).
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct ActorId(Fingerprint);
 
 impl ActorId {
+    pub fn as_hex(&self) -> String {
+        self.0.as_hex()
+    }
+
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
@@ -14,13 +20,16 @@ impl ActorId {
         self.0.encode(writer).await
     }
 
+    /// Access the actor's [`KeyId`]. This is intended for filtering available keys down to some
+    /// reasonable possible candidates and should not be used to uniquely identify the actor as a
+    /// whole. For unique actor identification, the full [`ActorId`] should be used.
     pub fn key_id(&self) -> KeyId {
         self.0.key_id()
     }
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
-        let (remaining, fingerprint) = Fingerprint::parse(input)?;
-        Ok((remaining, ActorId(fingerprint)))
+        Fingerprint::parse(input)
+            .map(|(remaining, fingerprint)| (remaining, Self::from(fingerprint)))
     }
 
     pub const fn size() -> usize {

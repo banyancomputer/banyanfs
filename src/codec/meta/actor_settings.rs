@@ -1,91 +1,218 @@
-use futures::io::{AsyncWrite, AsyncWriteExt};
+use ecdsa::signature::rand_core::CryptoRngCore;
+use futures::{AsyncWrite, AsyncWriteExt};
 use winnow::binary::le_u8;
 use winnow::token::take;
 use winnow::Parser;
 
-use crate::codec::crypto::VerifyingKey;
-use crate::codec::header::KeyAccessSettings;
-use crate::codec::meta::VectorClock;
+use crate::codec::crypto::{
+    AccessKey, AsymLockedAccessKey, AsymLockedAccessKeyError, SigningKey, VerifyingKey,
+};
+use crate::codec::header::AccessMask;
+use crate::codec::meta::{UserAgent, VectorClock};
 use crate::codec::{ParserResult, Stream};
 
-const SOFTWARE_AGENT_BYTE_STR_SIZE: usize = 63;
+const KEY_PRESENT_BIT: u8 = 0b0000_0001;
 
 #[derive(Clone, Debug)]
 pub struct ActorSettings {
     verifying_key: VerifyingKey,
     vector_clock: VectorClock,
-    access_settings: KeyAccessSettings,
-    agent: Vec<u8>,
+
+    access_mask: AccessMask,
+    filesystem_key: Option<AsymLockedAccessKey>,
+    data_key: Option<AsymLockedAccessKey>,
+    maintenance_key: Option<AsymLockedAccessKey>,
+
+    // todo(sstelfox): this would be a breaking change but this should be optional. When granting
+    // access to a new key, we only know what user agent the _current_ user is not the one being
+    // granted access. Recording our own as the user's agent is an error.
+    user_agent: UserAgent,
 }
 
 impl ActorSettings {
-    pub fn actor_settings(&self) -> KeyAccessSettings {
-        self.access_settings.clone()
+    pub fn access(&self) -> AccessMask {
+        self.access_mask
+    }
+
+    pub(crate) fn access_mut(&mut self) -> &mut AccessMask {
+        &mut self.access_mask
+    }
+
+    pub fn clear_data_key(&mut self) {
+        self.data_key = None;
+        self.access_mask.set_data_key_present(false);
+    }
+
+    pub fn clear_filesystem_key(&mut self) {
+        self.filesystem_key = None;
+        self.access_mask.set_filesystem_key_present(false);
+    }
+
+    pub fn clear_maintenance_key(&mut self) {
+        self.data_key = None;
+        self.access_mask.set_data_key_present(false);
+    }
+
+    pub fn data_key(
+        &self,
+        actor_key: &SigningKey,
+    ) -> Result<Option<AccessKey>, ActorSettingsError> {
+        if !self.access_mask.has_data_key() {
+            return Ok(None);
+        }
+
+        let locked_key = self
+            .data_key
+            .as_ref()
+            .ok_or(ActorSettingsError::ExpectedKeyMissing)?;
+
+        let open_key = locked_key
+            .unlock(actor_key)
+            .map_err(ActorSettingsError::UnlockFailed)?;
+
+        Ok(Some(open_key))
     }
 
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
-        overwrite_version: bool,
     ) -> std::io::Result<usize> {
         let mut written_bytes = 0;
 
         written_bytes += self.verifying_key.encode(writer).await?;
         written_bytes += self.vector_clock.encode(writer).await?;
-        written_bytes += self.access_settings.encode(writer).await?;
+        written_bytes += self.access_mask.encode(writer).await?;
+        written_bytes += self.user_agent().encode(writer).await?;
 
-        let (len, bytes) = if overwrite_version {
-            current_version_byte_str()
-        } else {
-            let agent_len = self.agent.len();
-            if agent_len > SOFTWARE_AGENT_BYTE_STR_SIZE {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "invalid agent byte string length",
-                ));
-            }
-
-            let mut full_agent = [0; SOFTWARE_AGENT_BYTE_STR_SIZE];
-            full_agent.copy_from_slice(&self.agent);
-
-            (agent_len as u8, full_agent)
-        };
-
-        writer.write_all(&[len]).await?;
-        writer.write_all(&bytes).await?;
-        written_bytes += 1 + SOFTWARE_AGENT_BYTE_STR_SIZE;
+        written_bytes += encode_optional_key(writer, &self.filesystem_key).await?;
+        written_bytes += encode_optional_key(writer, &self.data_key).await?;
+        written_bytes += encode_optional_key(writer, &self.maintenance_key).await?;
 
         Ok(written_bytes)
     }
 
-    pub fn new(verifying_key: VerifyingKey, access_settings: KeyAccessSettings) -> Self {
-        let vector_clock = VectorClock::initialize();
+    pub fn filesystem_key(
+        &self,
+        actor_key: &SigningKey,
+    ) -> Result<Option<AccessKey>, ActorSettingsError> {
+        if !self.access_mask.has_filesystem_key() {
+            return Ok(None);
+        }
 
-        let (len, agent_fixed) = current_version_byte_str();
-        let agent = agent_fixed[..len as usize].to_vec();
+        let locked_key = self
+            .filesystem_key
+            .as_ref()
+            .ok_or(ActorSettingsError::ExpectedKeyMissing)?;
+
+        let open_key = locked_key
+            .unlock(actor_key)
+            .map_err(ActorSettingsError::UnlockFailed)?;
+
+        Ok(Some(open_key))
+    }
+
+    pub fn grant_data_key(
+        &mut self,
+        rng: &mut impl CryptoRngCore,
+        key: &AccessKey,
+    ) -> Result<(), ActorSettingsError> {
+        let locked_key = key
+            .lock_for(rng, &self.verifying_key)
+            .map_err(|_| ActorSettingsError::KeyEscrowError)?;
+
+        self.data_key = Some(locked_key);
+        self.access_mask.set_data_key_present(true);
+
+        Ok(())
+    }
+
+    pub fn grant_filesystem_key(
+        &mut self,
+        rng: &mut impl CryptoRngCore,
+        key: &AccessKey,
+    ) -> Result<(), ActorSettingsError> {
+        let locked_key = key
+            .lock_for(rng, &self.verifying_key)
+            .map_err(|_| ActorSettingsError::KeyEscrowError)?;
+
+        self.filesystem_key = Some(locked_key);
+        self.access_mask.set_filesystem_key_present(true);
+
+        Ok(())
+    }
+
+    pub fn grant_maintenance_key(
+        &mut self,
+        rng: &mut impl CryptoRngCore,
+        key: &AccessKey,
+    ) -> Result<(), ActorSettingsError> {
+        let locked_key = key
+            .lock_for(rng, &self.verifying_key)
+            .map_err(|_| ActorSettingsError::KeyEscrowError)?;
+
+        self.maintenance_key = Some(locked_key);
+        self.access_mask.set_maintenance_key_present(true);
+
+        Ok(())
+    }
+
+    pub fn maintenance_key(
+        &self,
+        actor_key: &SigningKey,
+    ) -> Result<Option<AccessKey>, ActorSettingsError> {
+        if !self.access_mask.has_data_key() {
+            return Ok(None);
+        }
+
+        let locked_key = self
+            .maintenance_key
+            .as_ref()
+            .ok_or(ActorSettingsError::ExpectedKeyMissing)?;
+
+        let open_key = locked_key
+            .unlock(actor_key)
+            .map_err(ActorSettingsError::UnlockFailed)?;
+
+        Ok(Some(open_key))
+    }
+
+    pub fn new(verifying_key: VerifyingKey, access_mask: AccessMask) -> Self {
+        let vector_clock = VectorClock::initialize();
+        let user_agent = UserAgent::current();
 
         Self {
             verifying_key,
-            access_settings,
             vector_clock,
-            agent,
+
+            access_mask,
+            filesystem_key: None,
+            data_key: None,
+            maintenance_key: None,
+
+            user_agent,
         }
     }
 
-    pub fn parse_private(input: Stream) -> ParserResult<Self> {
+    pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, verifying_key) = VerifyingKey::parse(input)?;
         let (input, vector_clock) = VectorClock::parse(input)?;
-        let (input, access_settings) = KeyAccessSettings::parse_private(input)?;
+        let (input, access_mask) = AccessMask::parse(input)?;
+        let (input, user_agent) = UserAgent::parse(input)?;
 
-        let (input, agent_len) = le_u8.parse_peek(input)?;
-        let (input, agent_fixed) = take(SOFTWARE_AGENT_BYTE_STR_SIZE).parse_peek(input)?;
-        let agent = agent_fixed[..agent_len as usize].to_vec();
+        let (input, filesystem_key) = decode_optional_key(input)?;
+        let (input, data_key) = decode_optional_key(input)?;
+        let (input, maintenance_key) = decode_optional_key(input)?;
 
         let actor_settings = Self {
             verifying_key,
             vector_clock,
-            access_settings,
-            agent,
+
+            access_mask,
+            filesystem_key,
+            data_key,
+            maintenance_key,
+
+            user_agent,
         };
 
         Ok((input, actor_settings))
@@ -94,9 +221,17 @@ impl ActorSettings {
     pub const fn size() -> usize {
         VerifyingKey::size()
             + VectorClock::size()
-            + KeyAccessSettings::size()
-            + 1
-            + SOFTWARE_AGENT_BYTE_STR_SIZE
+            + AccessMask::size()
+            + UserAgent::size()
+            + 3 * (1 + AsymLockedAccessKey::size())
+    }
+
+    pub fn update_user_agent(&mut self) {
+        self.user_agent = UserAgent::current();
+    }
+
+    pub fn user_agent(&self) -> UserAgent {
+        self.user_agent.clone()
     }
 
     pub fn vector_clock(&self) -> VectorClock {
@@ -108,12 +243,62 @@ impl ActorSettings {
     }
 }
 
-fn current_version_byte_str() -> (u8, [u8; SOFTWARE_AGENT_BYTE_STR_SIZE]) {
-    let new_agent = crate::version::user_agent_byte_str();
-    let new_agent_len = new_agent.len();
+#[derive(Debug, thiserror::Error)]
+pub enum ActorSettingsError {
+    #[error("failed to escrow access key for actor")]
+    KeyEscrowError,
 
-    let mut full_agent = [0; SOFTWARE_AGENT_BYTE_STR_SIZE];
-    full_agent[..new_agent_len].copy_from_slice(&new_agent);
+    #[error("actor has permissions to access a key that wasn't present")]
+    ExpectedKeyMissing,
 
-    (new_agent.len() as u8, full_agent)
+    #[error("access key failed to unlock with actor's key")]
+    UnlockFailed(AsymLockedAccessKeyError),
+}
+
+fn decode_optional_key(input: Stream) -> ParserResult<Option<AsymLockedAccessKey>> {
+    let (input, presence_flag) = le_u8.parse_peek(input)?;
+
+    if cfg!(feature = "strict") && presence_flag != 0 && presence_flag != KEY_PRESENT_BIT {
+        return Err(winnow::error::ErrMode::Cut(
+            winnow::error::ParserError::from_error_kind(
+                &input,
+                winnow::error::ErrorKind::Verify,
+            ),
+        ));
+    }
+
+    if presence_flag & KEY_PRESENT_BIT != 0 {
+        let (input, key) = AsymLockedAccessKey::parse(input)?;
+        Ok((input, Some(key)))
+    } else {
+        // still need to advance the input
+        let (input, _blank) = take(AsymLockedAccessKey::size()).parse_peek(input)?;
+        Ok((input, None))
+    }
+}
+
+async fn encode_optional_key<W: AsyncWrite + Unpin + Send>(
+    writer: &mut W,
+    key: &Option<AsymLockedAccessKey>,
+) -> std::io::Result<usize> {
+    let mut written_bytes = 0;
+
+    match key {
+        Some(key) => {
+            writer.write_all(&[KEY_PRESENT_BIT]).await?;
+            written_bytes += 1;
+
+            written_bytes += key.encode(writer).await?;
+        }
+        None => {
+            writer.write_all(&[0x00]).await?;
+            written_bytes += 1;
+
+            let empty_key = [0u8; AsymLockedAccessKey::size()];
+            writer.write_all(&empty_key).await?;
+            written_bytes += AsymLockedAccessKey::size();
+        }
+    }
+
+    Ok(written_bytes)
 }

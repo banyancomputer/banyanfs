@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+//#![warn(missing_docs)]
 #![doc = include_str!("../README.md")]
 
 #[cfg(feature = "banyan-api")]
@@ -33,6 +33,6 @@ pub mod prelude {
     pub use crate::version::*;
 
     pub use crate::codec::crypto::{SigningKey, VerifyingKey};
-    pub use crate::codec::header::ContentOptions;
+    pub use crate::codec::header::{AccessMask, AccessMaskBuilder, ContentOptions};
     pub use crate::codec::FilesystemId;
 }
