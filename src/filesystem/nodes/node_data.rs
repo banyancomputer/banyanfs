@@ -228,11 +228,11 @@ impl NodeData {
             } => {
                 let base_size = FilePermissions::size();
 
-                let associated_data_size = associated_data
+                let associated_map_size = associated_data
                     .iter()
                     .fold(0, |acc, (name, _)| acc + name.size() + PermanentId::size());
 
-                (base_size + associated_data_size) as u64 + content.size()
+                (base_size + associated_map_size) as u64 + content.size()
             }
         }
     }
