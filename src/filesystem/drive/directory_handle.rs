@@ -306,7 +306,7 @@ impl DirectoryHandle {
         let src_parent_perm_id = inner_write.by_id(src_node_id)?.parent_id().ok_or(
             OperationError::InternalCorruption(src_node_id, "src node has no parent"),
         )?;
-        let src_parent_node = inner_write.by_perm_id_mut(&src_parent_perm_id)?;
+        let src_parent_node = inner_write.by_perm_id_mut(&src_parent_perm_id).await?;
 
         // Remove target node from its current location by removing it as a child from its parent
         src_parent_node
@@ -323,14 +323,14 @@ impl DirectoryHandle {
         // good way to make the move an atomic operation though...
         // The borrow checker won't let us get mutable references to all three nodes at once (src, dst, src_parent)
         // We could maybe extend `DriveInner` to do this operation internally to make it more atomic
-        let dst_parent_node = inner_write.by_id_mut(dst_parent_id)?;
+        let dst_parent_node = inner_write.by_id_mut(dst_parent_id).await?;
         let dst_parent_node_perm_id = dst_parent_node.permanent_id();
 
         dst_parent_node
             .add_child(new_dst_name.clone(), src_node_perm_id)
             .await?;
 
-        let src_node = inner_write.by_id_mut(src_node_id)?;
+        let src_node = inner_write.by_id_mut(src_node_id).await?;
         src_node.set_parent_id(dst_parent_node_perm_id).await;
         src_node.set_name(new_dst_name).await;
 
@@ -652,7 +652,7 @@ impl DirectoryHandle {
             .map_err(|_| OperationError::Other("failed to seal node data key"))?;
 
         let mut inner_write = self.inner.write().await;
-        let node = inner_write.by_perm_id_mut(&new_permanent_id)?;
+        let node = inner_write.by_perm_id_mut(&new_permanent_id).await?;
         let node_data = node.data_mut().await;
 
         let file_content =

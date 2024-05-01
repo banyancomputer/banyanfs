@@ -54,8 +54,8 @@ impl InnerDrive {
     /// Returns an mutable reference to the contained [`Node`] with the passed in [`NodeId`]
     /// # Error
     /// - [`OperationError::InternalCorruption`] if the [`NodeId`] is not found
-    pub(crate) fn by_id_mut(&mut self, node_id: NodeId) -> Result<&mut Node, OperationError> {
-        self.mark_ancestors_dirty(node_id)?;
+    pub(crate) async fn by_id_mut(&mut self, node_id: NodeId) -> Result<&mut Node, OperationError> {
+        self.mark_ancestors_dirty(node_id).await?;
         self.nodes
             .get_mut(node_id)
             .ok_or(OperationError::InternalCorruption(
@@ -64,14 +64,27 @@ impl InnerDrive {
             ))
     }
 
-    fn mark_ancestors_dirty(&mut self, node_id: NodeId) -> Result<(), OperationError> {
+    async fn mark_ancestors_dirty(&mut self, node_id: NodeId) -> Result<(), OperationError> {
         // Changes have happened in `node_id` walk up its parents to root marking nodes as dirty
         let mut node_id = node_id;
         self.dirty_nodes.push(node_id);
+
+        let _node_mut = self //mark cid dirty (getting mutable access to its data will cause this)
+            .nodes
+            .get_mut(node_id)
+            .expect("This succeeded directly above in non-mut form")
+            .data_mut()
+            .await;
         while let Some(parent_perm_id) = self.by_id(node_id)?.parent_id() {
             node_id = self.lookup_internal_id(&parent_perm_id)?;
             self.dirty_nodes.push(node_id);
         }
+        let _node_mut = self //mark cid dirty (getting mutable access to its data will cause this)
+            .nodes
+            .get_mut(node_id)
+            .expect("This succeeded directly above in non-mut form")
+            .data_mut()
+            .await;
         Ok(())
     }
 
@@ -79,8 +92,8 @@ impl InnerDrive {
         // Take the dirty node list (replacing it with an empty Vec)
         let mut dirty = std::mem::take(&mut self.dirty_nodes);
 
-        // Popping from back push NodeIds into `node_list`. Only pushing if the list does
-        // not already contain that nodeId.
+        // Popping from back of the dirty list, push NodeIds into `node_list`
+        // Only pushing if the list does not already contain that nodeId.
         let mut node_list = Vec::new();
         while let Some(node_id) = dirty.pop() {
             if !node_list.contains(&node_id) {
@@ -95,15 +108,17 @@ impl InnerDrive {
 
             // Update Size:
             let new_children_size = node.ordered_child_pids().iter().fold(0, |acc, child_pid| {
+                // This should maybe actually float up an error as opposed to defaulting to 0 if a child can not be found
+                // It implies a child on the current node can't be found in the filesystem.
+                // This should be done carefully though, maybe finishing the res of its work before returning an error? Or maybe not?
                 let child_size = self.by_perm_id(child_pid).ok().map_or(0, Node::size);
                 acc + child_size
             });
-            let node_mut = self.by_id_mut(node_id).unwrap();
+            let node_mut = self.by_id_mut(node_id).await.unwrap();
             match node_mut.data_mut().await {
                 NodeData::Directory { children_size, .. } => *children_size = new_children_size,
                 _ => {}
             }
-            // Update Cid:
         }
         Ok(())
     }
@@ -121,12 +136,12 @@ impl InnerDrive {
     /// # Error
     /// - [`OperationError::MissingPermanentId`] if the [`PermanentId`] is not found
     /// - [`OperationError::InternalCorruption`] if the [`PermanentId`] maps to a [`NodeId`] that no longer exists
-    pub(crate) fn by_perm_id_mut(
+    pub(crate) async fn by_perm_id_mut(
         &mut self,
         permanent_id: &PermanentId,
     ) -> Result<&mut Node, OperationError> {
         let node_id = self.lookup_internal_id(permanent_id)?;
-        self.by_id_mut(node_id)
+        self.by_id_mut(node_id).await
     }
 
     /// Creates a new [`Node`] using the passed in builder function
@@ -160,7 +175,7 @@ impl InnerDrive {
 
         self.permanent_id_map.insert(permanent_id, node_id);
 
-        let parent_node = self.by_perm_id_mut(&parent_permanent_id)?;
+        let parent_node = self.by_perm_id_mut(&parent_permanent_id).await?;
         parent_node.add_child(name, permanent_id).await?;
 
         Ok(permanent_id)
@@ -394,7 +409,7 @@ impl InnerDrive {
             .parent_id()
             .ok_or(OperationError::OrphanNode(perm_id))?;
 
-        let parent_node = self.by_perm_id_mut(&parent_perm_id)?;
+        let parent_node = self.by_perm_id_mut(&parent_perm_id).await?;
         parent_node.remove_permanent_id(&perm_id).await?;
 
         let mut nodes_to_remove = vec![perm_id];
