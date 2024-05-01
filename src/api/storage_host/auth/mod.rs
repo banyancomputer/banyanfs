@@ -23,7 +23,7 @@ use crate::api::client::{ApiClient, ApiError};
 /// produced by the platform to authorized users and must match the public key of the client that
 /// is attempting to call this registration endpoint.
 ///
-/// Internally this very specifically uses the raw [`ApiClient::request`] method as it needs to
+/// Internally this very specifically uses the raw ApiClient::request method as it needs to
 /// avoid our normal authentication to storage hosts as the grant itself takes that role.
 pub async fn register_grant(
     client: &ApiClient,
@@ -47,7 +47,7 @@ pub async fn register_grant(
 /// Calls to this endpoint allow a client to sign a JWT and check if its already registered and
 /// known to a particular storage host. This is internally used as part of the token registration
 /// process and as such needs to avoid the normal storage host authentication workflow. To avoid
-/// the normal authentication, the [`ApiClient::request`] method is used directly.
+/// the normal authentication, the ApiClient::request method is used directly.
 pub async fn who_am_i(
     client: &ApiClient,
     storage_host_url: &Url,

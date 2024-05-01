@@ -11,7 +11,8 @@ const FINGERPRINT_SIZE: usize = 32;
 pub struct Fingerprint([u8; FINGERPRINT_SIZE]);
 
 impl Fingerprint {
-    pub(crate) fn as_hex(self) -> String {
+    /// Produces a base16 encoded copy of the bytes that make up the fingerprint.
+    pub(crate) fn as_hex(&self) -> String {
         self.0
             .iter()
             .fold(String::new(), |acc, &b| format!("{acc}{:02x}", b))
@@ -25,6 +26,9 @@ impl Fingerprint {
         Ok(self.0.len())
     }
 
+    /// Retrieves the [`KeyId`] for identifying a particular public/private key pair in
+    /// public uses. Should not be used for unique differentiation of different keys. Additional
+    /// details of the types usage is documented in the [`KeyId`] documentation.
     pub fn key_id(&self) -> KeyId {
         let mut key_id = [0u8; 2];
         key_id.copy_from_slice(&self.0[..2]);
@@ -65,7 +69,7 @@ impl From<&VerifyingKey> for Fingerprint {
 }
 
 #[cfg(test)]
-pub mod tests {
+pub(crate) mod tests {
     use super::*;
 
     #[cfg(target_arch = "wasm32")]

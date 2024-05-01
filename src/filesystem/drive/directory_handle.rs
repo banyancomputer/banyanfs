@@ -375,7 +375,7 @@ impl DirectoryHandle {
 
         let inner_read = self.inner.read().await;
         let actor_id = self.current_key.actor_id();
-        if !inner_read.access().has_read_access(actor_id) {
+        if !inner_read.access().has_read_access(&actor_id) {
             return Err(OperationError::AccessDenied);
         }
         drop(inner_read);
@@ -403,11 +403,7 @@ impl DirectoryHandle {
                 .data_key()
                 .map_err(|_| OperationError::AccessDenied)?;
 
-            let data_key = match inner_read
-                .access()
-                .permission_keys()
-                .and_then(|pk| pk.data.as_ref())
-            {
+            let data_key = match inner_read.access().data_key() {
                 Some(data_key) => data_key,
                 None => return Err(OperationError::AccessDenied),
             };
@@ -482,15 +478,11 @@ impl DirectoryHandle {
 
         let inner_read = self.inner.read().await;
         let actor_id = self.current_key.actor_id();
-        if !inner_read.access().has_write_access(actor_id) {
+        if !inner_read.access().has_write_access(&actor_id) {
             return Err(OperationError::AccessDenied);
         }
 
-        let data_key = match inner_read
-            .access()
-            .permission_keys()
-            .and_then(|pk| pk.data.as_ref())
-        {
+        let data_key = match inner_read.access().data_key() {
             Some(data_key) => data_key.clone(),
             None => return Err(OperationError::AccessDenied),
         };

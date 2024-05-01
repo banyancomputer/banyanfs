@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use serde::Deserialize;
 
 use crate::api::{
     client::{ApiRequest, PlatformApiRequest},
@@ -8,12 +7,9 @@ use crate::api::{
 
 pub(crate) struct UserKeyAccess;
 
-#[derive(Deserialize)]
-pub struct UserKeyAccessResponse(pub(crate) Vec<ApiUserKeyAccess>);
-
 #[async_trait]
 impl ApiRequest for UserKeyAccess {
-    type Response = UserKeyAccessResponse;
+    type Response = Vec<ApiUserKeyAccess>;
     fn path(&self) -> String {
         "/api/v1/auth/user_key_access".to_string()
     }

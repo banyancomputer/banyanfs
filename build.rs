@@ -43,8 +43,8 @@ fn report_repository_version() {
         .output()
         .unwrap();
 
-    let long_version = String::from_utf8(git_describe.stdout).unwrap();
-    println!("cargo:rustc-env=REPO_VERSION={}", long_version);
+    let git_version = String::from_utf8(git_describe.stdout).unwrap();
+    println!("cargo:rustc-env=REPO_VERSION={}", git_version);
 
     let build_timestamp = OffsetDateTime::now_utc().format(&Rfc3339).unwrap();
     println!("cargo:rustc-env=BUILD_TIMESTAMP={build_timestamp}");

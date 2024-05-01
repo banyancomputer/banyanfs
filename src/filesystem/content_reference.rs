@@ -81,6 +81,7 @@ impl ContentReference {
         repeat(ref_count as usize, unpeek(Self::parse)).parse_peek(input)
     }
 
+    #[allow(dead_code)]
     pub fn size(&self) -> usize {
         let base_size = Cid::size() + BlockSize::size() + 2;
         let chunk_size = self.chunks.iter().map(ContentLocation::size).sum::<usize>();

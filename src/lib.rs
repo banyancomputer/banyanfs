@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+//#![warn(missing_docs)]
 #![doc = include_str!("../README.md")]
 
 #[cfg(feature = "banyan-api")]
@@ -28,7 +28,7 @@ pub mod prelude {
     pub use crate::api::ApiClient;
     pub use crate::codec::{
         crypto::{SigningKey, VerifyingKey},
-        header::ContentOptions,
+        header::{AccessMask, AccessMaskBuilder, ContentOptions},
         Cid, FilesystemId,
     };
     pub use crate::error::{BanyanFsError, BanyanFsResult};
@@ -40,5 +40,5 @@ pub mod prelude {
         ApiSyncableStore, DataStore, DataStoreError, MemoryDataStore, MemorySyncTracker,
         SyncTracker, SyncableDataStore,
     };
-    pub use crate::version::{full_version, minimal_version, user_agent_byte_str};
+    pub use crate::version::{full_version, minimal_version, user_agent};
 }

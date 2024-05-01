@@ -8,7 +8,7 @@ use create_user_key::CreateUserKey;
 use current_usage::{CurrentUsage, CurrentUsageResponse};
 use current_usage_limit::{CurrentUsageLimit, CurrentUsageLimitResponse};
 use get_storage_grant::{GetStorageGrant, GetStorageGrantResponse};
-use user_key_access::{UserKeyAccess, UserKeyAccessResponse};
+use user_key_access::UserKeyAccess;
 
 use url::Url;
 
@@ -57,8 +57,5 @@ pub async fn create_user_key(
 
 /// Provide the client with a list of User Keys that should be visible to them
 pub async fn user_key_access(client: &ApiClient) -> Result<Vec<ApiUserKeyAccess>, ApiError> {
-    client
-        .platform_request_full(UserKeyAccess)
-        .await
-        .map(|response| response.0)
+    client.platform_request_full(UserKeyAccess).await
 }

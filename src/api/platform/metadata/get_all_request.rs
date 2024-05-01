@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use crate::api::client::{ApiRequest, PlatformApiRequest};
-use crate::api::platform::{ApiDriveId, ApiMetadata, ApiMetadataId};
+use crate::api::platform::{ApiDriveId, ApiMetadata};
 
 pub(crate) struct GetAllRequest {
     drive_id: ApiDriveId,
