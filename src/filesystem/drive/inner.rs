@@ -66,7 +66,7 @@ impl InnerDrive {
 
     /// Private method for mutable access to a node, this will not add the node and its ancestors
     /// to the dirty_nodes list and therefore must be used with care
-    async fn by_id_mut_untracked(&mut self, node_id: NodeId) -> Result<&mut Node, OperationError> {
+    fn by_id_mut_untracked(&mut self, node_id: NodeId) -> Result<&mut Node, OperationError> {
         self.nodes
             .get_mut(node_id)
             .ok_or(OperationError::InternalCorruption(
@@ -119,13 +119,15 @@ impl InnerDrive {
 
             // Update Size:
             let new_children_size = node.ordered_child_pids().iter().fold(0, |acc, child_pid| {
-                // This should maybe actually float up an error as opposed to defaulting to 0 if a child can not be found
+                // This should maybe actually float up an error as opposed to defaulting to 0 if a child can not be found using `try_fold`
                 // It implies a child on the current node can't be found in the filesystem.
-                // This should be done carefully though, maybe finishing the res of its work before returning an error? Or maybe not?
+                // This should be done carefully though, maybe finishing the rest of its work before returning an error? Or maybe not?
                 let child_size = self.by_perm_id(child_pid).ok().map_or(0, Node::size);
                 acc + child_size
             });
-            let node_mut = self.by_id_mut_untracked(node_id).await.unwrap();
+            let node_mut = self
+                .by_id_mut_untracked(node_id)
+                .expect("We've already accessed this node immutably just above");
             match node_mut.data_mut().await {
                 NodeData::Directory { children_size, .. } => *children_size = new_children_size,
                 _ => {}
@@ -135,10 +137,12 @@ impl InnerDrive {
             let child_pids = node_mut.data().ordered_child_pids();
             let mut child_cids = Vec::new();
             for pid in child_pids {
-                child_cids.push((pid, self.by_perm_id_mut_untracked(&pid).await?.cid().await?))
+                child_cids.push((pid, self.by_perm_id_mut_untracked(&pid)?.cid().await?))
             }
 
-            let node_mut = self.by_id_mut_untracked(node_id).await.unwrap();
+            let node_mut = self
+                .by_id_mut_untracked(node_id)
+                .expect("We've already accessed this node immutably just above");
             for child in child_cids {
                 node_mut
                     .data_mut()
@@ -172,12 +176,12 @@ impl InnerDrive {
 
     /// Private method for mutable access to a node, this will not add the node and its ancestors
     /// to the dirty_nodes list and therefore must be used with care
-    async fn by_perm_id_mut_untracked(
+    fn by_perm_id_mut_untracked(
         &mut self,
         permanent_id: &PermanentId,
     ) -> Result<&mut Node, OperationError> {
         let node_id = self.lookup_internal_id(permanent_id)?;
-        self.by_id_mut_untracked(node_id).await
+        self.by_id_mut_untracked(node_id)
     }
 
     /// Creates a new [`Node`] using the passed in builder function
