@@ -64,6 +64,17 @@ impl InnerDrive {
             ))
     }
 
+    /// Private method for mutable access to a node, this will not add the node and its ancestors
+    /// to the dirty_nodes list and therefore must be used with care
+    async fn by_id_mut_untracked(&mut self, node_id: NodeId) -> Result<&mut Node, OperationError> {
+        self.nodes
+            .get_mut(node_id)
+            .ok_or(OperationError::InternalCorruption(
+                node_id,
+                "missing expected node ID",
+            ))
+    }
+
     async fn mark_ancestors_dirty(&mut self, node_id: NodeId) -> Result<(), OperationError> {
         // Changes have happened in `node_id` walk up its parents to root marking nodes as dirty
         let mut node_id = node_id;
@@ -114,7 +125,7 @@ impl InnerDrive {
                 let child_size = self.by_perm_id(child_pid).ok().map_or(0, Node::size);
                 acc + child_size
             });
-            let node_mut = self.by_id_mut(node_id).await.unwrap(); //This causes this node to be marked dirty again which is undesirable....
+            let node_mut = self.by_id_mut_untracked(node_id).await.unwrap();
             match node_mut.data_mut().await {
                 NodeData::Directory { children_size, .. } => *children_size = new_children_size,
                 _ => {}
@@ -124,10 +135,10 @@ impl InnerDrive {
             let child_pids = node_mut.data().ordered_child_pids();
             let mut child_cids = Vec::new();
             for pid in child_pids {
-                child_cids.push((pid, self.by_perm_id_mut(&pid).await?.cid().await?))
+                child_cids.push((pid, self.by_perm_id_mut_untracked(&pid).await?.cid().await?))
             }
 
-            let node_mut = self.by_id_mut(node_id).await.unwrap();
+            let node_mut = self.by_id_mut_untracked(node_id).await.unwrap();
             for child in child_cids {
                 node_mut
                     .data_mut()
@@ -157,6 +168,16 @@ impl InnerDrive {
     ) -> Result<&mut Node, OperationError> {
         let node_id = self.lookup_internal_id(permanent_id)?;
         self.by_id_mut(node_id).await
+    }
+
+    /// Private method for mutable access to a node, this will not add the node and its ancestors
+    /// to the dirty_nodes list and therefore must be used with care
+    async fn by_perm_id_mut_untracked(
+        &mut self,
+        permanent_id: &PermanentId,
+    ) -> Result<&mut Node, OperationError> {
+        let node_id = self.lookup_internal_id(permanent_id)?;
+        self.by_id_mut_untracked(node_id).await
     }
 
     /// Creates a new [`Node`] using the passed in builder function
