@@ -89,13 +89,14 @@ impl InnerDrive {
         while let Some(parent_perm_id) = self.by_id(node_id)?.parent_id() {
             node_id = self.lookup_internal_id(&parent_perm_id)?;
             self.dirty_nodes.push(node_id);
+
+            let _node_mut = self //mark cid dirty (getting mutable access to its data will cause this)
+                .nodes
+                .get_mut(node_id)
+                .expect("This succeeded directly above in non-mut form")
+                .data_mut()
+                .await;
         }
-        let _node_mut = self //mark cid dirty (getting mutable access to its data will cause this)
-            .nodes
-            .get_mut(node_id)
-            .expect("This succeeded directly above in non-mut form")
-            .data_mut()
-            .await;
         Ok(())
     }
 
