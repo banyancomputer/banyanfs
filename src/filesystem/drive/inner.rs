@@ -114,10 +114,25 @@ impl InnerDrive {
                 let child_size = self.by_perm_id(child_pid).ok().map_or(0, Node::size);
                 acc + child_size
             });
-            let node_mut = self.by_id_mut(node_id).await.unwrap();
+            let node_mut = self.by_id_mut(node_id).await.unwrap(); //This causes this node to be marked dirty again which is undesirable....
             match node_mut.data_mut().await {
                 NodeData::Directory { children_size, .. } => *children_size = new_children_size,
                 _ => {}
+            }
+
+            // Update child CIDs
+            let child_pids = node_mut.data().ordered_child_pids();
+            let mut child_cids = Vec::new();
+            for pid in child_pids {
+                child_cids.push((pid, self.by_perm_id_mut(&pid).await?.cid().await?))
+            }
+
+            let node_mut = self.by_id_mut(node_id).await.unwrap();
+            for child in child_cids {
+                node_mut
+                    .data_mut()
+                    .await
+                    .update_child_cid(&child.0, child.1)?;
             }
         }
         Ok(())
@@ -167,6 +182,7 @@ impl InnerDrive {
         let node_id = node_entry.key();
 
         let node = build_node(rng, node_id, parent_permanent_id, owner_id).await?;
+        let cid = node.cid().await?;
 
         let name = node.name();
         let permanent_id = node.permanent_id();
@@ -176,7 +192,7 @@ impl InnerDrive {
         self.permanent_id_map.insert(permanent_id, node_id);
 
         let parent_node = self.by_perm_id_mut(&parent_permanent_id).await?;
-        parent_node.add_child(name, permanent_id).await?;
+        parent_node.add_child(name, permanent_id, cid).await?;
 
         Ok(permanent_id)
     }
@@ -428,6 +444,8 @@ impl InnerDrive {
                     node_id,
                     "missing node for removal",
                 ))?;
+            // Remove all entries from dirty list with this node id
+            self.dirty_nodes.retain(|id| *id != node_id);
 
             if let Some(data_cids) = node.data_cids() {
                 data_cids_removed.extend(data_cids);

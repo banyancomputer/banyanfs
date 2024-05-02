@@ -94,8 +94,9 @@ impl Node {
         &mut self,
         name: NodeName,
         child_id: PermanentId,
+        child_cid: Cid,
     ) -> Result<(), NodeDataError> {
-        self.inner.add_child(name, child_id)?;
+        self.inner.add_child(name, child_id, child_cid)?;
         self.notify_of_change().await;
 
         Ok(())

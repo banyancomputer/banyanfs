@@ -114,7 +114,7 @@ impl DirectoryHandle {
 
         let mut entries = Vec::new();
 
-        for perm_id in children.into_iter() {
+        for perm_id in children.into_iter().map(|entry| entry.permanent_id()) {
             let node = inner_read.by_perm_id(perm_id)?;
             let entry = DirectoryEntry::try_from(node)?;
 
@@ -302,6 +302,7 @@ impl DirectoryHandle {
 
         let mut inner_write = self.inner.write().await;
         let src_node_name = inner_write.by_id(src_node_id)?.name();
+        let src_node_cid = inner_write.by_id(src_node_id)?.cid().await?;
         let src_node_perm_id = inner_write.by_id(src_node_id)?.permanent_id();
         let src_parent_perm_id = inner_write.by_id(src_node_id)?.parent_id().ok_or(
             OperationError::InternalCorruption(src_node_id, "src node has no parent"),
@@ -327,7 +328,7 @@ impl DirectoryHandle {
         let dst_parent_node_perm_id = dst_parent_node.permanent_id();
 
         dst_parent_node
-            .add_child(new_dst_name.clone(), src_node_perm_id)
+            .add_child(new_dst_name.clone(), src_node_perm_id, src_node_cid)
             .await?;
 
         let src_node = inner_write.by_id_mut(src_node_id).await?;
@@ -694,7 +695,7 @@ fn walk_path<'a>(
         };
 
         let perm_id = match child_map.get(&child_name) {
-            Some(pid) => pid,
+            Some(entry) => entry.permanent_id(),
             None => {
                 return Ok(WalkState::MissingComponent {
                     working_directory_id,
