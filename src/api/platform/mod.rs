@@ -27,5 +27,4 @@ pub const PLATFORM_MAINTENANCE_KEY: &str = r#"-----BEGIN PUBLIC KEY-----
 MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAE00jlH0iG12Lq1tuCwom4ma2dwZ/56Oxf
 Yl0LDsPoeNDWOuFDBtjvJRQllusFrIpEKJY+nRLq+Px+dlqtKlL4yD/0IVRcqYt/
 9mdrZWJ4KqrEUuRnYtNiPeCrfiKRqfjA
------END PUBLIC KEY-----
-"#;
+-----END PUBLIC KEY-----"#;
