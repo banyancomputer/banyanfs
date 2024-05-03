@@ -119,13 +119,12 @@ impl InnerDrive {
             let node = self.by_id(node_id)?;
 
             // Update Size:
-            let new_children_size = node.ordered_child_pids().iter().fold(0, |acc, child_pid| {
-                // This should maybe actually float up an error as opposed to defaulting to 0 if a child can not be found using `try_fold`
-                // It implies a child on the current node can't be found in the filesystem.
-                // This should be done carefully though, maybe finishing the rest of its work before returning an error? Or maybe not?
-                let child_size = self.by_perm_id(child_pid).ok().map_or(0, Node::size);
-                acc + child_size
-            });
+            let new_children_size = node
+                .ordered_child_pids()
+                .iter()
+                .try_fold(0, |acc, child_pid| {
+                    self.by_perm_id(child_pid).map(|node| node.size() + acc)
+                })?;
             let node_mut = self
                 .by_id_mut_untracked(node_id)
                 .expect("We've already accessed this node immutably just above");
