@@ -79,24 +79,29 @@ impl InnerDrive {
         // Changes have happened in `node_id` walk up its parents to root marking nodes as dirty
         let mut node_id = node_id;
         self.dirty_nodes.push(node_id);
+        self.mark_node_cid_dirty(node_id).await?;
 
-        let _node_mut = self //mark cid dirty (getting mutable access to its data will cause this)
-            .nodes
-            .get_mut(node_id)
-            .expect("This succeeded directly above in non-mut form")
-            .data_mut()
-            .await;
         while let Some(parent_perm_id) = self.by_id(node_id)?.parent_id() {
             node_id = self.lookup_internal_id(&parent_perm_id)?;
             self.dirty_nodes.push(node_id);
-
-            let _node_mut = self //mark cid dirty (getting mutable access to its data will cause this)
-                .nodes
-                .get_mut(node_id)
-                .expect("This succeeded directly above in non-mut form")
-                .data_mut()
-                .await;
+            self.mark_node_cid_dirty(node_id).await?;
         }
+        Ok(())
+    }
+
+    /// This currently relies on a bit of a side-effect
+    /// Mutably accessing a node's data will mark its Cid cache dirty
+    /// This gets tested in [`filesystem::nodes::test::test_mut_data_access_marks_cid_dirty`]
+    async fn mark_node_cid_dirty(&mut self, node_id: usize) -> Result<(), OperationError> {
+        self //mark cid dirty (getting mutable access to its data will cause this)
+            .nodes
+            .get_mut(node_id)
+            .ok_or(OperationError::InternalCorruption(
+                node_id,
+                "missing expected node ID",
+            ))?
+            .data_mut()
+            .await;
         Ok(())
     }
 
