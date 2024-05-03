@@ -57,6 +57,20 @@ impl WasmMount {
         let drive = Drive::initialize_private_with_id(&mut rng, signing_key, filesystem_id)
             .map_err(|e| BanyanFsError::from(e.to_string()))?;
 
+        let access_mask = AccessMaskBuilder::maintenance()
+            .protected()
+            .build()
+            .map_err(|e| format!("failed to build maintenance access mask: {e}"))?;
+
+        let platform_public_key =
+            VerifyingKey::from_spki(crate::api::platform::PLATFORM_MAINTENANCE_KEY)
+                .map_err(|e| format!("failed to parse platform public key: {e}"))?;
+
+        drive
+            .authorize_key(&mut rng, platform_public_key, access_mask)
+            .await
+            .map_err(|e| format!("failed to authorize platform key: {e}"))?;
+
         let mut mount = Self {
             wasm_client,
 
