@@ -94,8 +94,9 @@ impl Node {
         &mut self,
         name: NodeName,
         child_id: PermanentId,
+        child_cid: Cid,
     ) -> Result<(), NodeDataError> {
-        self.inner.add_child(name, child_id)?;
+        self.inner.add_child(name, child_id, child_cid)?;
         self.notify_of_change().await;
 
         Ok(())
@@ -468,5 +469,28 @@ impl std::fmt::Debug for Node {
                 .field(&self.name)
                 .finish(),
         }
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod test {
+    use crate::codec::crypto::Fingerprint;
+
+    use super::*;
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_mut_data_access_marks_cid_dirty() {
+        let mut rng = crate::utils::crypto_rng();
+        let mut test_node = NodeBuilder::file(NodeName::Named("TestDir".into()))
+            .with_id(0)
+            .with_owner(ActorId::from(Fingerprint::from([0; Fingerprint::size()])))
+            .with_parent(PermanentId::generate(&mut rng))
+            .build(&mut rng)
+            .unwrap();
+        let _cid = test_node.cid().await.unwrap();
+        assert!(!test_node.cid.is_dirty().await);
+        let _mut_data = test_node.data_mut().await;
+        assert!(test_node.cid.is_dirty().await);
     }
 }
