@@ -58,7 +58,8 @@ impl WasmMount {
         let drive = Drive::initialize_private_with_id(&mut rng, signing_key, filesystem_id)
             .map_err(|e| BanyanFsError::from(e.to_string()))?;
 
-        ensure_platform_key_present(&mut rng, &drive).await?;
+        let pubkey = wasm_client.client().platform_public_key().await?;
+        ensure_platform_key_present(&mut rng, &drive, pubkey).await?;
 
         let mut mount = Self {
             wasm_client,
@@ -90,7 +91,8 @@ impl WasmMount {
         let drive = try_load_drive(client, &drive_id, &metadata_id).await;
 
         if let Some(d) = drive.as_ref() {
-            ensure_platform_key_present(&mut crypto_rng(), d).await?;
+            let pubkey = client.platform_public_key().await?;
+            ensure_platform_key_present(&mut crypto_rng(), d, pubkey).await?;
         }
 
         let dirty = drive.is_none();
@@ -581,18 +583,16 @@ async fn try_load_drive(client: &ApiClient, drive_id: &str, metadata_id: &str) -
 async fn ensure_platform_key_present(
     rng: &mut impl CryptoRngCore,
     drive: &Drive,
+    key: VerifyingKey,
 ) -> BanyanFsResult<()> {
-    let pubkey = VerifyingKey::from_spki(crate::api::platform::PLATFORM_MAINTENANCE_KEY)
-        .map_err(|e| format!("failed to parse platform public key: {e}"))?;
-
-    if !drive.has_maintenance_access(&pubkey.actor_id()).await {
+    if !drive.has_maintenance_access(&key.actor_id()).await {
         let access_mask = AccessMaskBuilder::maintenance()
             .protected()
             .build()
             .map_err(|e| format!("failed to build maintenance access mask: {e}"))?;
 
         drive
-            .authorize_key(rng, pubkey, access_mask)
+            .authorize_key(rng, key, access_mask)
             .await
             .map_err(|e| format!("failed to authorize platform key: {e}"))?;
     }
