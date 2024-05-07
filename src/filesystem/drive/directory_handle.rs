@@ -303,6 +303,7 @@ impl DirectoryHandle {
         let mut inner_write = self.inner.write().await;
         let src_node_name = inner_write.by_id(src_node_id)?.name();
         let src_node_cid = inner_write.by_id(src_node_id)?.cid().await?;
+        let src_node_size = inner_write.by_id(src_node_id)?.size();
         let src_node_perm_id = inner_write.by_id(src_node_id)?.permanent_id();
         let src_parent_perm_id = inner_write.by_id(src_node_id)?.parent_id().ok_or(
             OperationError::InternalCorruption(src_node_id, "src node has no parent"),
@@ -328,7 +329,12 @@ impl DirectoryHandle {
         let dst_parent_node_perm_id = dst_parent_node.permanent_id();
 
         dst_parent_node
-            .add_child(new_dst_name.clone(), src_node_perm_id, src_node_cid)
+            .add_child(
+                new_dst_name.clone(),
+                src_node_perm_id,
+                src_node_cid,
+                src_node_size,
+            )
             .await?;
 
         let src_node = inner_write.by_id_mut(src_node_id).await?;

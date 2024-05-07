@@ -2,7 +2,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::binary::{le_u16, le_u64};
+use winnow::binary::le_u16;
 use winnow::Parser;
 
 use crate::codec::filesystem::{DirectoryPermissions, FilePermissions};
@@ -25,7 +25,6 @@ pub enum NodeData {
     AssociatedData { content: FileContent },
     Directory {
         permissions: DirectoryPermissions,
-        children_size: u64,
         children: ChildMap,
     },
 }
@@ -36,6 +35,7 @@ impl NodeData {
         name: NodeName,
         id: PermanentId,
         cid: Cid,
+        size: u64,
     ) -> Result<(), NodeDataError> {
         let child_map = match self {
             NodeData::Directory { children, .. } => children,
@@ -48,30 +48,34 @@ impl NodeData {
         match child_map.entry(name) {
             Entry::Occupied(_) => return Err(NodeDataError::ChildNameExists),
             Entry::Vacant(entry) => {
-                entry.insert(ChildMapEntry::new(id, cid));
+                entry.insert(ChildMapEntry::new(id, cid, size));
             }
         }
 
         Ok(())
     }
 
-    pub fn update_child_cid(
+    pub fn update_child(
         &mut self,
         child_permanent_id: &PermanentId,
         cid: Cid,
+        size: u64,
     ) -> Result<(), NodeDataError> {
-        match self {
-            Self::Directory { children, .. } => {
-                let child = children
-                    .iter_mut()
-                    .find(|entry| entry.1.permanent_id() == child_permanent_id)
-                    .ok_or(NodeDataError::ChildIdMissing)?
-                    .1;
-                child.set_cid(cid);
-                Ok(())
-            }
-            _ => Ok(()),
-        }
+        let children = match self {
+            Self::Directory { children, .. } => children,
+            Self::File {
+                associated_data, ..
+            } => associated_data,
+            Self::AssociatedData { .. } => return Ok(()),
+        };
+        let child = children
+            .iter_mut()
+            .find(|entry| entry.1.permanent_id() == child_permanent_id)
+            .ok_or(NodeDataError::ChildIdMissing)?
+            .1;
+        child.set_cid(cid);
+        child.set_size(size);
+        Ok(())
     }
 
     #[tracing::instrument(skip(self, writer))]
@@ -87,17 +91,10 @@ impl NodeData {
         match &self {
             NodeData::Directory {
                 permissions,
-                children_size,
                 children,
             } => {
                 written_bytes += permissions.encode(writer).await?;
-
-                let size_bytes = children_size.to_le_bytes();
-                writer.write_all(&size_bytes).await?;
-                written_bytes += size_bytes.len();
-
                 written_bytes += encode_children(children, writer).await?;
-
                 Ok(written_bytes)
             }
             NodeData::File {
@@ -126,7 +123,6 @@ impl NodeData {
     pub(crate) fn new_directory() -> Self {
         Self::Directory {
             permissions: DirectoryPermissions::default(),
-            children_size: 0,
             children: HashMap::new(),
         }
     }
@@ -177,12 +173,10 @@ impl NodeData {
             //NodeKind::AssociatedData => {}
             NodeKind::Directory => {
                 let (data_buf, permissions) = DirectoryPermissions::parse(input)?;
-                let (data_buf, children_size) = le_u64.parse_peek(data_buf)?;
                 let (data_buf, children) = parse_children(data_buf)?;
 
                 let data = NodeData::Directory {
                     permissions,
-                    children_size,
                     children,
                 };
 
@@ -236,33 +230,29 @@ impl NodeData {
 
         match self {
             NodeData::AssociatedData { content } => content.size(),
-            NodeData::Directory {
-                children,
-                children_size,
-                ..
-            } => {
+            NodeData::Directory { .. } => {
                 let base_size = DirectoryPermissions::size() + 8;
-
-                let child_map_size = children
-                    .iter()
-                    .fold(0, |acc, (name, _)| acc + name.size() + PermanentId::size());
-
-                (base_size + child_map_size) as u64 + children_size
+                base_size as u64 + self.children_size()
             }
-            NodeData::File {
-                associated_data,
-                content,
-                ..
-            } => {
+            NodeData::File { content, .. } => {
                 let base_size = FilePermissions::size();
 
-                let associated_map_size = associated_data
-                    .iter()
-                    .fold(0, |acc, (name, _)| acc + name.size() + PermanentId::size());
-
-                (base_size + associated_map_size) as u64 + content.size()
+                base_size as u64 + content.size() + self.children_size()
             }
         }
+    }
+
+    fn children_size(&self) -> u64 {
+        let children = match self {
+            NodeData::Directory { children, .. } => children,
+            NodeData::File {
+                associated_data, ..
+            } => associated_data,
+            NodeData::AssociatedData { .. } => return 0,
+        };
+        children.iter().fold(0, |acc, (name, entry)| {
+            acc + name.size() as u64 + std::mem::size_of::<ChildMapEntry>() as u64 + entry.size()
+        })
     }
 
     pub(crate) fn full_file(content: FileContent) -> Self {

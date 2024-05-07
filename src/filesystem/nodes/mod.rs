@@ -95,8 +95,10 @@ impl Node {
         name: NodeName,
         child_id: PermanentId,
         child_cid: Cid,
+        child_size: u64,
     ) -> Result<(), NodeDataError> {
-        self.inner.add_child(name, child_id, child_cid)?;
+        self.inner
+            .add_child(name, child_id, child_cid, child_size)?;
         self.notify_of_change().await;
 
         Ok(())
