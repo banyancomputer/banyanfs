@@ -23,13 +23,14 @@ pub(crate) const PLATFORM_AUDIENCE: &str = "banyan-platform";
 
 pub(crate) const STORAGE_HOST_AUDIENCE: &str = "banyan-storage";
 
+use std::cell::OnceCell;
 use std::sync::Arc;
 
 use reqwest::{Client, StatusCode, Url};
 use serde::Deserialize;
 use tracing::debug;
 
-use crate::codec::crypto::SigningKey;
+use crate::codec::crypto::{SigningKey, VerifyingKey};
 use crate::prelude::BanyanFsError;
 
 /// An HTTP client for interacting with the Banyan API (both platform and storage hosts). Specific
@@ -44,6 +45,7 @@ pub struct ApiClient {
     auth: ApiAuth,
     base_url: Url,
     client: Client,
+    platform_pubkey: OnceCell<VerifyingKey>,
 }
 
 impl ApiClient {
@@ -64,6 +66,7 @@ impl ApiClient {
             auth,
             base_url,
             client,
+            platform_pubkey: OnceCell::new(),
         })
     }
 
@@ -171,6 +174,17 @@ impl ApiClient {
             Some(resp) => Ok(resp),
             None => Err(ApiError::UnexpectedResponse("response should not be empty")),
         }
+    }
+
+    pub async fn platform_public_key(&self) -> Result<VerifyingKey, ApiError> {
+        if let Some(pubkey) = self.platform_pubkey.get() {
+            return Ok(pubkey.clone());
+        }
+
+        let pubkey = crate::api::platform::status::get_public_key(self).await?;
+        let _ = self.platform_pubkey.set(pubkey.clone());
+
+        Ok(pubkey)
     }
 
     pub async fn record_storage_grant(&self, storage_host_url: Url, auth_token: &str) {

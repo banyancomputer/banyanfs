@@ -8,5 +8,6 @@ pub mod drive_keys;
 pub mod drives;
 pub mod metadata;
 pub mod snapshots;
+pub mod status;
 
 pub use models::*;
