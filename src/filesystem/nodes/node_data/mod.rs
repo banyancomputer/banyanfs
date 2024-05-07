@@ -37,21 +37,13 @@ impl NodeData {
         cid: Cid,
         size: u64,
     ) -> Result<(), NodeDataError> {
-        let child_map = match self {
-            NodeData::Directory { children, .. } => children,
-            NodeData::File {
-                associated_data, ..
-            } => associated_data,
-            _ => return Err(NodeDataError::NotAParent),
-        };
-
+        let child_map = self.children_mut().ok_or(NodeDataError::NotAParent)?;
         match child_map.entry(name) {
             Entry::Occupied(_) => return Err(NodeDataError::ChildNameExists),
             Entry::Vacant(entry) => {
                 entry.insert(ChildMapEntry::new(id, cid, size));
             }
         }
-
         Ok(())
     }
 
@@ -61,13 +53,11 @@ impl NodeData {
         cid: Cid,
         size: u64,
     ) -> Result<(), NodeDataError> {
-        let children = match self {
-            Self::Directory { children, .. } => children,
-            Self::File {
-                associated_data, ..
-            } => associated_data,
-            Self::AssociatedData { .. } => return Ok(()),
+        let children = match self.children_mut() {
+            None => return Ok(()),
+            Some(children) => children,
         };
+
         let child = children
             .iter_mut()
             .find(|entry| entry.1.permanent_id() == child_permanent_id)
@@ -128,15 +118,10 @@ impl NodeData {
     }
 
     pub(crate) fn ordered_child_pids(&self) -> Vec<PermanentId> {
-        let children = match self {
-            NodeData::File {
-                associated_data, ..
-            } => associated_data,
-            NodeData::Directory { children, .. } => children,
-            _ => return Vec::new(),
-        };
-
-        let mut child_pairs = children.iter().collect::<Vec<_>>();
+        let mut child_pairs = self
+            .children()
+            .map(|child_map| child_map.iter().collect::<Vec<_>>())
+            .unwrap_or_else(Vec::new);
         child_pairs.sort_by(|(_, a), (_, b)| a.permanent_id().cmp(b.permanent_id()));
         child_pairs
             .into_iter()
@@ -144,6 +129,24 @@ impl NodeData {
             .collect()
     }
 
+    fn children(&self) -> Option<&ChildMap> {
+        match self {
+            Self::AssociatedData { .. } => None,
+            Self::Directory { children, .. } => children.into(),
+            Self::File {
+                associated_data, ..
+            } => associated_data.into(),
+        }
+    }
+    fn children_mut(&mut self) -> Option<&mut ChildMap> {
+        match self {
+            Self::AssociatedData { .. } => None,
+            Self::Directory { children, .. } => children.into(),
+            Self::File {
+                associated_data, ..
+            } => associated_data.into(),
+        }
+    }
     pub(crate) fn data_cids(&self) -> Option<Vec<Cid>> {
         match self {
             NodeData::File { content, .. } | NodeData::AssociatedData { content } => {
@@ -187,14 +190,7 @@ impl NodeData {
     }
 
     pub(crate) fn remove_child(&mut self, name: &NodeName) -> Result<PermanentId, NodeDataError> {
-        let child_map = match self {
-            NodeData::Directory { children, .. } => children,
-            NodeData::File {
-                associated_data, ..
-            } => associated_data,
-            _ => return Err(NodeDataError::NotAParent),
-        };
-
+        let child_map = self.children_mut().ok_or(NodeDataError::NotAParent)?;
         match child_map.remove(name) {
             Some(id) => Ok(id.permanent_id().clone()),
             None => Err(NodeDataError::ChildNameMissing),
@@ -212,16 +208,8 @@ impl NodeData {
         &mut self,
         permanent_id: &PermanentId,
     ) -> Result<(), NodeDataError> {
-        let child_map = match self {
-            NodeData::Directory { children, .. } => children,
-            NodeData::File {
-                associated_data, ..
-            } => associated_data,
-            _ => return Err(NodeDataError::NotAParent),
-        };
-
+        let child_map = self.children_mut().ok_or(NodeDataError::NotAParent)?;
         child_map.retain(|_, id| id.permanent_id() != permanent_id);
-
         Ok(())
     }
 
@@ -243,12 +231,9 @@ impl NodeData {
     }
 
     fn children_size(&self) -> u64 {
-        let children = match self {
-            NodeData::Directory { children, .. } => children,
-            NodeData::File {
-                associated_data, ..
-            } => associated_data,
-            NodeData::AssociatedData { .. } => return 0,
+        let children = match self.children() {
+            None => return 0,
+            Some(children) => children,
         };
         children.iter().fold(0, |acc, (name, entry)| {
             acc + name.size() as u64 + std::mem::size_of::<ChildMapEntry>() as u64 + entry.size()

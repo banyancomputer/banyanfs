@@ -51,8 +51,9 @@ impl ChildMapEntry {
     ) -> std::io::Result<usize> {
         let mut bytes_written = self.permanent_id().encode(writer).await?;
         bytes_written += self.cid().encode(writer).await?;
-        writer.write_all(&self.size().to_le_bytes()).await?;
-        bytes_written += std::mem::size_of::<u64>();
+        let size_bytes = self.size().to_le_bytes();
+        writer.write_all(&size_bytes).await?;
+        bytes_written += size_bytes.len();
         Ok(bytes_written)
     }
 

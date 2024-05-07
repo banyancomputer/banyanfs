@@ -120,10 +120,7 @@ impl InnerDrive {
         // Pop elements from back and update their size and Cid
         while let Some(node_id) = node_list.pop() {
             // Because of the work above we can assume that once we get here all of a nodes children are up to date
-
-            let node_mut = self
-                .by_id_mut_untracked(node_id)
-                .expect("We've already accessed this node immutably just above");
+            let node_mut = self.by_id_mut_untracked(node_id)?;
 
             // Update child CIDs and sizes
             let child_pids = node_mut.data().ordered_child_pids();
@@ -136,9 +133,7 @@ impl InnerDrive {
                 ))
             }
 
-            let node_mut = self
-                .by_id_mut_untracked(node_id)
-                .expect("We've already accessed this node immutably just above");
+            let node_mut = self.by_id_mut_untracked(node_id)?;
             for child in child_data {
                 node_mut
                     .data_mut()
