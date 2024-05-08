@@ -84,9 +84,9 @@ impl TombCompat {
         &mut self,
         name: String,
         user_key_id: String,
-    ) -> BanyanFsResult<WasmUserKey> {
-        let key = platform::account::rename_user_key(&self.client, &name, &user_key_id).await?;
-        Ok(WasmUserKey(key))
+    ) -> BanyanFsResult<()> {
+        platform::account::rename_user_key(&self.client, &name, &user_key_id).await?;
+        Ok(())
     }
 
     #[wasm_bindgen(js_name = revokeBucketAccess)]

@@ -25,7 +25,7 @@ impl RenameUserKey {
 
 #[async_trait(?Send)]
 impl ApiRequest for RenameUserKey {
-    type Response = ApiUserKey;
+    type Response = ();
 
     const METHOD: Method = Method::POST;
 

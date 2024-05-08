@@ -19,7 +19,7 @@ use crate::api::client::{ApiClient, ApiError};
 use crate::api::platform::ApiKeyId;
 use crate::codec::crypto::VerifyingKey;
 
-use super::{ApiUserKey, ApiUserKeyAccess};
+use super::ApiUserKeyAccess;
 
 pub async fn current_usage(client: &ApiClient) -> Result<CurrentUsageResponse, ApiError> {
     client.platform_request_full(CurrentUsage).await
@@ -61,15 +61,12 @@ pub async fn rename_user_key(
     client: &ApiClient,
     name: &str,
     user_key_id: &str,
-) -> Result<ApiUserKey, ApiError> {
+) -> Result<(), ApiError> {
     let rename_user_key = RenameUserKey::new(name, user_key_id);
-    let response = client.platform_request_full(rename_user_key).await?;
-
-    if cfg!(feature = "strict") && response.id() != user_key_id {
-        return Err(ApiError::MismatchedData("id mismatch".to_string()));
-    }
-
-    Ok(response)
+    client
+        .platform_request_empty_response(rename_user_key)
+        .await?;
+    Ok(())
 }
 
 /// Provide the client with a list of User Keys that should be visible to them
