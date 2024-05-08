@@ -11,7 +11,6 @@ use crate::codec::crypto::AccessKey;
 use crate::codec::*;
 use crate::filesystem::drive::DriveAccess;
 use crate::filesystem::nodes::{Node, NodeBuilder, NodeId};
-use crate::prelude::nodes::NodeData;
 use crate::utils::std_io_err;
 
 use super::OperationError;
@@ -121,38 +120,25 @@ impl InnerDrive {
         // Pop elements from back and update their size and Cid
         while let Some(node_id) = node_list.pop() {
             // Because of the work above we can assume that once we get here all of a nodes children are up to date
-            let node = self.by_id(node_id)?;
+            let node_mut = self.by_id_mut_untracked(node_id)?;
 
-            // Update Size:
-            let new_children_size = node
-                .ordered_child_pids()
-                .iter()
-                .try_fold(0, |acc, child_pid| {
-                    self.by_perm_id(child_pid).map(|node| node.size() + acc)
-                })?;
-            let node_mut = self
-                .by_id_mut_untracked(node_id)
-                .expect("We've already accessed this node immutably just above");
-            match node_mut.data_mut().await {
-                NodeData::Directory { children_size, .. } => *children_size = new_children_size,
-                _ => {}
-            }
-
-            // Update child CIDs
+            // Update child CIDs and sizes
             let child_pids = node_mut.data().ordered_child_pids();
-            let mut child_cids = Vec::new();
+            let mut child_data = Vec::new();
             for pid in child_pids {
-                child_cids.push((pid, self.by_perm_id_mut_untracked(&pid)?.cid().await?))
+                child_data.push((
+                    pid,
+                    self.by_perm_id_mut_untracked(&pid)?.cid().await?,
+                    self.by_perm_id_mut_untracked(&pid)?.size(),
+                ))
             }
 
-            let node_mut = self
-                .by_id_mut_untracked(node_id)
-                .expect("We've already accessed this node immutably just above");
-            for child in child_cids {
+            let node_mut = self.by_id_mut_untracked(node_id)?;
+            for child in child_data {
                 node_mut
                     .data_mut()
                     .await
-                    .update_child_cid(&child.0, child.1)?;
+                    .update_child(&child.0, child.1, child.2)?;
             }
         }
         Ok(())
@@ -213,6 +199,7 @@ impl InnerDrive {
 
         let node = build_node(rng, node_id, parent_permanent_id, owner_id).await?;
         let cid = node.cid().await?;
+        let size = node.size();
 
         let name = node.name();
         let permanent_id = node.permanent_id();
@@ -222,7 +209,7 @@ impl InnerDrive {
         self.permanent_id_map.insert(permanent_id, node_id);
 
         let parent_node = self.by_perm_id_mut(&parent_permanent_id).await?;
-        parent_node.add_child(name, permanent_id, cid).await?;
+        parent_node.add_child(name, permanent_id, cid, size).await?;
 
         Ok(permanent_id)
     }
