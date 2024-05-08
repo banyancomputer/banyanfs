@@ -75,11 +75,18 @@ impl TombCompat {
             Ok(key) => key,
             Err(err) => return Err(format!("failed to load public key: {err}").into()),
         };
-
-        tracing::warn!("using broken API key registration, needs to be reworked");
         platform::account::create_user_key(&self.client, &name, &public_key).await?;
-
         Ok(())
+    }
+
+    #[wasm_bindgen(js_name = renameUserKey)]
+    pub async fn rename_user_key(
+        &mut self,
+        name: String,
+        user_key_id: String,
+    ) -> BanyanFsResult<WasmUserKey> {
+        let key = platform::account::rename_user_key(&self.client, &name, &user_key_id).await?;
+        Ok(WasmUserKey(key))
     }
 
     #[wasm_bindgen(js_name = revokeBucketAccess)]
