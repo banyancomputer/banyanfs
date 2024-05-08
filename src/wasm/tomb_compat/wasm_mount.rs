@@ -5,7 +5,7 @@ use futures::io::Cursor;
 use futures::StreamExt;
 
 use crate::api::platform;
-use crate::filesystem::Node;
+use crate::filesystem::nodes::Node;
 use crate::prelude::*;
 
 use js_sys::{Array, ArrayBuffer, Uint8Array};
