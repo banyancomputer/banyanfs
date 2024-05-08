@@ -2,12 +2,14 @@ mod create_user_key;
 mod current_usage;
 mod current_usage_limit;
 mod get_storage_grant;
+mod rename_user_key;
 mod user_key_access;
 
 use create_user_key::CreateUserKey;
 use current_usage::{CurrentUsage, CurrentUsageResponse};
 use current_usage_limit::{CurrentUsageLimit, CurrentUsageLimitResponse};
 use get_storage_grant::{GetStorageGrant, GetStorageGrantResponse};
+use rename_user_key::RenameUserKey;
 use user_key_access::UserKeyAccess;
 
 use url::Url;
@@ -17,7 +19,7 @@ use crate::api::client::{ApiClient, ApiError};
 use crate::api::platform::ApiKeyId;
 use crate::codec::crypto::VerifyingKey;
 
-use super::ApiUserKeyAccess;
+use super::{ApiUserKey, ApiUserKeyAccess};
 
 pub async fn current_usage(client: &ApiClient) -> Result<CurrentUsageResponse, ApiError> {
     client.platform_request_full(CurrentUsage).await
@@ -53,6 +55,21 @@ pub async fn create_user_key(
     }
 
     Ok(response.id().clone())
+}
+
+pub async fn rename_user_key(
+    client: &ApiClient,
+    name: &str,
+    user_key_id: &str,
+) -> Result<ApiUserKey, ApiError> {
+    let rename_user_key = RenameUserKey::new(name, user_key_id);
+    let response = client.platform_request_full(rename_user_key).await?;
+
+    if cfg!(feature = "strict") && response.id() != user_key_id {
+        return Err(ApiError::MismatchedData("id mismatch".to_string()));
+    }
+
+    Ok(response)
 }
 
 /// Provide the client with a list of User Keys that should be visible to them
