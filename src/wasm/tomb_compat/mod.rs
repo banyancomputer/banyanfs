@@ -82,6 +82,7 @@ impl TombCompat {
         Ok(())
     }
 
+<<<<<<< HEAD
     #[wasm_bindgen(js_name = revokeBucketAccess)]
     pub async fn revoke_bucket_access(
         &mut self,
@@ -112,6 +113,20 @@ impl TombCompat {
     //) -> BanyanFsResult<WasmBucket> {
     //}
 
+||||||| 7c305e4
+    // appears to no longer be present, likely migrated to create_bucket_and_mount
+    //#[wasm_bindgen(js_name = createBucket)]
+    //pub async fn create_bucket(
+    //    &mut self,
+    //    name: String,
+    //    storage_class: String,
+    //    bucket_type: String,
+    //    public_key: CryptoKey,
+    //) -> BanyanFsResult<WasmBucket> {
+    //}
+
+=======
+>>>>>>> main
     // new transfered and checked,
     //
     // note(sstelfox): we already have the private key, and that gives us the public key. I'm

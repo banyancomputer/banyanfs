@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::Cursor;
 use futures::StreamExt;
 
@@ -59,6 +60,9 @@ impl WasmMount {
         let drive = Drive::initialize_private_with_id(&mut rng, signing_key, filesystem_id)
             .map_err(|e| BanyanFsError::from(e.to_string()))?;
 
+        let pubkey = wasm_client.client().platform_public_key().await?;
+        ensure_platform_key_present(&mut rng, &drive, pubkey).await?;
+
         let mut mount = Self {
             wasm_client,
 
@@ -87,6 +91,12 @@ impl WasmMount {
         // in here indicating that an initial metadata hasn't be pushed but that is a weird failure
         // case. We should really enforce an initial metadata push during the bucket creation...
         let drive = try_load_drive(client, &drive_id, &metadata_id).await;
+
+        if let Some(d) = drive.as_ref() {
+            let pubkey = client.platform_public_key().await?;
+            ensure_platform_key_present(&mut crypto_rng(), d, pubkey).await?;
+        }
+
         let dirty = drive.is_none();
         let store = wasm_client.store();
 
@@ -572,11 +582,24 @@ async fn try_load_drive(client: &ApiClient, drive_id: &str, metadata_id: &str) -
     }
 }
 
-fn vec_to_js_array<T>(vec: Vec<T>) -> js_sys::Array
-where
-    T: Into<JsValue>,
-{
-    vec.into_iter().map(|x| x.into()).collect()
+async fn ensure_platform_key_present(
+    rng: &mut impl CryptoRngCore,
+    drive: &Drive,
+    key: VerifyingKey,
+) -> BanyanFsResult<()> {
+    if !drive.has_maintenance_access(&key.actor_id()).await {
+        let access_mask = AccessMaskBuilder::maintenance()
+            .protected()
+            .build()
+            .map_err(|e| format!("failed to build maintenance access mask: {e}"))?;
+
+        drive
+            .authorize_key(rng, key, access_mask)
+            .await
+            .map_err(|e| format!("failed to authorize platform key: {e}"))?;
+    }
+
+    Ok(())
 }
 
 fn parse_js_path(path_arr: js_sys::Array) -> BanyanFsResult<Vec<String>> {
@@ -599,4 +622,11 @@ fn parse_js_path(path_arr: js_sys::Array) -> BanyanFsResult<Vec<String>> {
     }
 
     Ok(strings)
+}
+
+fn vec_to_js_array<T>(vec: Vec<T>) -> js_sys::Array
+where
+    T: Into<JsValue>,
+{
+    vec.into_iter().map(|x| x.into()).collect()
 }

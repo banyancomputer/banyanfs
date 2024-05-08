@@ -10,7 +10,7 @@ use winnow::Parser;
 use crate::codec::crypto::AccessKey;
 use crate::codec::*;
 use crate::filesystem::drive::DriveAccess;
-use crate::filesystem::nodes::{Node, NodeBuilder, NodeId};
+use crate::filesystem::nodes::{Node, NodeBuilder, NodeData, NodeId};
 use crate::utils::std_io_err;
 
 use super::OperationError;
@@ -23,17 +23,24 @@ pub(crate) struct InnerDrive {
 
     nodes: Slab<Node>,
     permanent_id_map: HashMap<PermanentId, NodeId>,
+
+    dirty_nodes: Vec<NodeId>,
 }
 
 impl InnerDrive {
+    /// Returns an immutable reference to the [`DriveAccess`] of this [`InnerDrive`]
     pub(crate) fn access(&self) -> &DriveAccess {
         &self.access
     }
 
+    /// Returns an mutable reference to the [`DriveAccess`] of this [`InnerDrive`]
     pub(crate) fn access_mut(&mut self) -> &mut DriveAccess {
         &mut self.access
     }
 
+    /// Returns an immutable reference to the contained [`Node`] with the passed in [`NodeId`]
+    /// # Error
+    /// - [`OperationError::InternalCorruption`] if the [`NodeId`] is not found
     pub(crate) fn by_id(&self, node_id: NodeId) -> Result<&Node, OperationError> {
         self.nodes
             .get(node_id)
@@ -43,7 +50,11 @@ impl InnerDrive {
             ))
     }
 
-    pub(crate) fn by_id_mut(&mut self, node_id: NodeId) -> Result<&mut Node, OperationError> {
+    /// Returns an mutable reference to the contained [`Node`] with the passed in [`NodeId`]
+    /// # Error
+    /// - [`OperationError::InternalCorruption`] if the [`NodeId`] is not found
+    pub(crate) async fn by_id_mut(&mut self, node_id: NodeId) -> Result<&mut Node, OperationError> {
+        self.mark_ancestors_dirty(node_id).await?;
         self.nodes
             .get_mut(node_id)
             .ok_or(OperationError::InternalCorruption(
@@ -52,19 +63,132 @@ impl InnerDrive {
             ))
     }
 
+    /// Private method for mutable access to a node, this will not add the node and its ancestors
+    /// to the dirty_nodes list and therefore must be used with care
+    fn by_id_mut_untracked(&mut self, node_id: NodeId) -> Result<&mut Node, OperationError> {
+        self.nodes
+            .get_mut(node_id)
+            .ok_or(OperationError::InternalCorruption(
+                node_id,
+                "missing expected node ID",
+            ))
+    }
+
+    async fn mark_ancestors_dirty(&mut self, node_id: NodeId) -> Result<(), OperationError> {
+        // Changes have happened in `node_id` walk up its parents to root marking nodes as dirty
+        let mut node_id = node_id;
+        self.dirty_nodes.push(node_id);
+        self.mark_node_cid_dirty(node_id).await?;
+
+        while let Some(parent_perm_id) = self.by_id(node_id)?.parent_id() {
+            node_id = self.lookup_internal_id(&parent_perm_id)?;
+            self.dirty_nodes.push(node_id);
+            self.mark_node_cid_dirty(node_id).await?;
+        }
+        Ok(())
+    }
+
+    /// This currently relies on a bit of a side-effect
+    /// Mutably accessing a node's data will mark its Cid cache dirty
+    /// This gets tested in [`filesystem::nodes::test::test_mut_data_access_marks_cid_dirty`]
+    async fn mark_node_cid_dirty(&mut self, node_id: usize) -> Result<(), OperationError> {
+        self //mark cid dirty (getting mutable access to its data will cause this)
+            .nodes
+            .get_mut(node_id)
+            .ok_or(OperationError::InternalCorruption(
+                node_id,
+                "missing expected node ID",
+            ))?
+            .data_mut()
+            .await;
+        Ok(())
+    }
+
+    pub(crate) async fn clean_drive(&mut self) -> Result<(), OperationError> {
+        // Take the dirty node list (replacing it with an empty Vec)
+        let mut dirty = std::mem::take(&mut self.dirty_nodes);
+
+        // Popping from back of the dirty list, push NodeIds into `node_list`
+        // Only pushing if the list does not already contain that nodeId.
+        let mut node_list = Vec::new();
+        while let Some(node_id) = dirty.pop() {
+            if !node_list.contains(&node_id) {
+                node_list.push(node_id);
+            }
+        }
+
+        // Pop elements from back and update their size and Cid
+        while let Some(node_id) = node_list.pop() {
+            // Because of the work above we can assume that once we get here all of a nodes children are up to date
+            let node = self.by_id(node_id)?;
+
+            // Update Size:
+            let new_children_size = node
+                .ordered_child_pids()
+                .iter()
+                .try_fold(0, |acc, child_pid| {
+                    self.by_perm_id(child_pid).map(|node| node.size() + acc)
+                })?;
+            let node_mut = self
+                .by_id_mut_untracked(node_id)
+                .expect("We've already accessed this node immutably just above");
+            match node_mut.data_mut().await {
+                NodeData::Directory { children_size, .. } => *children_size = new_children_size,
+                _ => {}
+            }
+
+            // Update child CIDs
+            let child_pids = node_mut.data().ordered_child_pids();
+            let mut child_cids = Vec::new();
+            for pid in child_pids {
+                child_cids.push((pid, self.by_perm_id_mut_untracked(&pid)?.cid().await?))
+            }
+
+            let node_mut = self
+                .by_id_mut_untracked(node_id)
+                .expect("We've already accessed this node immutably just above");
+            for child in child_cids {
+                node_mut
+                    .data_mut()
+                    .await
+                    .update_child_cid(&child.0, child.1)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Returns an immutable reference to the contained [`Node`] with the passed in [`PermanentId`]
+    /// # Error
+    /// - [`OperationError::MissingPermanentId`] if the [`PermanentId`] is not found
+    /// - [`OperationError::InternalCorruption`] if the [`PermanentId`] maps to a [`NodeId`] that no longer exists
     pub(crate) fn by_perm_id(&self, permanent_id: &PermanentId) -> Result<&Node, OperationError> {
         let node_id = self.lookup_internal_id(permanent_id)?;
         self.by_id(node_id)
     }
 
-    pub(crate) fn by_perm_id_mut(
+    /// Returns an mutable reference to the contained [`Node`] with the passed in [`PermanentId`]
+    /// # Error
+    /// - [`OperationError::MissingPermanentId`] if the [`PermanentId`] is not found
+    /// - [`OperationError::InternalCorruption`] if the [`PermanentId`] maps to a [`NodeId`] that no longer exists
+    pub(crate) async fn by_perm_id_mut(
         &mut self,
         permanent_id: &PermanentId,
     ) -> Result<&mut Node, OperationError> {
         let node_id = self.lookup_internal_id(permanent_id)?;
-        self.by_id_mut(node_id)
+        self.by_id_mut(node_id).await
     }
 
+    /// Private method for mutable access to a node, this will not add the node and its ancestors
+    /// to the dirty_nodes list and therefore must be used with care
+    fn by_perm_id_mut_untracked(
+        &mut self,
+        permanent_id: &PermanentId,
+    ) -> Result<&mut Node, OperationError> {
+        let node_id = self.lookup_internal_id(permanent_id)?;
+        self.by_id_mut_untracked(node_id)
+    }
+
+    /// Creates a new [`Node`] using the passed in builder function
     #[instrument(level = tracing::Level::TRACE, skip(self, rng, build_node))]
     pub(crate) async fn create_node<'a, R, F, Fut>(
         &mut self,
@@ -87,6 +211,7 @@ impl InnerDrive {
         let node_id = node_entry.key();
 
         let node = build_node(rng, node_id, parent_permanent_id, owner_id).await?;
+        let cid = node.cid().await?;
 
         let name = node.name();
         let permanent_id = node.permanent_id();
@@ -95,8 +220,8 @@ impl InnerDrive {
 
         self.permanent_id_map.insert(permanent_id, node_id);
 
-        let parent_node = self.by_perm_id_mut(&parent_permanent_id)?;
-        parent_node.add_child(name, permanent_id).await?;
+        let parent_node = self.by_perm_id_mut(&parent_permanent_id).await?;
+        parent_node.add_child(name, permanent_id, cid).await?;
 
         Ok(permanent_id)
     }
@@ -220,6 +345,7 @@ impl InnerDrive {
             nodes,
             root_pid,
             permanent_id_map,
+            dirty_nodes: Vec::new(),
         };
 
         Ok(inner)
@@ -239,6 +365,7 @@ impl InnerDrive {
             .ok_or(OperationError::MissingPermanentId(*perm_id))
     }
 
+    /// Returns an iterator of immutable references to every [`Node`] in this [`InnerDrive`]
     pub(crate) fn node_iter(&self) -> impl Iterator<Item = &Node> {
         self.nodes.iter().map(|(_, node)| node)
     }
@@ -310,6 +437,7 @@ impl InnerDrive {
             root_pid,
             nodes,
             permanent_id_map,
+            dirty_nodes: Vec::new(),
         };
 
         Ok((node_input, inner_drive))
@@ -326,7 +454,7 @@ impl InnerDrive {
             .parent_id()
             .ok_or(OperationError::OrphanNode(perm_id))?;
 
-        let parent_node = self.by_perm_id_mut(&parent_perm_id)?;
+        let parent_node = self.by_perm_id_mut(&parent_perm_id).await?;
         parent_node.remove_permanent_id(&perm_id).await?;
 
         let mut nodes_to_remove = vec![perm_id];
@@ -345,6 +473,8 @@ impl InnerDrive {
                     node_id,
                     "missing node for removal",
                 ))?;
+            // Remove all entries from dirty list with this node id
+            self.dirty_nodes.retain(|id| *id != node_id);
 
             if let Some(data_cids) = node.data_cids() {
                 data_cids_removed.extend(data_cids);
@@ -370,7 +500,7 @@ impl InnerDrive {
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
     use super::*;
     use crate::filesystem::nodes::NodeName;
     use crate::prelude::*;
@@ -456,7 +586,7 @@ mod test {
     }
 
     // A fixture to make a relatively interesting inner
-    async fn build_interesting_inner() -> InnerDrive {
+    pub(crate) async fn build_interesting_inner() -> InnerDrive {
         let mut rng = crate::utils::crypto_rng();
         let (actor_id, mut inner) = initialize_inner_drive();
 

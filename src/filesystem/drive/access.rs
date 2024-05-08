@@ -112,6 +112,18 @@ impl DriveAccess {
         access.has_filesystem_key() && access.has_data_key()
     }
 
+    /// Cheks whether the requested actor is able to read maintenance related information from an
+    /// encrypted drive. This includes information such as which public keys are present and the
+    /// CIDs of the data blocks that are being added and removed.
+    pub fn has_maintenance_access(&self, actor_id: &ActorId) -> bool {
+        let access = match self.active_actor_access(actor_id) {
+            Some(a) => a,
+            None => return false,
+        };
+
+        access.has_maintenance_key()
+    }
+
     /// Checks whether the requested actor is able to read the the structure of the filesystem and
     /// the associated attributes with its contents. This does not check whether the actor is able
     /// to read data from files or associated data nodes. To check whether the Actor can read data

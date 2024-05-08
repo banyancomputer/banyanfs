@@ -10,10 +10,15 @@ use crate::codec::{Cid, ParserResult, PermanentId, Stream};
 use crate::filesystem::nodes::{NodeKind, NodeName};
 use crate::filesystem::FileContent;
 
+mod child_map;
+use child_map::ChildMap;
+
+use self::child_map::ChildMapEntry;
+
 pub enum NodeData {
     File {
         permissions: FilePermissions,
-        associated_data: HashMap<NodeName, PermanentId>,
+        associated_data: ChildMap,
         content: FileContent,
     },
     #[allow(dead_code)]
@@ -21,7 +26,7 @@ pub enum NodeData {
     Directory {
         permissions: DirectoryPermissions,
         children_size: u64,
-        children: HashMap<NodeName, PermanentId>,
+        children: ChildMap,
     },
 }
 
@@ -30,6 +35,7 @@ impl NodeData {
         &mut self,
         name: NodeName,
         id: PermanentId,
+        cid: Cid,
     ) -> Result<(), NodeDataError> {
         let child_map = match self {
             NodeData::Directory { children, .. } => children,
@@ -40,13 +46,32 @@ impl NodeData {
         };
 
         match child_map.entry(name) {
-            Entry::Occupied(_) => return Err(NodeDataError::NameExists),
+            Entry::Occupied(_) => return Err(NodeDataError::ChildNameExists),
             Entry::Vacant(entry) => {
-                entry.insert(id);
+                entry.insert(ChildMapEntry::new(id, cid));
             }
         }
 
         Ok(())
+    }
+
+    pub fn update_child_cid(
+        &mut self,
+        child_permanent_id: &PermanentId,
+        cid: Cid,
+    ) -> Result<(), NodeDataError> {
+        match self {
+            Self::Directory { children, .. } => {
+                let child = children
+                    .iter_mut()
+                    .find(|entry| entry.1.permanent_id() == child_permanent_id)
+                    .ok_or(NodeDataError::ChildIdMissing)?
+                    .1;
+                child.set_cid(cid);
+                Ok(())
+            }
+            _ => Ok(()),
+        }
     }
 
     #[tracing::instrument(skip(self, writer))]
@@ -116,8 +141,11 @@ impl NodeData {
         };
 
         let mut child_pairs = children.iter().collect::<Vec<_>>();
-        child_pairs.sort_by(|(_, a), (_, b)| a.cmp(b));
-        child_pairs.into_iter().map(|(_, id)| *id).collect()
+        child_pairs.sort_by(|(_, a), (_, b)| a.permanent_id().cmp(b.permanent_id()));
+        child_pairs
+            .into_iter()
+            .map(|(_, id)| *id.permanent_id())
+            .collect()
     }
 
     pub(crate) fn data_cids(&self) -> Option<Vec<Cid>> {
@@ -174,8 +202,8 @@ impl NodeData {
         };
 
         match child_map.remove(name) {
-            Some(id) => Ok(id),
-            None => Err(NodeDataError::NameMissing),
+            Some(id) => Ok(id.permanent_id().clone()),
+            None => Err(NodeDataError::ChildNameMissing),
         }
     }
 
@@ -198,7 +226,7 @@ impl NodeData {
             _ => return Err(NodeDataError::NotAParent),
         };
 
-        child_map.retain(|_, id| id != permanent_id);
+        child_map.retain(|_, id| id.permanent_id() != permanent_id);
 
         Ok(())
     }
@@ -228,11 +256,11 @@ impl NodeData {
             } => {
                 let base_size = FilePermissions::size();
 
-                let associated_data_size = associated_data
+                let associated_map_size = associated_data
                     .iter()
                     .fold(0, |acc, (name, _)| acc + name.size() + PermanentId::size());
 
-                (base_size + associated_data_size) as u64 + content.size()
+                (base_size + associated_map_size) as u64 + content.size()
             }
         }
     }
@@ -255,7 +283,7 @@ impl NodeData {
 }
 
 async fn encode_children<W: AsyncWrite + Unpin + Send>(
-    children: &HashMap<NodeName, PermanentId>,
+    children: &ChildMap,
     writer: &mut W,
 ) -> std::io::Result<usize> {
     let child_count = children.len();
@@ -271,7 +299,7 @@ async fn encode_children<W: AsyncWrite + Unpin + Send>(
     let mut written_bytes = child_count_bytes.len();
 
     let mut children = children.iter().collect::<Vec<_>>();
-    children.sort_by(|(_, a), (_, b)| a.cmp(b));
+    children.sort_by(|(_, a), (_, b)| a.permanent_id().cmp(b.permanent_id()));
 
     for (name, id) in children {
         written_bytes += name.encode(writer).await?;
@@ -281,7 +309,7 @@ async fn encode_children<W: AsyncWrite + Unpin + Send>(
     Ok(written_bytes)
 }
 
-fn parse_children(input: Stream) -> ParserResult<HashMap<NodeName, PermanentId>> {
+fn parse_children(input: Stream) -> ParserResult<ChildMap> {
     let (data_buf, children_count) = le_u16.parse_peek(input)?;
 
     let mut children = HashMap::new();
@@ -289,9 +317,9 @@ fn parse_children(input: Stream) -> ParserResult<HashMap<NodeName, PermanentId>>
 
     for _ in 0..children_count {
         let (remaining, child_name) = NodeName::parse(child_buf)?;
-        let (remaining, child_id) = PermanentId::parse(remaining)?;
+        let (remaining, child_entry) = ChildMapEntry::parse(remaining)?;
 
-        children.insert(child_name, child_id);
+        children.insert(child_name, child_entry);
 
         child_buf = remaining;
     }
@@ -302,11 +330,14 @@ fn parse_children(input: Stream) -> ParserResult<HashMap<NodeName, PermanentId>>
 #[derive(Debug, thiserror::Error)]
 pub enum NodeDataError {
     #[error("attempted to add child with a name that was already present")]
-    NameExists,
+    ChildNameExists,
 
     #[error("attempted to remove a child that was not present")]
-    NameMissing,
+    ChildNameMissing,
 
     #[error("non-parent node cannot have or interact with children")]
     NotAParent,
+
+    #[error("Passed in PermanentId does not refer to a valid child")]
+    ChildIdMissing,
 }

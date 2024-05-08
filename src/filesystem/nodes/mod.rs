@@ -49,7 +49,8 @@ pub(crate) type NodeId = usize;
 /// When a [`Node`] instance needs to by referenced there are three relevant identifiers to be
 /// aware of. When loaded into memory a [`Node`] will have a runtime identifier type of
 /// [`NodeId`]. A [`NodeId`] should not be used for any reference that may need to persist
-/// between serializations.
+/// between serializations. A [`NodeId`] can also be reused if a node is deleted/removed and
+/// and another one gets created.
 ///
 /// A specific version of a Node should be referenced by the content identifier ([`Cid`]), this
 /// takes into account all of the attributes that make up the filesystem entry. This is most useful
@@ -93,8 +94,9 @@ impl Node {
         &mut self,
         name: NodeName,
         child_id: PermanentId,
+        child_cid: Cid,
     ) -> Result<(), NodeDataError> {
-        self.inner.add_child(name, child_id)?;
+        self.inner.add_child(name, child_id, child_cid)?;
         self.notify_of_change().await;
 
         Ok(())
@@ -272,7 +274,7 @@ impl Node {
         self.inner.data_cids()
     }
 
-    /// This returns the esimated amount of storage that is taken up by attributes at this level of
+    /// This returns the estimated amount of storage that is taken up by attributes at this level of
     /// indirection without the contents of the data itself. This is used internally to dynamically
     /// estimate of the total encoding size of the node.
     fn outer_size_estimate(&self) -> u64 {
@@ -299,7 +301,7 @@ impl Node {
     /// The owner of a node is the actor that created the specific version of this file. If a file
     /// is replaced or edited, the new actor will be the owner of the new version. Some client
     /// implementations make use of custom authorization middlewares that reject change violating
-    /// more complex authorization policies such as only alllowing the owner to modify a file,
+    /// more complex authorization policies such as only allowing the owner to modify a file,
     /// enforce the actor is a member of a specific group, etc.
     pub fn owner_id(&self) -> ActorId {
         self.owner_id
@@ -467,5 +469,28 @@ impl std::fmt::Debug for Node {
                 .field(&self.name)
                 .finish(),
         }
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod test {
+    use crate::codec::crypto::Fingerprint;
+
+    use super::*;
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_mut_data_access_marks_cid_dirty() {
+        let mut rng = crate::utils::crypto_rng();
+        let mut test_node = NodeBuilder::file(NodeName::Named("TestDir".into()))
+            .with_id(0)
+            .with_owner(ActorId::from(Fingerprint::from([0; Fingerprint::size()])))
+            .with_parent(PermanentId::generate(&mut rng))
+            .build(&mut rng)
+            .unwrap();
+        let _cid = test_node.cid().await.unwrap();
+        assert!(!test_node.cid.is_dirty().await);
+        let _mut_data = test_node.data_mut().await;
+        assert!(test_node.cid.is_dirty().await);
     }
 }

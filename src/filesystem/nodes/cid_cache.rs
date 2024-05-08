@@ -49,6 +49,7 @@ impl CidCache {
         let cid = crate::utils::calculate_cid(data);
         let mut inner = self.0.write().await;
         inner.cid = Some(cid);
+        inner.dirty = false;
     }
 
     pub(crate) async fn take_cached(&self) -> Option<Vec<u8>> {

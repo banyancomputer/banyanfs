@@ -5,6 +5,14 @@ fn main() {}
 #[tokio::main]
 async fn main() {
     use tokio_util::compat::TokioAsyncReadCompatExt;
+    use tracing::{level_filters::LevelFilter, Level};
+    use tracing_subscriber::fmt::format::FmtSpan;
+    let subscriber = tracing_subscriber::FmtSubscriber::builder()
+        .with_level(true)
+        .with_span_events(FmtSpan::ACTIVE)
+        .with_max_level(LevelFilter::from_level(Level::TRACE))
+        .finish();
+    tracing::subscriber::set_global_default(subscriber).unwrap();
 
     use banyanfs::prelude::*;
 
@@ -63,6 +71,7 @@ async fn main() {
             .read(&memory_store, &["testing", "poem-♥.txt"])
             .await
             .unwrap();
+
         assert_eq!(file_data, b"a filesystem was born");
 
         let additional_key = std::sync::Arc::new(SigningKey::generate(&mut rng));
