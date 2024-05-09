@@ -23,7 +23,6 @@ pub(crate) const PLATFORM_AUDIENCE: &str = "banyan-platform";
 
 pub(crate) const STORAGE_HOST_AUDIENCE: &str = "banyan-storage";
 
-use std::cell::OnceCell;
 use std::sync::Arc;
 
 use reqwest::{Client, StatusCode, Url};
@@ -45,7 +44,7 @@ pub struct ApiClient {
     auth: ApiAuth,
     base_url: Url,
     client: Client,
-    platform_pubkey: OnceCell<VerifyingKey>,
+    platform_pubkey: Option<VerifyingKey>,
 }
 
 impl ApiClient {
@@ -66,7 +65,7 @@ impl ApiClient {
             auth,
             base_url,
             client,
-            platform_pubkey: OnceCell::new(),
+            platform_pubkey: None,
         })
     }
 
@@ -176,17 +175,15 @@ impl ApiClient {
         }
     }
 
-    pub async fn platform_public_key(&self) -> Result<VerifyingKey, ApiError> {
-        if let Some(pubkey) = self.platform_pubkey.get() {
+    pub async fn platform_public_key(&mut self) -> Result<VerifyingKey, ApiError> {
+        if let Some(pubkey) = &self.platform_pubkey {
             return Ok(pubkey.clone());
         }
 
         let pubkey = crate::api::platform::status::get_public_key(self).await?;
-        let _ = self.platform_pubkey.set(pubkey.clone());
-
+        self.platform_pubkey = Some(pubkey.clone());
         Ok(pubkey)
     }
-
     pub async fn record_storage_grant(&self, storage_host_url: Url, auth_token: &str) {
         tracing::debug!(?storage_host_url, "recording storage grant");
 
