@@ -78,7 +78,7 @@ impl WasmMount {
     }
 
     pub(crate) async fn pull(bucket: WasmBucket, wasm_client: TombCompat) -> BanyanFsResult<Self> {
-        let &mut client = wasm_client.client();
+        let client = wasm_client.client();
         let drive_id = bucket.id();
 
         let current_metadata = platform::metadata::get_current(client, &drive_id).await?;
