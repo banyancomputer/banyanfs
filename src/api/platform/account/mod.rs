@@ -47,7 +47,11 @@ pub async fn create_user_key(
     public_key: &VerifyingKey,
 ) -> Result<ApiKeyId, ApiError> {
     let fingerprint = api_fingerprint_key(public_key);
-    let create_user_key = CreateUserKey::new(name, public_key);
+    let public_key_pem = public_key
+        .to_spki()
+        .map_err(|err| ApiError::InvalidData(err.to_string()))?;
+
+    let create_user_key = CreateUserKey::new(name, &public_key_pem);
     let response = client.platform_request_full(create_user_key).await?;
 
     if cfg!(feature = "strict") && response.fingerprint() != fingerprint {

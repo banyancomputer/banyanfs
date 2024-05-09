@@ -19,10 +19,10 @@ pub struct CreateUserKey {
 }
 
 impl CreateUserKey {
-    pub fn new(name: &str, key: &VerifyingKey) -> Self {
+    pub fn new(name: &str, public_key_pem: &str) -> Self {
         Self {
             name: name.to_string(),
-            public_key_pem: key.to_public_key_pem(LineEnding::CR).unwrap(),
+            public_key_pem: public_key_pem.to_string(),
         }
     }
 }
