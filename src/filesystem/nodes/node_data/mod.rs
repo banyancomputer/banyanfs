@@ -121,7 +121,7 @@ impl NodeData {
         let mut child_pairs = self
             .children()
             .map(|child_map| child_map.iter().collect::<Vec<_>>())
-            .unwrap_or_else(Vec::new);
+            .unwrap_or_default();
         child_pairs.sort_by(|(_, a), (_, b)| a.permanent_id().cmp(b.permanent_id()));
         child_pairs
             .into_iter()
