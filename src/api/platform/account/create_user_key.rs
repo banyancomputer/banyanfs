@@ -6,7 +6,6 @@ use serde::Serialize;
 use crate::api::client::{ApiError, ApiRequest, PlatformApiRequest};
 use crate::api::platform::ApiUserKey;
 
-
 // todo(sstelfox): currently we support registering any key with permissions to the account, then
 // that key gets full access to the account and any encrypted data even if the user doesn't have
 // access. We need to adjust our permission model to restrict the key usage to the buckets it has

@@ -5,8 +5,6 @@ use serde::Serialize;
 
 use crate::api::client::{ApiError, ApiRequest, PlatformApiRequest};
 
-
-
 #[derive(Serialize)]
 pub struct RenameUserKey {
     name: String,
