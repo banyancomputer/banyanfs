@@ -17,6 +17,7 @@ banyan-api = ["async-trait", "reqwest", "serde", "serde_json", "url"]
 pem = ["p384/pem", "p384/pkcs8"]
 strict = []
 tomb-compat = ["banyan-api"]
+reqwest = ["dep:reqwest"]
 
 [dependencies]
 async-recursion = "^1"
@@ -97,6 +98,12 @@ web-sys = { version = "^0.3", default-features = false, features = [
 wasm-bindgen-test = "^0.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+reqwest = { version = "^0.12", default-features = false, optional = true, features = [
+  "multipart",
+  "json",
+  "rustls-tls",
+  "stream",
+] }
 tokio = { version = "^1", features = ["full"] }
 tokio-util = { version = "^0.7", features = ["compat", "io"] }
 tracing-appender = "^0.2"
