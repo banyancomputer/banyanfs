@@ -25,7 +25,7 @@ pub(crate) struct PushRequest {
     // and will no longer be needed but need to be passed in from the outside until
     // the server side has been updated to consume this information from the format
     // itself.
-    valid_keys: Vec<Fingerprint>,
+    user_key_fingerprints: Vec<Fingerprint>,
     deleted_block_cids: Vec<Cid>,
 }
 
@@ -40,7 +40,7 @@ impl PushRequest {
 
         stream_body: S,
 
-        valid_keys: Vec<Fingerprint>,
+        user_key_fingerprints: Vec<Fingerprint>,
         deleted_block_cids: Vec<Cid>,
     ) -> Result<Self, std::io::Error>
     where
@@ -70,7 +70,7 @@ impl PushRequest {
 
             stream_body: Some(stream_body),
 
-            valid_keys,
+            user_key_fingerprints,
             deleted_block_cids,
         })
     }
@@ -109,7 +109,11 @@ impl ApiRequest for PushRequest {
         let mut form = Form::new();
 
         let metadata_cid = root_cid.clone();
-        let valid_keys = self.valid_keys.iter().map(|f| f.as_hex()).collect();
+        let user_key_fingerprints = self
+            .user_key_fingerprints
+            .iter()
+            .map(|f| f.as_hex())
+            .collect();
         let deleted_block_cids = self
             .deleted_block_cids
             .iter()
@@ -123,7 +127,7 @@ impl ApiRequest for PushRequest {
             metadata_cid,
             previous_id,
 
-            valid_keys,
+            user_key_fingerprints,
             deleted_block_cids,
         };
 
@@ -156,7 +160,7 @@ struct InnerPushRequest {
 
     previous_id: Option<String>,
 
-    valid_keys: Vec<String>,
+    user_key_fingerprints: Vec<String>,
     deleted_block_cids: Vec<String>,
 }
 

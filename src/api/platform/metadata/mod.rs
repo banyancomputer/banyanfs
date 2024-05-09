@@ -63,7 +63,7 @@ pub async fn push_stream<S>(
 
     stream_body: std::pin::Pin<Box<S>>,
 
-    valid_keys: Vec<Fingerprint>,
+    user_key_fingerprints: Vec<Fingerprint>,
     deleted_block_cids: Vec<Cid>,
 ) -> Result<PushResponse, ApiError>
 where
@@ -75,7 +75,7 @@ where
         merkle_root_cid,
         previous_version_id,
         stream_body,
-        valid_keys,
+        user_key_fingerprints,
         deleted_block_cids,
     )
     .await?;

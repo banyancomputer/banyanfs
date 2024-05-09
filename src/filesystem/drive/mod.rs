@@ -243,6 +243,11 @@ impl Drive {
 
         Ok(root_cid)
     }
+
+    pub async fn verifying_keys(&self) -> Vec<VerifyingKey> {
+        let inner = self.inner.read().await;
+        inner.access().verifying_keys()
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

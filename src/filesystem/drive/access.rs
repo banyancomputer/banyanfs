@@ -51,6 +51,15 @@ impl DriveAccess {
             .clone()
     }
 
+    pub(crate) fn verifying_keys(&self) -> Vec<VerifyingKey> {
+        let keys = self
+            .sorted_actor_settings()
+            .into_iter()
+            .map(|settings| settings.verifying_key())
+            .collect();
+        keys
+    }
+
     /// A user is allowed to fork off a copy of a drive if they have read access to the data and
     /// the filesystem. At the time, this is equivalent of [`DriveAccess::has_data_access`].
     pub fn can_fork(&self, actor_id: &ActorId) -> bool {

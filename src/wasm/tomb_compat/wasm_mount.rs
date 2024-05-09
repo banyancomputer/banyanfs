@@ -143,7 +143,14 @@ impl WasmMount {
             .map_err(|e| format!("error while getting root cid for sync: {e}"))?;
 
         // todo(sstelfox): still need the following:
-        let valid_keys = vec![];
+        let user_key_fingerprints = unlocked_drive
+            .verifying_keys()
+            .await
+            .into_iter()
+            .map(|key| key.fingerprint())
+            .collect();
+
+        tracing::info!("valid_keys: {:?}", user_key_fingerprints);
 
         let deleted_block_cids = self
             .store
@@ -160,7 +167,7 @@ impl WasmMount {
             root_cid,
             self.last_saved_metadata.as_ref().map(|m| m.id()).clone(),
             drive_stream,
-            valid_keys,
+            user_key_fingerprints,
             deleted_block_cids,
         )
         .await?;
