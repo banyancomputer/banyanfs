@@ -52,12 +52,16 @@ impl DriveAccess {
     }
 
     pub(crate) fn verifying_keys(&self) -> Vec<VerifyingKey> {
-        let keys = self
-            .sorted_actor_settings()
-            .into_iter()
-            .map(|settings| settings.verifying_key())
-            .collect();
-        keys
+        self.actor_settings
+            .iter()
+            .filter_map(|(actor_id, settings)| {
+                if self.is_owner(actor_id) {
+                    Some(settings.verifying_key())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     /// A user is allowed to fork off a copy of a drive if they have read access to the data and
