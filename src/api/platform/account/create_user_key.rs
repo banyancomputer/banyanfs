@@ -15,14 +15,14 @@ use crate::codec::crypto::VerifyingKey;
 #[derive(Serialize)]
 pub struct CreateUserKey {
     name: String,
-    pem: String,
+    public_key_pem: String,
 }
 
 impl CreateUserKey {
     pub fn new(name: &str, key: &VerifyingKey) -> Self {
         Self {
             name: name.to_string(),
-            pem: key.to_public_key_pem(LineEnding::CR).unwrap(),
+            public_key_pem: key.to_public_key_pem(LineEnding::CR).unwrap(),
         }
     }
 }
