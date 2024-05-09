@@ -17,6 +17,7 @@ use crate::api::client::{ApiClient, ApiError};
 use crate::api::platform::{ApiMetadata, ApiMetadataId};
 use crate::codec::crypto::Fingerprint;
 use crate::codec::Cid;
+use crate::prelude::VerifyingKey;
 
 pub async fn get_current(client: &ApiClient, drive_id: &str) -> Result<ApiMetadata, ApiError> {
     client
@@ -63,7 +64,7 @@ pub async fn push_stream<S>(
 
     stream_body: std::pin::Pin<Box<S>>,
 
-    user_key_fingerprints: Vec<Fingerprint>,
+    verifying_keys: Vec<VerifyingKey>,
     deleted_block_cids: Vec<Cid>,
 ) -> Result<PushResponse, ApiError>
 where
@@ -75,7 +76,7 @@ where
         merkle_root_cid,
         previous_version_id,
         stream_body,
-        user_key_fingerprints,
+        verifying_keys,
         deleted_block_cids,
     )
     .await?;

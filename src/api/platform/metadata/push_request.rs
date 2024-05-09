@@ -5,10 +5,12 @@ use reqwest::multipart::{Form, Part};
 use reqwest::{Body, Method, RequestBuilder, Url};
 use serde::{Deserialize, Serialize};
 
+use crate::api::client::utils::api_fingerprint_key;
 use crate::api::client::{ApiError, ApiRequest, PlatformApiRequest};
 use crate::api::platform::{ApiDriveId, ApiMetadataId};
 use crate::codec::crypto::Fingerprint;
 use crate::codec::Cid;
+use crate::prelude::VerifyingKey;
 
 pub(crate) struct PushRequest {
     drive_id: ApiDriveId,
@@ -25,7 +27,7 @@ pub(crate) struct PushRequest {
     // and will no longer be needed but need to be passed in from the outside until
     // the server side has been updated to consume this information from the format
     // itself.
-    user_key_fingerprints: Vec<Fingerprint>,
+    verifying_keys: Vec<VerifyingKey>,
     deleted_block_cids: Vec<Cid>,
 }
 
@@ -40,7 +42,7 @@ impl PushRequest {
 
         stream_body: S,
 
-        user_key_fingerprints: Vec<Fingerprint>,
+        verifying_keys: Vec<VerifyingKey>,
         deleted_block_cids: Vec<Cid>,
     ) -> Result<Self, std::io::Error>
     where
@@ -70,10 +72,16 @@ impl PushRequest {
 
             stream_body: Some(stream_body),
 
-            user_key_fingerprints,
+            verifying_keys,
             deleted_block_cids,
         })
     }
+}
+
+#[derive(Debug, Serialize)]
+pub struct PushKey {
+    fingerprint: String,
+    pem: String,
 }
 
 #[async_trait(?Send)]
@@ -109,10 +117,19 @@ impl ApiRequest for PushRequest {
         let mut form = Form::new();
 
         let metadata_cid = root_cid.clone();
-        let user_key_fingerprints = self
-            .user_key_fingerprints
+        let user_keys = self
+            .verifying_keys
             .iter()
-            .map(|f| f.as_hex())
+            .filter_map(|key| {
+                if let Ok(pem) = key.to_spki() {
+                    Some(PushKey {
+                        fingerprint: api_fingerprint_key(key),
+                        pem,
+                    })
+                } else {
+                    None
+                }
+            })
             .collect();
         let deleted_block_cids = self
             .deleted_block_cids
@@ -127,7 +144,7 @@ impl ApiRequest for PushRequest {
             metadata_cid,
             previous_id,
 
-            user_key_fingerprints,
+            user_keys,
             deleted_block_cids,
         };
 
@@ -160,7 +177,7 @@ struct InnerPushRequest {
 
     previous_id: Option<String>,
 
-    user_key_fingerprints: Vec<String>,
+    user_keys: Vec<PushKey>,
     deleted_block_cids: Vec<String>,
 }
 
