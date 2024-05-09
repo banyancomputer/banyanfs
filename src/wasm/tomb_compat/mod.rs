@@ -95,7 +95,7 @@ impl TombCompat {
         bucket_id: String,
         fingerprint: String,
     ) -> BanyanFsResult<()> {
-        platform::drive_access::revoke(&self.client, &bucket_id, &fingerprint).await?;
+        // TODO remove the key from the drive and initiate a sync
         Ok(())
     }
 

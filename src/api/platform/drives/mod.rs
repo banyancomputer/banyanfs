@@ -20,13 +20,13 @@ use crate::prelude::VerifyingKey;
 pub async fn create(
     client: &ApiClient,
     name: &str,
-    key: &VerifyingKey,
+    owner_key: &VerifyingKey,
 ) -> Result<ApiDriveId, ApiError> {
     let request = CreateRequest {
         name: name.to_string(),
         kind: DriveKind::Interactive,
         storage_class: StorageClass::Hot,
-        fingerprint: api_fingerprint_key(key),
+        fingerprint: api_fingerprint_key(owner_key),
     };
 
     let created_drive = client.platform_request_full(request).await?;

@@ -1,15 +1,13 @@
-use std::fmt::{Display, Formatter};
-
+use super::{ApiDriveId, ApiKeyId};
 use serde::{Deserialize, Serialize};
-
-use super::ApiKeyId;
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Deserialize, Serialize)]
 #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct ApiDriveAccess {
     user_key_id: ApiKeyId,
     #[serde(rename = "bucket_id")]
-    drive_id: String,
+    drive_id: ApiDriveId,
     fingerprint: String,
     state: BucketAccessState,
 }
