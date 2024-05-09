@@ -1,11 +1,11 @@
 use async_trait::async_trait;
-use elliptic_curve::pkcs8::{EncodePublicKey, LineEnding};
+
 use reqwest::{Method, RequestBuilder};
 use serde::Serialize;
 
 use crate::api::client::{ApiError, ApiRequest, PlatformApiRequest};
 use crate::api::platform::ApiUserKey;
-use crate::codec::crypto::VerifyingKey;
+
 
 // todo(sstelfox): currently we support registering any key with permissions to the account, then
 // that key gets full access to the account and any encrypted data even if the user doesn't have

@@ -132,9 +132,8 @@ impl InnerDrive {
             let node_mut = self
                 .by_id_mut_untracked(node_id)
                 .expect("We've already accessed this node immutably just above");
-            match node_mut.data_mut().await {
-                NodeData::Directory { children_size, .. } => *children_size = new_children_size,
-                _ => {}
+            if let NodeData::Directory { children_size, .. } = node_mut.data_mut().await {
+                *children_size = new_children_size;
             }
 
             // Update child CIDs
@@ -555,7 +554,7 @@ pub(crate) mod test {
         assert_eq!(new_node.parent_id().unwrap(), inner.root_pid);
         let root_children = inner.root_node().unwrap().ordered_child_pids();
         assert_eq!(root_children.len(), 1);
-        assert_eq!(root_children.get(0).unwrap(), &node_pid);
+        assert_eq!(root_children.first().unwrap(), &node_pid);
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]

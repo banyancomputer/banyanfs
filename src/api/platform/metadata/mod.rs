@@ -15,7 +15,7 @@ use futures::Stream;
 
 use crate::api::client::{ApiClient, ApiError};
 use crate::api::platform::{ApiMetadata, ApiMetadataId};
-use crate::codec::crypto::Fingerprint;
+
 use crate::codec::Cid;
 use crate::prelude::VerifyingKey;
 

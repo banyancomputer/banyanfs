@@ -202,7 +202,7 @@ impl NodeData {
         };
 
         match child_map.remove(name) {
-            Some(id) => Ok(id.permanent_id().clone()),
+            Some(id) => Ok(*id.permanent_id()),
             None => Err(NodeDataError::ChildNameMissing),
         }
     }
