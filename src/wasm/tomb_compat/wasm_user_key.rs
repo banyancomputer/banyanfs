@@ -30,9 +30,9 @@ impl WasmUserKey {
         self.0.api_access()
     }
 
-    /// PEM
-    pub fn pem(&self) -> String {
-        self.0.pem().to_string()
+    /// Public Key PEM
+    pub fn public_key_pem(&self) -> String {
+        self.0.public_key_pem().to_string()
     }
 
     /// Public Key Fingerprint
