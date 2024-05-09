@@ -23,8 +23,7 @@ pub(crate) const PLATFORM_AUDIENCE: &str = "banyan-platform";
 
 pub(crate) const STORAGE_HOST_AUDIENCE: &str = "banyan-storage";
 
-use std::cell::OnceCell;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use reqwest::{Client, StatusCode, Url};
 use serde::Deserialize;
@@ -45,7 +44,7 @@ pub struct ApiClient {
     auth: ApiAuth,
     base_url: Url,
     client: Client,
-    platform_pubkey: OnceCell<VerifyingKey>,
+    platform_pubkey: OnceLock<VerifyingKey>,
 }
 
 impl ApiClient {
@@ -66,7 +65,7 @@ impl ApiClient {
             auth,
             base_url,
             client,
-            platform_pubkey: OnceCell::new(),
+            platform_pubkey: OnceLock::default(),
         })
     }
 
