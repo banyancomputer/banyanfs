@@ -7,6 +7,7 @@ mod storage_host_auth;
 mod traits;
 
 pub use error::ApiClientError;
+pub use utils::VecStream;
 
 pub(crate) mod utils;
 
