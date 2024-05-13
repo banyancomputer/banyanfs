@@ -7,6 +7,8 @@ use winnow::stream::Offset;
 use winnow::token::{literal, take};
 use winnow::Parser;
 
+mod data_options;
+
 use crate::codec::crypto::{
     AccessKey, AuthenticationTag, Nonce, Signature, SigningKey, VerifyingKey,
 };
@@ -14,6 +16,7 @@ use crate::codec::header::BANYAN_DATA_MAGIC;
 use crate::codec::meta::{BlockSize, BlockSizeError};
 use crate::codec::{Cid, ParserResult, Stream};
 use crate::utils::std_io_err;
+use data_options::DataOptions;
 
 const ENCRYPTED_BIT: u8 = 0b1000_0000;
 
@@ -377,68 +380,6 @@ pub enum DataBlockError {
 
     #[error("block size was invalid: {0}")]
     Size(#[from] BlockSizeError),
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct DataOptions {
-    ecc_present: bool,
-    encrypted: bool,
-    block_size: BlockSize,
-}
-
-impl DataOptions {
-    pub fn block_size(&self) -> &BlockSize {
-        &self.block_size
-    }
-
-    pub fn ecc_present(&self) -> bool {
-        self.ecc_present
-    }
-
-    pub async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-    ) -> std::io::Result<usize> {
-        let mut option_byte = 0u8;
-
-        if self.ecc_present {
-            option_byte |= ECC_PRESENT_BIT;
-        }
-
-        if self.encrypted {
-            option_byte |= ENCRYPTED_BIT;
-        }
-
-        writer.write_all(&[option_byte]).await?;
-        let block_size = self.block_size.encode(writer).await?;
-
-        Ok(1 + block_size)
-    }
-
-    pub fn encrypted(&self) -> bool {
-        self.encrypted
-    }
-
-    pub fn parse(input: Stream) -> ParserResult<Self> {
-        let (input, version_byte) = take(1u8).parse_peek(input)?;
-        let option_byte = version_byte[0];
-
-        let ecc_present = (option_byte & ECC_PRESENT_BIT) == ECC_PRESENT_BIT;
-        let encrypted = (option_byte & ENCRYPTED_BIT) == ENCRYPTED_BIT;
-        let (input, block_size) = BlockSize::parse(input)?;
-
-        let data_options = DataOptions {
-            ecc_present,
-            encrypted,
-            block_size,
-        };
-
-        Ok((input, data_options))
-    }
-
-    pub const fn size() -> usize {
-        2
-    }
 }
 
 fn banyan_data_magic_tag(input: Stream) -> ParserResult<&[u8]> {

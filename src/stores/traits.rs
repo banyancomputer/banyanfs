@@ -4,7 +4,7 @@ use url::Url;
 use crate::codec::Cid;
 
 /// The core storage trait for the library backend. This is the minimum requirement for
-/// integrating banyanfs with any form of extenal storage or platform. Data availability and
+/// integrating banyanfs with any form of external storage or platform. Data availability and
 /// reliability relies on the implementation of this trait and the backing store. Failing to save
 /// data will not corrupt the filesystem itself but will prevent the affected file(s) from being
 /// readable.
@@ -39,7 +39,7 @@ pub trait DataStore {
     ///
     /// The immediate flag is a hint that the data should be persisted immediately rather than just
     /// in any form of a cache. It's up to the implementor to decide what the exact behavior of
-    /// this flag is. Expects the block to be immediaetly available for retrieval once this call
+    /// this flag is. Expects the block to be immediately available for retrieval once this call
     /// completes successfully.
     async fn store(
         &mut self,
