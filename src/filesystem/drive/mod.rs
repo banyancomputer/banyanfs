@@ -243,6 +243,15 @@ impl Drive {
 
         Ok(root_cid)
     }
+
+    pub async fn root_entry(&self) -> Result<DirectoryEntry, OperationError> {
+        let inner_read = self.inner.read().await;
+
+        let root_perm_id = inner_read.root_pid();
+        let root_node = inner_read.by_perm_id(&root_perm_id)?;
+
+        DirectoryEntry::try_from(root_node)
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
