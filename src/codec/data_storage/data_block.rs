@@ -7,8 +7,7 @@ use winnow::stream::Offset;
 use winnow::token::{literal, take};
 use winnow::Parser;
 
-mod data_options;
-
+use super::data_options::DataOptions;
 use crate::codec::crypto::{
     AccessKey, AuthenticationTag, Nonce, Signature, SigningKey, VerifyingKey,
 };
@@ -16,11 +15,6 @@ use crate::codec::header::BANYAN_DATA_MAGIC;
 use crate::codec::meta::{BlockSize, BlockSizeError};
 use crate::codec::{Cid, ParserResult, Stream};
 use crate::utils::std_io_err;
-use data_options::DataOptions;
-
-const ENCRYPTED_BIT: u8 = 0b1000_0000;
-
-const ECC_PRESENT_BIT: u8 = 0b0100_0000;
 
 use std::sync::{Arc, RwLock};
 
@@ -41,7 +35,7 @@ impl DataBlock {
         134_217_728 - (64 * Nonce::size() + AuthenticationTag::size());
 
     pub fn base_chunk_size(&self) -> usize {
-        self.data_options().block_size().chunk_size() as usize
+        self.data_options().chunk_size() as usize
     }
 
     pub fn chunk_size(&self) -> usize {
@@ -226,8 +220,8 @@ impl DataBlock {
 
         let chunk_count = data_options.block_size().chunk_count() as usize;
 
-        let base_chunk_size = data_options.block_size().chunk_size() as usize;
-        let encrypted_chunk_size = base_chunk_size - (Nonce::size() + AuthenticationTag::size());
+        let base_chunk_size = data_options.chunk_size();
+        let encrypted_chunk_size = data_options.encrypted_chunk_data_size();
 
         let mut contents = Vec::with_capacity(chunk_count);
         for _ in 0..chunk_count {

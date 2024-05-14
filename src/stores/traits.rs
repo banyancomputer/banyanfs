@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use url::Url;
 
-use crate::codec::Cid;
+use crate::{codec::Cid, prelude::ContentLocation};
 
 /// The core storage trait for the library backend. This is the minimum requirement for
 /// integrating banyanfs with any form of external storage or platform. Data availability and
@@ -47,6 +47,23 @@ pub trait DataStore {
         data: Vec<u8>,
         immediate: bool,
     ) -> Result<(), DataStoreError>;
+}
+
+pub trait PackableStore: SyncableDataStore {
+    async fn store_packed(
+        &mut self,
+        data: Vec<u8>,
+    ) -> Result<Vec<ContentReference>, DataStoreError>;
+}
+
+pub struct ContentReference {
+    data_block_cid: Cid,
+    chunks: Vec<ContentLocation>,
+}
+
+pub enum BlockCid {
+    Cid(Cid),
+    Unresolved, // Does this need some sort of identifier?
 }
 
 /// An optional additional trait for implementors that would like to perform periodic flushing of

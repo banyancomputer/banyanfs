@@ -1,9 +1,13 @@
 use futures::{AsyncWrite, AsyncWriteExt};
 use winnow::{token::take, Parser};
 
-use super::{ECC_PRESENT_BIT, ENCRYPTED_BIT};
+use crate::codec::crypto::{AuthenticationTag, Nonce};
 use crate::codec::meta::BlockSize;
 use crate::codec::{ParserResult, Stream};
+
+const ENCRYPTED_BIT: u8 = 0b1000_0000;
+
+const ECC_PRESENT_BIT: u8 = 0b0100_0000;
 
 #[derive(Clone, Copy, Debug)]
 pub struct DataOptions {
@@ -15,6 +19,18 @@ pub struct DataOptions {
 impl DataOptions {
     pub fn block_size(&self) -> &BlockSize {
         &self.block_size
+    }
+
+    pub fn chunk_size(&self) -> usize {
+        self.block_size().chunk_size() as usize
+    }
+
+    pub fn encrypted_chunk_data_size(&self) -> usize {
+        self.chunk_size() - (8 + Nonce::size() + AuthenticationTag::size())
+    }
+
+    pub fn unencrypted_chunk_data_size(&self) -> usize {
+        self.chunk_size() - 8
     }
 
     pub fn ecc_present(&self) -> bool {

@@ -10,8 +10,8 @@ use crate::codec::filesystem::NodeKind;
 use crate::codec::*;
 
 use crate::codec::crypto::{AccessKey, SigningKey};
+use crate::codec::data_storage::DataBlock;
 use crate::codec::filesystem::BlockKind;
-use crate::codec::header::DataBlock;
 use crate::filesystem::drive::{DirectoryEntry, InnerDrive, OperationError, WalkState};
 use crate::filesystem::nodes::{Node, NodeData, NodeId, NodeName};
 use crate::filesystem::{ContentLocation, ContentReference, FileContent, NodeBuilder};
