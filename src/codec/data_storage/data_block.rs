@@ -221,7 +221,7 @@ impl DataBlock {
         let chunk_count = data_options.block_size().chunk_count() as usize;
 
         let base_chunk_size = data_options.chunk_size();
-        let encrypted_chunk_size = data_options.encrypted_chunk_data_size();
+        let encrypted_chunk_size = data_options.encrypted_chunk_data_size() + 8;
 
         let mut contents = Vec::with_capacity(chunk_count);
         for _ in 0..chunk_count {
