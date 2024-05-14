@@ -127,6 +127,15 @@ impl std::convert::TryFrom<&str> for NodeName {
     }
 }
 
+impl ToString for NodeName {
+    fn to_string(&self) -> String {
+        match self {
+            NodeName::Root => String::new(),
+            NodeName::Named(name) => name.to_string(),
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum NodeNameError {
     #[error("name can't contain slashes")]
