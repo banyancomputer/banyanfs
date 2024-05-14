@@ -81,7 +81,7 @@ impl PushRequest {
 #[derive(Debug, Serialize)]
 pub struct PushKey {
     fingerprint: String,
-    pem: String,
+    public_key: String,
 }
 
 #[async_trait(?Send)]
@@ -121,10 +121,10 @@ impl ApiRequest for PushRequest {
             .verifying_keys
             .iter()
             .filter_map(|key| {
-                if let Ok(pem) = key.to_spki() {
+                if let Ok(public_key) = key.to_spki() {
                     Some(PushKey {
                         fingerprint: api_fingerprint_key(key),
-                        pem,
+                        public_key,
                     })
                 } else {
                     None

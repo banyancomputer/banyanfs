@@ -14,14 +14,14 @@ use crate::api::platform::ApiUserKey;
 #[derive(Serialize)]
 pub struct CreateUserKey {
     name: String,
-    public_key_pem: String,
+    public_key: String,
 }
 
 impl CreateUserKey {
-    pub fn new(name: &str, public_key_pem: &str) -> Self {
+    pub fn new(name: &str, public_key: &str) -> Self {
         Self {
             name: name.to_string(),
-            public_key_pem: public_key_pem.to_string(),
+            public_key: public_key.to_string(),
         }
     }
 }
