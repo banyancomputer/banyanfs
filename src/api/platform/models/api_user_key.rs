@@ -4,7 +4,7 @@ use serde::Deserialize;
 pub struct ApiUserKey {
     id: ApiKeyId,
     name: String,
-    user_id: UserId,
+    user_id: ApiUserId,
     api_access: bool,
     #[serde(rename = "pem")]
     public_key_pem: String,
@@ -24,7 +24,7 @@ impl ApiUserKey {
     }
 
     /// User Id of the Owner of the Key
-    pub fn user_id(&self) -> &str {
+    pub fn user_id(&self) -> &ApiUserId {
         &self.user_id
     }
 
@@ -50,4 +50,4 @@ impl ApiUserKey {
 }
 
 pub type ApiKeyId = String;
-pub type UserId = String;
+pub type ApiUserId = String;

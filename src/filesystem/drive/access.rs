@@ -51,16 +51,10 @@ impl DriveAccess {
             .clone()
     }
 
-    pub(crate) fn verifying_keys(&self) -> Vec<VerifyingKey> {
+    pub(crate) fn verifying_keys(&self) -> Vec<(VerifyingKey, AccessMask)> {
         self.actor_settings
             .iter()
-            .filter_map(|(actor_id, settings)| {
-                if self.is_owner(actor_id) {
-                    Some(settings.verifying_key())
-                } else {
-                    None
-                }
-            })
+            .map(|(_, settings)| (settings.verifying_key(), settings.access()))
             .collect()
     }
 

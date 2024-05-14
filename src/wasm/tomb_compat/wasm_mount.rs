@@ -141,8 +141,18 @@ impl WasmMount {
             .await
             .map_err(|e| format!("error while getting root cid for sync: {e}"))?;
 
-        // todo(sstelfox): still need the following:
-        let verifying_keys = unlocked_drive.verifying_keys().await;
+        let verifying_keys = unlocked_drive
+            .verifying_keys()
+            .await
+            .into_iter()
+            .filter_map(|(key, mask)| {
+                if !mask.is_historical() {
+                    Some(key)
+                } else {
+                    None
+                }
+            })
+            .collect();
 
         let deleted_block_cids = self
             .store
