@@ -7,6 +7,7 @@ use winnow::stream::Offset;
 use winnow::token::{literal, take};
 use winnow::Parser;
 
+use super::data_chunk::DataChunk;
 use super::data_options::DataOptions;
 use crate::codec::crypto::{
     AccessKey, AuthenticationTag, Nonce, Signature, SigningKey, VerifyingKey,
@@ -21,7 +22,7 @@ use std::sync::{Arc, RwLock};
 pub struct DataBlock {
     data_options: DataOptions,
     cid: Arc<RwLock<Option<Cid>>>,
-    contents: Vec<Vec<u8>>,
+    contents: Vec<DataChunk>,
 }
 
 impl DataBlock {
@@ -72,16 +73,6 @@ impl DataBlock {
         signing_key: &SigningKey,
         writer: &mut W,
     ) -> std::io::Result<(usize, Vec<Cid>)> {
-        // Pad our data block
-        let mut extra_chunks = Vec::new();
-        let needed_chunks = self.max_chunk_count() - self.contents.len();
-
-        for _ in 0..needed_chunks {
-            let mut padding = Vec::with_capacity(self.chunk_size());
-            rng.fill_bytes(&mut padding);
-            extra_chunks.push(padding);
-        }
-
         if self.data_options.ecc_present() {
             unimplemented!("parity blocks are not yet supported");
         }
@@ -102,37 +93,18 @@ impl DataBlock {
         let mut data_buffer = Vec::new();
         let mut chunk_cids = Vec::new();
 
-        for chunk in self.contents.iter().chain(&extra_chunks) {
-            if chunk.len() > self.chunk_size() {
-                tracing::error!(true_length = ?chunk.len(), max_length = self.chunk_size(), "chunk too large");
-                return Err(std_io_err("chunk size mismatch (chunk too large)"));
-            }
+        for chunk in self.contents.iter() {
+            let (_size, cid) = chunk
+                .encode(rng, &self.data_options, access_key, &mut data_buffer)
+                .await?;
+            chunk_cids.push(cid);
+        }
 
-            // write out the true data length
-            let chunk_length = chunk.len() as u64;
-            let chunk_length_bytes = chunk_length.to_le_bytes();
-
-            // We need to prepend the length of the data, the pad the remaining space with random
-            // data.
-            let full_size = self.chunk_size() + 8;
-            let mut payload = Vec::with_capacity(full_size);
-            payload.extend_from_slice(&chunk_length_bytes);
-            payload.extend_from_slice(chunk);
-            payload.resize_with(full_size, || rng.gen());
-
-            let (nonce, tag) = access_key
-                .encrypt_buffer(rng, &[], &mut payload)
-                .map_err(|_| std_io_err("failed to encrypt chunk"))?;
-
-            let mut chunk_data = Vec::with_capacity(self.base_chunk_size());
-
-            nonce.encode(&mut chunk_data).await?;
-            chunk_data.write_all(&payload).await?;
-            tag.encode(&mut chunk_data).await?;
-
-            let cid = crate::utils::calculate_cid(&chunk_data);
-
-            data_buffer.extend(chunk_data);
+        // Pad our data block
+        let needed_chunks = self.max_chunk_count() - self.contents.len();
+        for _ in 0..needed_chunks {
+            let (_size, cid) =
+                DataChunk::encode_padding_chunk(rng, &self.data_options, &mut data_buffer).await?;
             chunk_cids.push(cid);
         }
 
@@ -173,7 +145,7 @@ impl DataBlock {
     pub fn get_chunk_data(&self, index: usize) -> Result<&[u8], DataBlockError> {
         self.contents
             .get(index)
-            .map(|chunk| chunk.as_slice())
+            .map(|chunk| chunk.data())
             .ok_or(DataBlockError::ChunkIndexOutOfBounds)
     }
 
@@ -225,48 +197,9 @@ impl DataBlock {
 
         let mut contents = Vec::with_capacity(chunk_count);
         for _ in 0..chunk_count {
-            let chunk_start = input;
+            let (input, chunk) = DataChunk::parse(input, &data_options, access_key)?;
 
-            let (input, nonce) = Nonce::parse(input)?;
-            let (input, data) = take(encrypted_chunk_size).parse_peek(input)?;
-            let (input, tag) = AuthenticationTag::parse(input)?;
-
-            debug_assert!(
-                input.offset_from(&chunk_start) == base_chunk_size,
-                "chunk should be fully read"
-            );
-
-            let mut plaintext_data = data.to_vec();
-            if let Err(err) = access_key.decrypt_buffer(nonce, &[], &mut plaintext_data, tag) {
-                tracing::error!("failed to decrypt chunk: {err}");
-                let err = winnow::error::ParserError::from_error_kind(
-                    &input,
-                    winnow::error::ErrorKind::Verify,
-                );
-                return Err(winnow::error::ErrMode::Cut(err));
-            }
-
-            let data_length = match le_u64::<&[u8], ErrMode<winnow::error::ContextError>>
-                .parse_peek(plaintext_data.as_slice())
-            {
-                Ok((_, length)) => length,
-                Err(err) => {
-                    tracing::error!("failed to read inner length: {err:?}");
-
-                    let empty_static: &'static [u8] = &[];
-                    return Err(winnow::error::ErrMode::Cut(
-                        winnow::error::ParserError::from_error_kind(
-                            &Stream::new(empty_static),
-                            winnow::error::ErrorKind::Verify,
-                        ),
-                    ));
-                }
-            };
-            let plaintext_data: Vec<u8> = plaintext_data
-                .drain(8..(data_length as usize + 8))
-                .collect();
-
-            contents.push(plaintext_data);
+            contents.push(chunk);
         }
 
         let mut chunk_cids = Vec::with_capacity(chunk_count);
@@ -302,19 +235,13 @@ impl DataBlock {
             return Err(DataBlockError::Full);
         }
 
-        let max_chunk_size = self.chunk_size();
-        if data.len() > max_chunk_size {
-            return Err(DataBlockError::Size(BlockSizeError::ChunkTooLarge(
-                data.len(),
-                max_chunk_size,
-            )));
-        }
+        let chunk = DataChunk::from_slice(&data, &self.data_options)?;
 
         let mut inner_cid = self.cid.write().map_err(|_| DataBlockError::LockPoisoned)?;
         inner_cid.take();
         drop(inner_cid);
 
-        self.contents.push(data);
+        self.contents.push(chunk);
 
         Ok(())
     }

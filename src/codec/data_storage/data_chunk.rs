@@ -1,6 +1,7 @@
 use crate::codec::crypto::{
     AccessKey, AuthenticationTag, Nonce, Signature, SigningKey, VerifyingKey,
 };
+use crate::codec::BlockSizeError;
 use crate::codec::{Cid, ParserResult, Stream};
 use crate::utils::std_io_err;
 use elliptic_curve::rand_core::CryptoRngCore;
@@ -13,17 +14,29 @@ use winnow::token::{literal, take};
 use winnow::Parser;
 
 use super::data_options::DataOptions;
+use super::DataBlockError;
 
 pub struct DataChunk {
     contents: Box<[u8]>,
 }
 
 impl DataChunk {
+    pub fn from_slice(data: &[u8], options: &DataOptions) -> Result<Self, DataBlockError> {
+        if data.len() > options.encrypted_chunk_data_size() {
+            return Err(DataBlockError::Size(BlockSizeError::ChunkTooLarge(
+                data.len(),
+                options.encrypted_chunk_data_size(),
+            )));
+        }
+        Ok(Self {
+            contents: data.into(),
+        })
+    }
+
     pub fn parse<'a>(
         input: Stream<'a>,
         options: &DataOptions,
         access_key: &AccessKey,
-        _verifying_key: &VerifyingKey,
     ) -> ParserResult<'a, Self> {
         if !options.encrypted() {
             unimplemented!("unencrypted data blocks are not yet supported");
@@ -31,7 +44,7 @@ impl DataChunk {
         let chunk_start = input;
 
         let (input, nonce) = Nonce::parse(input)?;
-        let (input, data) = take(options.encrypted_chunk_data_size()).parse_peek(input)?;
+        let (input, data) = take(options.encrypted_chunk_data_size() + 8).parse_peek(input)?;
         let (input, tag) = AuthenticationTag::parse(input)?;
 
         debug_assert!(
@@ -126,7 +139,6 @@ impl DataChunk {
     }
 
     pub async fn encode_padding_chunk<W: AsyncWrite + Unpin + Send>(
-        &self,
         rng: &mut impl CryptoRngCore,
         options: &DataOptions,
         writer: &mut W,
