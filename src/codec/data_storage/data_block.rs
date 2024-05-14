@@ -1,10 +1,7 @@
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
-use rand::Rng;
-use winnow::binary::{le_u64, le_u8};
-use winnow::error::ErrMode;
-use winnow::stream::Offset;
-use winnow::token::{literal, take};
+use winnow::binary::le_u8;
+use winnow::token::literal;
 use winnow::Parser;
 
 use super::data_chunk::DataChunk;
@@ -188,17 +185,13 @@ impl DataBlock {
         }
 
         // todo(sstelfox): I'm not yet verifying the data block's signature here yet
-        let (input, _signature) = Signature::parse(input)?;
+        let (mut input, _signature) = Signature::parse(input)?;
 
         let chunk_count = data_options.block_size().chunk_count() as usize;
-
-        let base_chunk_size = data_options.chunk_size();
-        let encrypted_chunk_size = data_options.encrypted_chunk_data_size() + 8;
-
         let mut contents = Vec::with_capacity(chunk_count);
         for _ in 0..chunk_count {
-            let (input, chunk) = DataChunk::parse(input, &data_options, access_key)?;
-
+            let (remaining, chunk) = DataChunk::parse(input, &data_options, access_key)?;
+            input = remaining;
             contents.push(chunk);
         }
 

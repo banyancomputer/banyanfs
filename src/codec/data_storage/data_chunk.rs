@@ -1,16 +1,14 @@
-use crate::codec::crypto::{
-    AccessKey, AuthenticationTag, Nonce, Signature, SigningKey, VerifyingKey,
-};
+use crate::codec::crypto::{AccessKey, AuthenticationTag, Nonce};
 use crate::codec::BlockSizeError;
 use crate::codec::{Cid, ParserResult, Stream};
 use crate::utils::std_io_err;
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
 use rand::Rng;
-use winnow::binary::{le_u64, le_u8};
+use winnow::binary::le_u64;
 use winnow::error::ErrMode;
 use winnow::stream::Offset;
-use winnow::token::{literal, take};
+use winnow::token::take;
 use winnow::Parser;
 
 use super::data_options::DataOptions;
