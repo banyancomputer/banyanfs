@@ -10,6 +10,6 @@ pub(crate) use file_content::{FileContent, FileContentError};
 pub(crate) use nodes::NodeBuilder;
 
 pub use drive::{
-    DirectoryEntry, DirectoryHandle, Drive, DriveAccess, DriveLoader, DriveLoaderError,
+    DirectoryEntry, DirectoryHandle, Drive, DriveAccess, DriveError, DriveLoader, DriveLoaderError,
     OperationError,
 };

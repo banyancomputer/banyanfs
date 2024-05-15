@@ -191,21 +191,20 @@ pub struct PushResponse {
     storage_authorization: Option<String>,
 }
 
-#[allow(dead_code)]
 impl PushResponse {
-    pub(crate) fn id(&self) -> ApiMetadataId {
+    pub fn id(&self) -> ApiMetadataId {
         self.id.clone()
     }
 
-    pub(crate) fn state(&self) -> &str {
+    pub fn state(&self) -> &str {
         &self.state
     }
 
-    pub(crate) fn storage_authorization(&self) -> Option<&str> {
+    pub fn storage_authorization(&self) -> Option<&str> {
         self.storage_authorization.as_deref()
     }
 
-    pub(crate) fn storage_host(&self) -> Option<Url> {
+    pub fn storage_host(&self) -> Option<Url> {
         self.storage_host
             .as_deref()
             .and_then(|s| Url::parse(s).ok())

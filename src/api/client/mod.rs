@@ -9,7 +9,6 @@ mod traits;
 pub use error::ApiClientError;
 
 pub(crate) mod utils;
-
 pub(crate) use api_auth::ApiAuth;
 pub(crate) use direct_response::DirectResponse;
 pub(crate) use expiring_token::ExpiringToken;
