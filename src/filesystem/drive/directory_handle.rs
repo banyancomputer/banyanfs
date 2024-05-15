@@ -33,7 +33,7 @@ pub struct DirectoryHandle {
 
 impl DirectoryHandle {
 
-    pub async fn to_entry(&self) -> Result<DirectoryEntry, OperationError> {
+    pub async fn entry(&self) -> Result<DirectoryEntry, OperationError> {
         let inner_read = self.inner.read().await;
         let root = inner_read.root_node()?;
         DirectoryEntry::try_from(root)
