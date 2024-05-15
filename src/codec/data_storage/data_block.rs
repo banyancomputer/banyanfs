@@ -4,11 +4,9 @@ use winnow::binary::le_u8;
 use winnow::token::literal;
 use winnow::Parser;
 
-use super::data_chunk::DataChunk;
 use super::data_options::DataOptions;
-use crate::codec::crypto::{
-    AccessKey, AuthenticationTag, Nonce, Signature, SigningKey, VerifyingKey,
-};
+use super::encrypted_data_chunk::EncryptedDataChunk;
+use crate::codec::crypto::{AuthenticationTag, Nonce};
 use crate::codec::header::BANYAN_DATA_MAGIC;
 use crate::codec::meta::{BlockSize, BlockSizeError};
 use crate::codec::{Cid, ParserResult, Stream};
@@ -19,7 +17,7 @@ use std::sync::{Arc, RwLock};
 pub struct DataBlock {
     data_options: DataOptions,
     cid: Arc<RwLock<Option<Cid>>>,
-    contents: Vec<DataChunk>,
+    contents: Vec<EncryptedDataChunk>,
 }
 
 impl DataBlock {
@@ -66,8 +64,6 @@ impl DataBlock {
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         rng: &mut impl CryptoRngCore,
-        access_key: &AccessKey,
-        signing_key: &SigningKey,
         writer: &mut W,
     ) -> std::io::Result<(usize, Vec<Cid>)> {
         if self.data_options.ecc_present() {
@@ -78,31 +74,25 @@ impl DataBlock {
             unimplemented!("unencrypted data blocks are not yet supported");
         }
 
-        let mut signed_data = Vec::new();
+        let mut header_data = Vec::new();
 
-        signed_data.write_all(BANYAN_DATA_MAGIC).await?;
-        signed_data.write_all(&[0x01]).await?;
+        header_data.write_all(BANYAN_DATA_MAGIC).await?;
+        header_data.write_all(&[0x01]).await?;
 
-        // todo(sstelfox): I should move all the chunk encoding, encrypting, decrypting, and
-        // decoding into its own type to encapsulate that information but also to switch this in an
-        // enum over encrypted and decrypted types. I want to be able to decode a single chunk
-        // without all of them.
         let mut data_buffer = Vec::new();
         let mut chunk_cids = Vec::new();
 
         for chunk in self.contents.iter() {
-            let (_size, cid) = chunk
-                .encode(rng, &self.data_options, access_key, &mut data_buffer)
-                .await?;
-            chunk_cids.push(cid);
+            data_buffer.extend_from_slice(chunk.data());
+            chunk_cids.push(chunk.cid().clone());
         }
 
         // Pad our data block
         let needed_chunks = self.max_chunk_count() - self.contents.len();
         for _ in 0..needed_chunks {
-            let (_size, cid) =
-                DataChunk::encode_padding_chunk(rng, &self.data_options, &mut data_buffer).await?;
-            chunk_cids.push(cid);
+            let padding_chunk = EncryptedDataChunk::padding_chunk(rng, &self.data_options);
+            data_buffer.extend_from_slice(padding_chunk.data());
+            chunk_cids.push(padding_chunk.cid().clone());
         }
 
         // We include a map of the chunks and their CIDs in a trailer at the end of the block. This
@@ -115,8 +105,8 @@ impl DataBlock {
         // The data block CID is only over the data payload, the rest of the
         // data is signed.
         let cid = crate::utils::calculate_cid(&data_buffer);
-        cid.encode(&mut signed_data).await?;
-        self.data_options.encode(&mut signed_data).await?;
+        cid.encode(&mut header_data).await?;
+        self.data_options.encode(&mut header_data).await?;
 
         // This mutex is very picky, need to put it in its own scope
         {
@@ -127,11 +117,8 @@ impl DataBlock {
             inner_cid.replace(cid);
         }
 
-        writer.write_all(&signed_data).await?;
-        let mut written_bytes = signed_data.len();
-
-        let signature = signing_key.sign(rng, &signed_data);
-        written_bytes += signature.encode(writer).await?;
+        writer.write_all(&header_data).await?;
+        let mut written_bytes = header_data.len();
 
         writer.write_all(&data_buffer).await?;
         written_bytes += data_buffer.len();
@@ -139,10 +126,9 @@ impl DataBlock {
         Ok((written_bytes, chunk_cids))
     }
 
-    pub fn get_chunk_data(&self, index: usize) -> Result<&[u8], DataBlockError> {
+    pub fn get_chunk(&self, index: usize) -> Result<&EncryptedDataChunk, DataBlockError> {
         self.contents
             .get(index)
-            .map(|chunk| chunk.data())
             .ok_or(DataBlockError::ChunkIndexOutOfBounds)
     }
 
@@ -158,11 +144,7 @@ impl DataBlock {
         self.contents.len() >= self.max_chunk_count()
     }
 
-    pub fn parse<'a>(
-        input: Stream<'a>,
-        access_key: &AccessKey,
-        _verifying_key: &VerifyingKey,
-    ) -> ParserResult<'a, Self> {
+    pub fn parse<'a>(input: Stream<'a>) -> ParserResult<'a, Self> {
         let (input, version) = le_u8.parse_peek(input)?;
 
         if version != 0x01 {
@@ -184,19 +166,16 @@ impl DataBlock {
             unimplemented!("unencrypted data blocks are not yet supported");
         }
 
-        // todo(sstelfox): I'm not yet verifying the data block's signature here yet
-        let (mut input, _signature) = Signature::parse(input)?;
-
         let chunk_count = data_options.block_size().chunk_count() as usize;
         let mut contents = Vec::with_capacity(chunk_count);
+        let mut input = input;
         for _ in 0..chunk_count {
-            let (remaining, chunk) = DataChunk::parse(input, &data_options, access_key)?;
+            let (remaining, chunk) = EncryptedDataChunk::parse(input, &data_options)?;
             input = remaining;
             contents.push(chunk);
         }
 
         let mut chunk_cids = Vec::with_capacity(chunk_count);
-        let mut input = input;
         for _ in 0..chunk_count {
             let (remaining, cid) = Cid::parse(input)?;
             input = remaining;
@@ -204,6 +183,7 @@ impl DataBlock {
         }
 
         // todo(sstelfox): not doing anything with the cids...
+        // note(jason): should compare cids from EncryptedDataChunk to these to make sure they agree
 
         let block = Self {
             data_options,
@@ -214,21 +194,15 @@ impl DataBlock {
         Ok((input, block))
     }
 
-    pub fn parse_with_magic<'a>(
-        input: Stream<'a>,
-        access_key: &AccessKey,
-        verifying_key: &VerifyingKey,
-    ) -> ParserResult<'a, Self> {
+    pub fn parse_with_magic<'a>(input: Stream<'a>) -> ParserResult<'a, Self> {
         let (input, _magic) = banyan_data_magic_tag(input)?;
-        Self::parse(input, access_key, verifying_key)
+        Self::parse(input)
     }
 
-    pub fn push_chunk(&mut self, data: Vec<u8>) -> Result<(), DataBlockError> {
+    pub fn push_chunk(&mut self, chunk: EncryptedDataChunk) -> Result<(), DataBlockError> {
         if self.is_full() {
             return Err(DataBlockError::Full);
         }
-
-        let chunk = DataChunk::from_slice(&data, &self.data_options)?;
 
         let mut inner_cid = self.cid.write().map_err(|_| DataBlockError::LockPoisoned)?;
         inner_cid.take();

@@ -12,6 +12,7 @@ use winnow::token::take;
 use winnow::Parser;
 
 use super::data_options::DataOptions;
+use super::encrypted_data_chunk::EncryptedDataChunk;
 use super::DataBlockError;
 
 pub struct DataChunk {
@@ -90,6 +91,20 @@ impl DataChunk {
 
     pub fn data(&self) -> &[u8] {
         &self.contents
+    }
+
+    pub async fn encrypt(
+        &self,
+        rng: &mut impl CryptoRngCore,
+        options: &DataOptions,
+        access_key: &AccessKey,
+    ) -> std::io::Result<EncryptedDataChunk> {
+        let mut ciphertext = Vec::new();
+
+        let (_size, cid) = self
+            .encode(rng, options, access_key, &mut ciphertext)
+            .await?;
+        Ok(EncryptedDataChunk::new(ciphertext.into_boxed_slice(), cid))
     }
 
     pub async fn encode<W: AsyncWrite + Unpin + Send>(

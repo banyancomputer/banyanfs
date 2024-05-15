@@ -10,7 +10,7 @@ use crate::codec::filesystem::NodeKind;
 use crate::codec::*;
 
 use crate::codec::crypto::{AccessKey, SigningKey};
-use crate::codec::data_storage::DataBlock;
+use crate::codec::data_storage::{data_chunk::DataChunk, DataBlock};
 use crate::codec::filesystem::BlockKind;
 use crate::filesystem::drive::{DirectoryEntry, InnerDrive, OperationError, WalkState};
 use crate::filesystem::nodes::{Node, NodeData, NodeId, NodeName};
@@ -452,15 +452,11 @@ impl DirectoryHandle {
 
                 let data_chunk = store.retrieve(content_ref.data_block_cid()).await?;
 
-                let (_remaining, block) = DataBlock::parse_with_magic(
-                    Stream::new(&data_chunk),
-                    &unlocked_key,
-                    &verifying_key,
-                )
-                .map_err(|err| {
-                    tracing::error!("parsing of data block failed: {err:?}");
-                    OperationError::BlockCorrupted(content_ref.data_block_cid())
-                })?;
+                let (_remaining, block) = DataBlock::parse_with_magic(Stream::new(&data_chunk))
+                    .map_err(|err| {
+                        tracing::error!("parsing of data block failed: {err:?}");
+                        OperationError::BlockCorrupted(content_ref.data_block_cid())
+                    })?;
                 // todo(sstelfox): still stuff remaining which means this decoder is sloppy
                 //tracing::info!(?remaining, "drive::read::remaining");
                 //debug_assert!(remaining.is_empty(), "no extra data should be present");
@@ -470,14 +466,22 @@ impl DirectoryHandle {
                         unimplemented!("indirect reference loading");
                     }
 
-                    let data = block
-                        .get_chunk_data(location.block_index() as usize)
+                    let encrypted_chunk = block
+                        .get_chunk(location.block_index() as usize)
                         .map_err(|err| {
                             tracing::error!("failed to retrieve block chunk: {err:?}");
                             OperationError::BlockCorrupted(content_ref.data_block_cid())
                         })?;
+                    let chunk = encrypted_chunk
+                        .decrypt(&block.data_options(), &unlocked_key)
+                        .map_err(|_| {
+                            OperationError::BlockCorrupted(content_ref.data_block_cid())
+                        })?;
 
-                    file_data.extend_from_slice(data);
+                    // &unlocked_key,
+                    // &verifying_key,
+
+                    file_data.extend_from_slice(chunk.data());
                 }
             }
 
@@ -585,23 +589,34 @@ impl DirectoryHandle {
             let (chunk_data, next_data) = remaining_data.split_at(data_to_read);
             remaining_data = next_data;
 
-            active_block
-                .push_chunk(chunk_data.to_vec())
+            let chunk = DataChunk::from_slice(chunk_data, &active_block.data_options())
                 .map_err(|err| {
                     tracing::error!("failed to push chunk: {:?}", err);
                     OperationError::Other("expected remaining capacity")
+                })?
+                .encrypt(rng, &active_block.data_options(), &node_data_key)
+                .await
+                .map_err(|err| {
+                    tracing::error!("Failed to encrypt chunk: {:?}", err);
+                    OperationError::Other("Error encrypting chunk")
                 })?;
+
+            active_block.push_chunk(chunk).map_err(|err| {
+                tracing::error!("failed to push chunk: {:?}", err);
+                OperationError::Other("expected remaining capacity")
+            })?;
 
             if active_block.is_full() {
                 let mut sealed_block = Vec::new();
 
-                let (_, cids) = active_block
-                    .encode(rng, &node_data_key, &self.current_key, &mut sealed_block)
-                    .await
-                    .map_err(|err| {
-                        tracing::error!("failed to encode block: {:?}", err);
-                        OperationError::Other("failed to encode block")
-                    })?;
+                let (_, cids) =
+                    active_block
+                        .encode(rng, &mut sealed_block)
+                        .await
+                        .map_err(|err| {
+                            tracing::error!("failed to encode block: {:?}", err);
+                            OperationError::Other("failed to encode block")
+                        })?;
 
                 let block_size = *active_block.data_options().block_size();
                 let cid = active_block
@@ -630,7 +645,7 @@ impl DirectoryHandle {
             let mut sealed_block = Vec::new();
 
             let (_, cids) = active_block
-                .encode(rng, &node_data_key, &self.current_key, &mut sealed_block)
+                .encode(rng, &mut sealed_block)
                 .await
                 .map_err(|err| {
                     tracing::error!("failed to encode block: {:?}", err);
