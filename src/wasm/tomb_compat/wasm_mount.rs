@@ -546,6 +546,36 @@ impl WasmMount {
 
         Ok(())
     }
+
+    #[wasm_bindgen(js_name = authorizeKey)]
+    pub async fn authorize_key(&mut self, public_key: &str) -> BanyanFsResult<()> {
+        let unlocked_drive = match &self.drive {
+            Some(drive) => drive,
+            None => return Err("unable to delete content of a locked bucket".into()),
+        };
+        let public_key = match VerifyingKey::from_spki(&public_key) {
+            Ok(key) => key,
+            Err(err) => return Err(format!("failed to load public key: {err}").into()),
+        };
+        let mut rng = crypto_rng();
+        let mask = match AccessMaskBuilder::full_access().build() {
+            Ok(mask) => mask,
+            Err(err) => return Err(format!("failed to create access mask: {err}").into()),
+        };
+        match unlocked_drive
+            .authorize_key(&mut rng, public_key, mask)
+            .await
+        {
+            Ok(_) => {
+                self.dirty = true;
+                self.sync().await
+            }
+            Err(err) => {
+                tracing::error!("authorize key {}", err);
+                Err(format!("failed to authorize key: {err}").into())
+            }
+        }
+    }
 }
 
 async fn try_load_drive(client: &ApiClient, drive_id: &str, metadata_id: &str) -> Option<Drive> {

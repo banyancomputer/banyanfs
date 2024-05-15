@@ -9,8 +9,8 @@ pub type ApiDriveId = String;
 #[derive(Debug, Deserialize, Serialize)]
 #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct ApiDrive {
-    pub(crate) id: ApiDriveId,
-    pub(crate) name: String,
+    pub id: ApiDriveId,
+    pub name: String,
 
     #[serde(rename = "type")]
     pub(crate) kind: DriveKind,
