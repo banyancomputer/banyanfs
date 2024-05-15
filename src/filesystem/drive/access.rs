@@ -52,9 +52,7 @@ impl DriveAccess {
     }
 
     pub(crate) fn verifying_keys(&self) -> Vec<(VerifyingKey, AccessMask)> {
-        self.actor_settings
-            .iter()
-            .map(|(_, settings)| (settings.verifying_key(), settings.access()))
+        self.actor_settings.values().map(|settings| (settings.verifying_key(), settings.access()))
             .collect()
     }
 
