@@ -5,9 +5,9 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen]
 pub struct WasmUserKeyAccess(pub(crate) ApiUserKeyAccess);
 
-impl WasmUserKeyAccess {
-    pub(crate) fn new(key_access: ApiUserKeyAccess) -> Self {
-        Self(key_access)
+impl From<ApiUserKeyAccess> for WasmUserKeyAccess {
+    fn from(value: ApiUserKeyAccess) -> Self {
+        Self(value)
     }
 }
 

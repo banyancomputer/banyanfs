@@ -92,8 +92,8 @@ impl TombCompat {
     #[wasm_bindgen(js_name = revokeBucketAccess)]
     pub async fn revoke_bucket_access(
         &mut self,
-        bucket_id: String,
-        fingerprint: String,
+        _bucket_id: String,
+        _fingerprint: String,
     ) -> BanyanFsResult<()> {
         // TODO remove the key from the drive and initiate a sync
         Ok(())
@@ -184,9 +184,9 @@ impl TombCompat {
 
     // checked, returns Account::usage response, changed return type from u64 to usize
     #[wasm_bindgen(js_name = getUsage)]
-    pub async fn get_usage(&mut self) -> BanyanFsResult<usize> {
+    pub async fn get_usage(&mut self) -> BanyanFsResult<u64> {
         let current_usage = platform::account::current_usage(&self.client).await?;
-        Ok(current_usage.total_usage())
+        Ok(current_usage.hot_usage() + current_usage.archival_usage())
     }
 
     // checked, returns Account::usage_limit response, changed return type from u64 to usize
