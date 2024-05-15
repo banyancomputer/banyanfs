@@ -435,12 +435,6 @@ impl DirectoryHandle {
                 .unlock(data_key)
                 .map_err(|_| OperationError::AccessDenied)?;
 
-            let author_id = read_node.owner_id();
-            let verifying_key = inner_read
-                .access()
-                .actor_key(&author_id)
-                .ok_or(OperationError::AccessDenied)?;
-
             let mut file_data = Vec::new();
 
             for content_ref in node_content.content_references()? {

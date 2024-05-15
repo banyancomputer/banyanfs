@@ -83,16 +83,17 @@ impl DataBlock {
         let mut chunk_cids = Vec::new();
 
         for chunk in self.contents.iter() {
-            data_buffer.extend_from_slice(chunk.data());
-            chunk_cids.push(chunk.cid().clone());
+            let (_size, cid) = chunk.encode(&mut data_buffer).await?;
+            chunk_cids.push(cid);
         }
 
         // Pad our data block
         let needed_chunks = self.max_chunk_count() - self.contents.len();
         for _ in 0..needed_chunks {
-            let padding_chunk = EncryptedDataChunk::padding_chunk(rng, &self.data_options);
-            data_buffer.extend_from_slice(padding_chunk.data());
-            chunk_cids.push(padding_chunk.cid().clone());
+            let (_size, cid) =
+                EncryptedDataChunk::encode_padding_chunk(rng, &self.data_options, &mut data_buffer)
+                    .await?;
+            chunk_cids.push(cid);
         }
 
         // We include a map of the chunks and their CIDs in a trailer at the end of the block. This
