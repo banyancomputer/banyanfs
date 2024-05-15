@@ -1,11 +1,12 @@
 use futures::{AsyncWrite, AsyncWriteExt};
+use serde::{Deserialize, Serialize};
 use winnow::{token::take, Parser};
 
 use crate::codec::{ParserResult, Stream};
 
 const CID_LENGTH: usize = 32;
 
-#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct Cid([u8; CID_LENGTH]);
 
 impl Cid {
