@@ -32,6 +32,13 @@ pub struct DirectoryHandle {
 }
 
 impl DirectoryHandle {
+
+    pub async fn entry(&self) -> Result<DirectoryEntry, OperationError> {
+        let inner_read = self.inner.read().await;
+        let root = inner_read.root_node()?;
+        DirectoryEntry::try_from(root)
+    }
+
     /// Allows traversing the filesystem both up and down. Does not allow invalid character in any
     /// of the path elements (primarily "/"). Will report an error if you attempt to traverse above
     /// the root of the filesystem or into/through an invalid node type.
