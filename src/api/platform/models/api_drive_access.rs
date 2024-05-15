@@ -1,7 +1,6 @@
 use super::{ApiDriveId, ApiKeyId};
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Debug, Deserialize, Serialize)]
 #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct ApiDriveAccess {
