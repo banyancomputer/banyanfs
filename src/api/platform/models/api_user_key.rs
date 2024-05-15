@@ -6,8 +6,7 @@ pub struct ApiUserKey {
     name: String,
     user_id: ApiUserId,
     api_access: bool,
-    #[serde(rename = "pem")]
-    public_key_pem: String,
+    public_key: String,
     fingerprint: String,
     created_at: String,
 }
@@ -34,8 +33,8 @@ impl ApiUserKey {
     }
 
     /// Public Key PEM
-    pub fn public_key_pem(&self) -> &str {
-        &self.public_key_pem
+    pub fn public_key(&self) -> &str {
+        &self.public_key
     }
 
     /// Public Key Fingerprint

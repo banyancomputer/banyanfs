@@ -69,9 +69,9 @@ impl TombCompat {
     pub async fn create_user_key(
         &mut self,
         name: String,
-        public_pem: String,
+        public_key: String,
     ) -> BanyanFsResult<()> {
-        let public_key = match VerifyingKey::from_spki(&public_pem) {
+        let public_key = match VerifyingKey::from_spki(&public_key) {
             Ok(key) => key,
             Err(err) => return Err(format!("failed to load public key: {err}").into()),
         };

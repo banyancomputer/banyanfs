@@ -8,7 +8,7 @@ mod drive_kind;
 mod storage_class;
 
 pub use api_drive::{ApiDrive, ApiDriveId, ApiDriveUpdateAttributes};
-pub use api_drive_access::{ApiDriveAccess, BucketAccessState};
+pub use api_drive_access::ApiDriveAccess;
 pub use api_metadata::{ApiMetadata, ApiMetadataId, ApiMetadataState};
 pub use api_snapshot::{ApiSnapshot, ApiSnapshotId, ApiSnapshotState};
 pub use api_user_key::{ApiKeyId, ApiUserKey};

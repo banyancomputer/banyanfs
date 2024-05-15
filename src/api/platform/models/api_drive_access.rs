@@ -9,30 +9,12 @@ pub struct ApiDriveAccess {
     #[serde(rename = "bucket_id")]
     drive_id: ApiDriveId,
     fingerprint: String,
-    state: BucketAccessState,
-}
-
-#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum BucketAccessState {
-    Pending,
-    Approved,
-    Revoked,
-}
-
-impl Display for BucketAccessState {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            BucketAccessState::Pending => f.write_str("pending"),
-            BucketAccessState::Approved => f.write_str("approved"),
-            BucketAccessState::Revoked => f.write_str("revoked"),
-        }
-    }
+    approved: bool,
 }
 
 impl ApiDriveAccess {
-    pub fn state(&self) -> String {
-        self.state.to_string()
+    pub fn approved(&self) -> bool {
+        self.approved
     }
 
     pub fn fingerprint(&self) -> &str {
