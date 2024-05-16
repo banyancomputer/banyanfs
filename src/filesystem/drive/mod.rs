@@ -203,6 +203,46 @@ impl Drive {
         Ok(())
     }
 
+    /// If the caller knows the [`PermanentId`] of a directory, they can retrieve a handle on it
+    /// directly. Generally users will traverse the filesystem themselves to get this information,
+    /// but that can be a costly operation. This allows the external cacheing of permanent IDs to
+    /// quickly jump to a specific location.
+    ///
+    /// Will produce an error if the provided permanent ID is not a traversable type.
+    pub async fn directory_by_id(
+        &self,
+        permanent_id: &PermanentId,
+    ) -> Result<DirectoryHandle, OperationError> {
+        let inner_read = self.inner.read().await;
+
+        let node = inner_read.by_perm_id(permanent_id)?;
+        if !node.supports_children() {
+            return Err(OperationError::NotTraversable);
+        }
+
+        let current_key = self.current_key.clone();
+        let handle = DirectoryHandle::new(current_key, node.id(), self.inner.clone()).await;
+
+        Ok(handle)
+    }
+
+    /// Retrieve a handle on a specific entry in the filesystem by its permanent ID. This requires
+    /// the caller to already know the [`PermanentId`] they are looking for. Generally, users and
+    /// software operate by performing a walk of the filesystem themselves to read a particular
+    /// entry. This method is primarily useful if an external cache is used for these kinds of
+    /// mappings.
+    pub async fn entry_by_id(
+        &self,
+        permanent_id: &PermanentId,
+    ) -> Result<DirectoryEntry, OperationError> {
+        let inner_read = self.inner.read().await;
+
+        let node = inner_read.by_perm_id(permanent_id)?;
+        let entry = DirectoryEntry::try_from(node)?;
+
+        Ok(entry)
+    }
+
     pub async fn for_each_node<F, R>(&self, operation: F) -> Result<Vec<R>, OperationError>
     where
         F: Fn(&Node) -> Result<Option<R>, OperationError> + Send + Sync,
@@ -223,16 +263,14 @@ impl Drive {
         todo!("not needed yet, but keeping as a placeholder")
     }
 
+    /// Retrieve a handle on the root directory of the filesystem. This is the starting point for
+    /// most initial traversal and is the foundation of the filesystem structure. Attempting to use
+    /// relative paths "above" this location will result in an Error.
     pub async fn root(&self) -> Result<DirectoryHandle, OperationError> {
         let inner_read = self.inner.read().await;
-
         let root_perm_id = inner_read.root_pid();
-        let root_node_id = inner_read.lookup_internal_id(&root_perm_id)?;
 
-        let current_key = self.current_key.clone();
-        let dir_handle = DirectoryHandle::new(current_key, root_node_id, self.inner.clone()).await;
-
-        Ok(dir_handle)
+        self.directory_by_id(&root_perm_id).await
     }
 
     pub async fn root_cid(&self) -> Result<Cid, DriveError> {
