@@ -32,11 +32,11 @@ pub struct DirectoryHandle {
 }
 
 impl DirectoryHandle {
-
+    /// Retrieves the [`DirectoryEntry`] for the current working directory.
     pub async fn entry(&self) -> Result<DirectoryEntry, OperationError> {
         let inner_read = self.inner.read().await;
-        let root = inner_read.root_node()?;
-        DirectoryEntry::try_from(root)
+        let node = inner_read.by_id(self.cwd_id)?;
+        DirectoryEntry::try_from(node)
     }
 
     /// Allows traversing the filesystem both up and down. Does not allow invalid character in any
