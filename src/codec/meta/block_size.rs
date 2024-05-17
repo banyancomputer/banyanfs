@@ -15,11 +15,11 @@ pub struct BlockSize {
 }
 
 impl BlockSize {
-    pub fn chunk_size(&self) -> u64 {
+    pub const fn chunk_size(&self) -> u64 {
         2u64.pow(self.chunk_size as u32)
     }
 
-    pub fn chunk_count(&self) -> u64 {
+    pub const fn chunk_count(&self) -> u64 {
         2u64.pow((self.total_space - self.chunk_size) as u32)
     }
 
@@ -35,7 +35,7 @@ impl BlockSize {
 
     /// Create a new instance of a BlockSize. Not exposed intentionally to limit the block sizes in
     /// use in the wild at this point in time.
-    fn new(total_space: u8, chunk_size: u8) -> Result<Self, BlockSizeError> {
+    const fn new(total_space: u8, chunk_size: u8) -> Result<Self, BlockSizeError> {
         if chunk_size > total_space {
             return Err(BlockSizeError::ChunkSizeTooLarge(chunk_size, total_space));
         }
@@ -62,12 +62,18 @@ impl BlockSize {
         2
     }
 
-    pub fn small() -> Result<Self, BlockSizeError> {
-        Self::new(18, 18)
+    pub const fn small() -> Self {
+        match Self::new(18, 18) {
+            Err(_) => panic!("With known values this will never error"),
+            Ok(res) => res,
+        }
     }
 
-    pub fn standard() -> Result<Self, BlockSizeError> {
-        Self::new(26, 20)
+    pub const fn standard() -> Self {
+        match Self::new(26, 20) {
+            Err(_) => panic!("With known values this will never error"),
+            Ok(res) => res,
+        }
     }
 }
 

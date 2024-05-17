@@ -17,20 +17,29 @@ pub struct DataOptions {
 }
 
 impl DataOptions {
-    pub fn block_size(&self) -> &BlockSize {
+    pub const fn block_size(&self) -> &BlockSize {
         &self.block_size
     }
 
-    pub fn chunk_size(&self) -> usize {
+    /// Total size of a chunk
+    pub const fn chunk_size(&self) -> usize {
         self.block_size().chunk_size() as usize
     }
 
-    pub fn encrypted_chunk_data_size(&self) -> usize {
-        self.chunk_size() - (8 + Nonce::size() + AuthenticationTag::size())
+    /// Size of the contents of a chunk not including the encryption overhead (if applicable)
+    pub const fn chunk_payload_size(&self) -> usize {
+        if self.encrypted {
+            self.chunk_size() - (Nonce::size() + AuthenticationTag::size())
+        } else {
+            self.chunk_size()
+        }
     }
 
-    pub fn unencrypted_chunk_data_size(&self) -> usize {
-        self.chunk_size() - 8
+    /// The amount of bytes a chunk can actually store as data after accounting for the encryption overhead(if applicable)
+    /// and the length field
+    pub const fn chunk_data_size(&self) -> usize {
+        // Subtracting 8 accounts for the 64 bit length field
+        self.chunk_payload_size() - 8
     }
 
     pub fn ecc_present(&self) -> bool {

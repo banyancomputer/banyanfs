@@ -14,10 +14,10 @@ pub struct DataChunk {
 
 impl DataChunk {
     pub fn from_slice(data: &[u8], options: &DataOptions) -> Result<Self, DataBlockError> {
-        if data.len() > options.encrypted_chunk_data_size() {
+        if data.len() > options.chunk_data_size() {
             return Err(DataBlockError::Size(BlockSizeError::ChunkTooLarge(
                 data.len(),
-                options.encrypted_chunk_data_size(),
+                options.chunk_data_size(),
             )));
         }
         Ok(Self {
@@ -39,8 +39,8 @@ impl DataChunk {
             //should probably actually be an error "can't encrypt chunk for unenrypted options" or similar
             unimplemented!("unencrypted data blocks are not yet supported");
         }
-        if self.contents.len() > options.encrypted_chunk_data_size() {
-            tracing::error!(true_length = ?self.contents.len(), max_length = options.encrypted_chunk_data_size(), "chunk too large");
+        if self.contents.len() > options.chunk_data_size() {
+            tracing::error!(true_length = ?self.contents.len(), max_length = options.chunk_data_size(), "chunk too large");
             return Err(std_io_err("chunk size mismatch (chunk too large)"));
         }
 
@@ -50,7 +50,7 @@ impl DataChunk {
 
         // We need to prepend the length of the data, the pad the remaining space with random
         // data.
-        let full_size = options.encrypted_chunk_data_size() + chunk_length_bytes.len();
+        let full_size = options.chunk_payload_size();
         let mut payload = Vec::with_capacity(full_size);
         payload.extend_from_slice(&chunk_length_bytes);
         payload.extend_from_slice(self.data());

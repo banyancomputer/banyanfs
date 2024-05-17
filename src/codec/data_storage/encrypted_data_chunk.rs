@@ -2,6 +2,7 @@ use elliptic_curve::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
 use rand::Rng;
 use winnow::binary::le_u64;
+use winnow::binary::length_take;
 use winnow::error::ErrMode;
 use winnow::token::take;
 use winnow::Parser;
@@ -14,15 +15,15 @@ use crate::codec::{Cid, ParserResult, Stream};
 
 pub struct EncryptedDataChunk {
     nonce: Nonce,
-    data: Box<[u8]>,
+    payload: Box<[u8]>,
     authentication_tag: AuthenticationTag,
 }
 
 impl EncryptedDataChunk {
-    pub fn new(nonce: Nonce, data: Box<[u8]>, authentication_tag: AuthenticationTag) -> Self {
+    pub fn new(nonce: Nonce, payload: Box<[u8]>, authentication_tag: AuthenticationTag) -> Self {
         Self {
             nonce,
-            data,
+            payload,
             authentication_tag,
         }
     }
@@ -34,7 +35,7 @@ impl EncryptedDataChunk {
         let mut encoded = Vec::new();
 
         self.nonce.encode(&mut encoded).await?;
-        encoded.write_all(&self.data).await?;
+        encoded.write_all(&self.payload).await?;
         self.authentication_tag.encode(&mut encoded).await?;
 
         let cid = crate::utils::calculate_cid(&encoded);
@@ -48,30 +49,23 @@ impl EncryptedDataChunk {
         options: &DataOptions,
         access_key: &AccessKey,
     ) -> Result<DataChunk, DataChunkError> {
-        let mut plaintext_data = Vec::from(self.data.clone());
+        let mut plaintext_payload = Vec::from(self.payload.clone());
         if let Err(err) = access_key.decrypt_buffer(
             self.nonce.clone(),
             &[],
-            &mut plaintext_data,
+            &mut plaintext_payload,
             self.authentication_tag.clone(),
         ) {
             tracing::error!("failed to decrypt chunk: {err}");
             return Err(DataChunkError::DecryptError);
         }
 
-        let data_length = match le_u64::<&[u8], ErrMode<winnow::error::ContextError>>
-            .parse_peek(plaintext_data.as_slice())
-        {
-            Ok((_, length)) => length,
-            Err(err) => {
-                tracing::error!("failed to read inner length: {err:?}");
-                return Err(DataChunkError::PlainTextLengthParseError);
-            }
-        };
-        let plaintext_data: Vec<u8> = plaintext_data
-            .drain(8..(data_length as usize + 8))
-            .collect();
-        let chunk = DataChunk::from_slice(&plaintext_data, options)
+        let (_remaining, plaintext_data) =
+            length_take(le_u64::<&[u8], ErrMode<winnow::error::ContextError>>)
+                .parse_peek(plaintext_payload.as_slice())
+                .map_err(|_| DataChunkError::PlainTextLengthParseError)?;
+
+        let chunk = DataChunk::from_slice(plaintext_data, options)
             .map_err(|_| DataChunkError::ChunkLengthError)?;
         Ok(chunk)
     }
@@ -95,10 +89,10 @@ impl EncryptedDataChunk {
             unimplemented!("unencrypted data blocks are not yet supported");
         }
         let (input, nonce) = Nonce::parse(input)?;
-        let (input, data) = take(options.encrypted_chunk_data_size() + 8).parse_peek(input)?;
+        let (input, payload) = take(options.chunk_payload_size()).parse_peek(input)?;
         let (input, tag) = AuthenticationTag::parse(input)?;
 
-        Ok((input, Self::new(nonce, data.into(), tag)))
+        Ok((input, Self::new(nonce, payload.into(), tag)))
     }
 }
 

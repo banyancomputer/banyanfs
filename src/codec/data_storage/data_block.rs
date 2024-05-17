@@ -22,30 +22,31 @@ pub struct DataBlock {
 
 impl DataBlock {
     /// The amount of payload a small encrypted block can hold.
-    #[allow(clippy::identity_op)]
-    pub const SMALL_ENCRYPTED_SIZE: usize =
-        262_144 - (1 * Nonce::size() + AuthenticationTag::size());
+    pub const SMALL_ENCRYPTED_SIZE: usize = {
+        let options = DataOptions {
+            ecc_present: true,
+            encrypted: true,
+            block_size: BlockSize::small(),
+        };
+        options.chunk_data_size() * options.block_size.chunk_count() as usize
+    };
 
     /// The amount of payload a standard encrypted block can hold.
-    pub const STANDARD_ENCRYPTED_SIZE: usize =
-        134_217_728 - (64 * Nonce::size() + AuthenticationTag::size());
-
-    pub fn base_chunk_size(&self) -> usize {
-        self.data_options().chunk_size() as usize
-    }
+    pub const STANDARD_ENCRYPTED_SIZE: usize = {
+        let options = DataOptions {
+            ecc_present: true,
+            encrypted: true,
+            block_size: BlockSize::standard(),
+        };
+        options.chunk_data_size() * options.block_size.chunk_count() as usize
+    };
 
     pub fn chunk_size(&self) -> usize {
-        let mut base_chunk_size = self.base_chunk_size();
+        self.data_options().chunk_size()
+    }
 
-        // length bytes
-        base_chunk_size -= 8;
-
-        if self.data_options().encrypted() {
-            base_chunk_size -= Nonce::size();
-            base_chunk_size -= AuthenticationTag::size();
-        }
-
-        base_chunk_size
+    pub fn chunk_data_size(&self) -> usize {
+        self.data_options().chunk_data_size()
     }
 
     pub fn cid(&self) -> Result<Cid, DataBlockError> {
@@ -220,14 +221,14 @@ impl DataBlock {
         let total_chunks = block_size.chunk_count();
         let remaining_chunks = total_chunks - self.contents.len() as u64;
 
-        remaining_chunks * self.chunk_size() as u64
+        remaining_chunks * self.chunk_data_size() as u64
     }
 
     pub fn small() -> Result<Self, DataBlockError> {
         let data_options = DataOptions {
             ecc_present: false,
             encrypted: true,
-            block_size: BlockSize::small()?,
+            block_size: BlockSize::small(),
         };
 
         Ok(Self {
@@ -242,7 +243,7 @@ impl DataBlock {
         let data_options = DataOptions {
             ecc_present: false,
             encrypted: true,
-            block_size: BlockSize::small()?,
+            block_size: BlockSize::small(),
         };
 
         Ok(Self {

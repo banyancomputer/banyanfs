@@ -574,7 +574,7 @@ impl DirectoryHandle {
 
         let mut remaining_data = data;
         let mut active_block = block_creator()?;
-        let active_block_chunk_size = active_block.chunk_size();
+        let active_block_chunk_size = active_block.chunk_data_size();
         let node_data_key = AccessKey::generate(rng);
         let mut content_references = Vec::new();
 
