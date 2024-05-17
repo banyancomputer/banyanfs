@@ -96,8 +96,12 @@ impl EncryptedDataChunk {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
 pub enum DataChunkError {
+    #[error("Error Decrypting a chunk")]
     DecryptError,
+    #[error("Error parsing the length field of the chunk after decryption")]
     PlainTextLengthParseError,
+    #[error("Decrypted chunk plaintext is too long for the data options currently set")]
     ChunkLengthError,
 }
