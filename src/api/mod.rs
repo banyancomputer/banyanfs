@@ -9,4 +9,7 @@ pub mod storage_host;
 
 pub(crate) mod client;
 
-pub use client::{utils::VecStream, ApiClient, ApiClientError, ApiError};
+pub use client::{
+    utils::{api_fingerprint_key, VecStream},
+    ApiClient, ApiClientError, ApiError,
+};

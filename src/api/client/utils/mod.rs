@@ -24,7 +24,7 @@ const TOKEN_LIFETIME: Duration = Duration::from_secs(300);
 /// to generate matching one from a public key.
 ///
 /// todo(sstelfox): This needs to be reverted back to a standard size
-pub(crate) fn api_fingerprint_key(key: &VerifyingKey) -> String {
+pub fn api_fingerprint_key(key: &VerifyingKey) -> String {
     let compressed_point = key.to_encoded_point(true);
     let compressed_point = compressed_point.as_bytes();
 
