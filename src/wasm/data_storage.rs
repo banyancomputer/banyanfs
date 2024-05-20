@@ -1,11 +1,12 @@
-//use js_sys::Uint8Array;
-//use wasm_bindgen_futures::JsFuture;
-//use web_sys::{
-//    File, FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemGetFileOptions,
-//    FileSystemWritableFileStream, StorageManager,
-//};
+use js_sys::Uint8Array;
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{
+    File, FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemGetFileOptions,
+    FileSystemWritableFileStream, StorageManager,
+};
 
 use crate::api::ApiClient;
+use crate::error::BanyanFsError;
 use crate::stores::{ApiSyncableStore, MemoryDataStore, MemorySyncTracker};
 
 // todo(sstelfox): I really want WASM aware versions of this that can be shared between browser
@@ -57,14 +58,14 @@ pub(crate) fn initialize_store(api_client: ApiClient) -> WasmDataStorage {
 //        inner.unsynced_data_size()
 //    }
 //}
-//
+
 //#[derive(Default)]
 //struct DataStorageInner {
 //    stored_cids: HashSet<Cid>,
 //    unsynced_cids: HashSet<Cid>,
 //    unsynced_data_size: u64,
 //}
-//
+
 //impl DataStorageInner {
 //    pub async fn retrieve(&self, cid: &Cid) -> Result<Option<Vec<u8>>, BanyanFsError> {
 //        let file = match get_cid_file(cid).await? {
@@ -113,7 +114,7 @@ pub(crate) fn initialize_store(api_client: ApiClient) -> WasmDataStorage {
 //        self.unsynced_data_size
 //    }
 //}
-//
+
 //#[async_trait(?Send)]
 //impl DataStore for DataStorage {
 //    async fn retrieve(&self, cid: Cid) -> Result<Option<Vec<u8>>, DataStoreError> {
@@ -130,7 +131,7 @@ pub(crate) fn initialize_store(api_client: ApiClient) -> WasmDataStorage {
 //            .map_err(|_| DataStoreError::StoreFailure)
 //    }
 //}
-//
+
 //#[async_trait(?Send)]
 //impl DelayedDataStore for DataStorage {
 //    async fn sync(&mut self, client: &Self::Client) -> Result<(), DataStoreError> {
@@ -174,7 +175,7 @@ pub(crate) fn initialize_store(api_client: ApiClient) -> WasmDataStorage {
 //        inner.unsynced_data_size()
 //    }
 //}
-//
+
 //async fn get_cid_file(cid: &Cid) -> Result<Option<File>, BanyanFsError> {
 //    let storage_dir = storage_directory().await?;
 //
@@ -191,7 +192,7 @@ pub(crate) fn initialize_store(api_client: ApiClient) -> WasmDataStorage {
 //
 //    Ok(Some(file))
 //}
-//
+
 //async fn remove_cid_file(cid: &Cid) -> Result<(), BanyanFsError> {
 //    let storage_dir = storage_directory().await?;
 //
@@ -202,28 +203,19 @@ pub(crate) fn initialize_store(api_client: ApiClient) -> WasmDataStorage {
 //
 //    Ok(())
 //}
-//
-//async fn size_of_cid_file(cid: &Cid) -> Result<u64, BanyanFsError> {
-//    let _file = match get_cid_file(cid).await? {
-//        Some(file) => file,
-//        None => return Ok(0),
-//    };
-//
-//    todo!()
-//}
-//
-//async fn storage_directory() -> Result<FileSystemDirectoryHandle, BanyanFsError> {
-//    let storage_manager = storage_manager().await?;
-//
-//    let storage_dir: FileSystemDirectoryHandle = JsFuture::from(storage_manager.get_directory())
-//        .await
-//        .map_err(|e| format!("failed to resolve storage manager: {e:?}"))?
-//        .into();
-//
-//    Ok(storage_dir)
-//}
-//
-//async fn storage_manager() -> Result<StorageManager, BanyanFsError> {
-//    let window = web_sys::window().ok_or("failed to get browser window object")?;
-//    Ok(window.navigator().storage())
-//}
+
+async fn storage_directory() -> Result<FileSystemDirectoryHandle, BanyanFsError> {
+    let storage_manager = storage_manager().await?;
+
+    let storage_dir: FileSystemDirectoryHandle = JsFuture::from(storage_manager.get_directory())
+        .await
+        .map_err(|e| format!("failed to resolve storage manager: {e:?}"))?
+        .into();
+
+    Ok(storage_dir)
+}
+
+async fn storage_manager() -> Result<StorageManager, BanyanFsError> {
+    let window = web_sys::window().ok_or("failed to get browser window object")?;
+    Ok(window.navigator().storage())
+}
