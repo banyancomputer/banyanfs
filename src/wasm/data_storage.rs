@@ -6,6 +6,7 @@ use web_sys::{
 };
 
 use crate::api::ApiClient;
+use crate::codec::meta::Cid;
 use crate::error::BanyanFsError;
 use crate::stores::{ApiSyncableStore, MemoryDataStore, MemorySyncTracker};
 
@@ -176,33 +177,61 @@ pub(crate) fn initialize_store(api_client: ApiClient) -> WasmDataStorage {
 //    }
 //}
 
-//async fn get_cid_file(cid: &Cid) -> Result<Option<File>, BanyanFsError> {
-//    let storage_dir = storage_directory().await?;
-//
-//    let name = format!("{:?}.blk", cid.as_base64url_multicodec());
-//    let fh = match JsFuture::from(storage_dir.get_file_handle(&name)).await {
-//        Ok(fh) => FileSystemFileHandle::from(fh),
-//        Err(_) => return Ok(None),
-//    };
-//
-//    let file = JsFuture::from(fh.get_file())
-//        .await
-//        .map(File::from)
-//        .map_err(|e| format!("failed to retrieve file content: {e:?}"))?;
-//
-//    Ok(Some(file))
-//}
+async fn get_block(cid: &Cid) -> Result<Option<File>, BanyanFsError> {
+    let storage_dir = storage_directory().await?;
 
-//async fn remove_cid_file(cid: &Cid) -> Result<(), BanyanFsError> {
-//    let storage_dir = storage_directory().await?;
-//
-//    let name = format!("{:?}.blk", cid.as_base64url_multicodec());
-//    JsFuture::from(storage_dir.remove_entry(&name))
-//        .await
-//        .map_err(|e| format!("failed to remove file: {e:?}"))?;
-//
-//    Ok(())
-//}
+    let name = format!("{:?}.blk", cid.as_base64url_multicodec());
+    let fh = match JsFuture::from(storage_dir.get_file_handle(&name)).await {
+        Ok(fh) => FileSystemFileHandle::from(fh),
+        Err(_) => return Ok(None),
+    };
+
+    let file = JsFuture::from(fh.get_file())
+        .await
+        .map(File::from)
+        .map_err(|e| format!("failed to retrieve file content: {e:?}"))?;
+
+    Ok(Some(file))
+}
+
+async fn put_block(cid: &Cid, data: &[u8]) -> Result<(), BanyanFsError> {
+    let _storage_dir = storage_directory().await?;
+
+    //let name = format!("{:?}.blk", cid.as_base64url_multicodec());
+    //let mut open_opts = FileSystemGetFileOptions::new();
+    //open_opts.create(true);
+
+    //let fh = JsFuture::from(storage_dir.get_file_handle_with_options(&name, &open_opts))
+    //    .await
+    //    .map(FileSystemFileHandle::from)
+    //    .map_err(|e| format!("failed to open storage directory: {e:?}"))?;
+
+    //let writer = JsFuture::from(fh.create_writable())
+    //    .await
+    //    .map(FileSystemWritableFileStream::from)
+    //    .map_err(|e| format!("failed to get writable file handle: {e:?}"))?;
+
+    //let write_promise = writer
+    //    .write_with_u8_array(&Uint8Array::from(data))
+    //    .map_err(|e| format!("failed to create storage future: {e:?}"))?;
+
+    //JsFuture::from(write_promise)
+    //    .await
+    //    .map_err(|e| format!("failed to store data: {e:?}"))?;
+
+    Ok(())
+}
+
+async fn remove_block(cid: &Cid) -> Result<(), BanyanFsError> {
+    let storage_dir = storage_directory().await?;
+
+    let name = format!("{:?}.blk", cid.as_base64url_multicodec());
+    JsFuture::from(storage_dir.remove_entry(&name))
+        .await
+        .map_err(|e| format!("failed to remove file: {e:?}"))?;
+
+    Ok(())
+}
 
 async fn storage_directory() -> Result<FileSystemDirectoryHandle, BanyanFsError> {
     let storage_manager = storage_manager().await?;
