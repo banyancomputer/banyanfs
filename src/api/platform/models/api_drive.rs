@@ -32,5 +32,5 @@ pub struct ApiDrive {
 #[derive(Debug, Default, Serialize)]
 pub struct ApiDriveUpdateAttributes {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) name: Option<String>,
+    pub name: Option<String>,
 }
