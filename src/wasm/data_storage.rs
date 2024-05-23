@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-//use js_sys::Uint8Array;
+use js_sys::Uint8Array;
 use tracing::warn;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
@@ -9,20 +9,16 @@ use web_sys::{
 
 use crate::api::ApiClient;
 use crate::codec::meta::Cid;
-use crate::stores::{
-    ApiSyncableStore, DataStore, DataStoreError, MemoryDataStore, MemorySyncTracker,
-};
+use crate::stores::{ApiSyncableStore, DataStore, DataStoreError, MemorySyncTracker};
 
 // todo(sstelfox): I really want WASM aware versions of this that can be shared between browser
 // tabs, likely this means using the filesystem for the data store and indexdb for the sync
 // tracker.
-pub(crate) type WasmDataStorage = ApiSyncableStore<MemoryDataStore, MemorySyncTracker>;
+pub(crate) type WasmDataStorage = ApiSyncableStore<WebFsDataStore, MemorySyncTracker>;
 
 pub(crate) fn initialize_store(api_client: ApiClient) -> WasmDataStorage {
-    let store = MemoryDataStore::default();
     let tracker = MemorySyncTracker::default();
-
-    ApiSyncableStore::new(api_client, store, tracker)
+    ApiSyncableStore::new(api_client, WebFsDataStore, tracker)
 }
 
 //impl WasmDataStorage {
@@ -158,18 +154,36 @@ impl DataStore for WebFsDataStore {
     }
 
     async fn retrieve(&self, cid: Cid) -> Result<Vec<u8>, DataStoreError> {
-        let _block_file = get_block(&cid).await?;
+        let block_file = match get_block(&cid).await? {
+            Some(fh) => fh,
+            None => return Err(DataStoreError::RetrievalFailure),
+        };
 
-        todo!()
+        let arr_buf = match JsFuture::from(block_file.array_buffer()).await {
+            Ok(ab) => ab,
+            Err(err) => {
+                let err_msg = format!("getting data from FS system: {err:?}");
+                return Err(DataStoreError::Implementation(err_msg));
+            }
+        };
+
+        let data = Uint8Array::from(arr_buf).to_vec();
+
+        Ok(data)
     }
 
     async fn store(
         &mut self,
-        _cid: Cid,
-        _data: Vec<u8>,
+        cid: Cid,
+        data: Vec<u8>,
         _immediate: bool,
     ) -> Result<(), DataStoreError> {
-        todo!()
+        if let Err(err) = put_block(&cid, &data).await {
+            let err_msg = format!("failed to store block: {err:?}");
+            return Err(DataStoreError::Implementation(err_msg));
+        }
+
+        Ok(())
     }
 }
 
@@ -196,33 +210,45 @@ async fn get_block(cid: &Cid) -> Result<Option<File>, DataStoreError> {
     Ok(Some(file))
 }
 
-//async fn put_block(cid: &Cid, data: &[u8]) -> Result<(), DataStoreError> {
-//    let storage_dir = storage_directory().await?;
-//
-//    let name = format!("{:?}.blk", cid.as_base64url_multicodec());
-//    let mut open_opts = FileSystemGetFileOptions::new();
-//    open_opts.create(true);
-//
-//    let fh = JsFuture::from(storage_dir.get_file_handle_with_options(&name, &open_opts))
-//        .await
-//        .map(FileSystemFileHandle::from)
-//        .map_err(|e| format!("failed to open storage directory: {e:?}"))?;
-//
-//    let writer = JsFuture::from(fh.create_writable())
-//        .await
-//        .map(FileSystemWritableFileStream::from)
-//        .map_err(|e| format!("failed to get writable file handle: {e:?}"))?;
-//
-//    let write_promise = writer
-//        .write_with_u8_array(&data)
-//        .map_err(|e| format!("failed to create storage future: {e:?}"))?;
-//
-//    JsFuture::from(write_promise)
-//        .await
-//        .map_err(|e| format!("failed to store data: {e:?}"))?;
-//
-//    Ok(())
-//}
+async fn put_block(cid: &Cid, data: &[u8]) -> Result<(), WebFsDataStoreError> {
+    let storage_dir = storage_directory().await?;
+    let name = format!("{:?}.blk", cid.as_base64url_multicodec());
+
+    let mut open_opts = FileSystemGetFileOptions::new();
+    open_opts.create(true);
+
+    let fh_promise = storage_dir.get_file_handle_with_options(&name, &open_opts);
+    let fh = match JsFuture::from(fh_promise).await {
+        Ok(fh) => FileSystemFileHandle::from(fh),
+        Err(err) => {
+            let err_msg = format!("{err:?}");
+            return Err(WebFsDataStoreError::FileHandleError(err_msg));
+        }
+    };
+
+    let writer = match JsFuture::from(fh.create_writable()).await {
+        Ok(writer) => FileSystemWritableFileStream::from(writer),
+        Err(err) => {
+            let err_msg = format!("failed to make file handle writable: {err:?}");
+            return Err(WebFsDataStoreError::FileHandleError(err_msg));
+        }
+    };
+
+    let write_promise = match writer.write_with_u8_array(&data) {
+        Ok(promise) => promise,
+        Err(err) => {
+            let err_msg = format!("failed to create storage future: {err:?}");
+            return Err(WebFsDataStoreError::PromiseError(err_msg));
+        }
+    };
+
+    if let Err(err) = JsFuture::from(write_promise).await {
+        let err_msg = format!("write failed: {err:?}");
+        return Err(WebFsDataStoreError::FileHandleError(err_msg));
+    }
+
+    Ok(())
+}
 
 async fn remove_block(cid: &Cid) -> Result<(), WebFsDataStoreError> {
     let storage_dir = storage_directory().await?;
@@ -258,10 +284,16 @@ async fn storage_manager() -> Result<StorageManager, WebFsDataStoreError> {
 
 #[derive(Debug, thiserror::Error)]
 pub enum WebFsDataStoreError {
+    #[error("failed to get hold on file handle: {0}")]
+    FileHandleError(String),
+
+    #[error("failed to generate a JS promise: {0}")]
+    PromiseError(String),
+
     #[error("failed to remove block: {0}")]
     RemovalFailed(String),
 
-    #[error("failed to retrieve storage manager")]
+    #[error("failed to retrieve storage manager: {0}")]
     StorageManagerUnavailable(String),
 
     #[error("failed to get browser window object")]
