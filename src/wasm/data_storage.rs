@@ -152,8 +152,9 @@ impl DataStore for WebFsDataStore {
         Ok(block.is_some())
     }
 
-    async fn remove(&mut self, _cid: Cid, _recusrive: bool) -> Result<(), DataStoreError> {
-        todo!()
+    async fn remove(&mut self, cid: Cid, _recusrive: bool) -> Result<(), DataStoreError> {
+        remove_block(&cid).await?;
+        Ok(())
     }
 
     async fn retrieve(&self, cid: Cid) -> Result<Vec<u8>, DataStoreError> {
@@ -223,24 +224,28 @@ async fn get_block(cid: &Cid) -> Result<Option<File>, DataStoreError> {
 //    Ok(())
 //}
 
-//async fn remove_block(cid: &Cid) -> Result<(), DataStoreError> {
-//    let storage_dir = storage_directory().await?;
-//
-//    let name = format!("{:?}.blk", cid.as_base64url_multicodec());
-//    JsFuture::from(storage_dir.remove_entry(&name))
-//        .await
-//        .map_err(|e| format!("failed to remove file: {e:?}"))?;
-//
-//    Ok(())
-//}
+async fn remove_block(cid: &Cid) -> Result<(), WebFsDataStoreError> {
+    let storage_dir = storage_directory().await?;
+
+    let name = format!("{:?}.blk", cid.as_base64url_multicodec());
+    if let Err(err) = JsFuture::from(storage_dir.remove_entry(&name)).await {
+        let err_msg = format!("{err:?}");
+        return Err(WebFsDataStoreError::RemovalFailed(err_msg))?;
+    }
+
+    Ok(())
+}
 
 async fn storage_directory() -> Result<FileSystemDirectoryHandle, WebFsDataStoreError> {
     let storage_manager = storage_manager().await?;
 
-    let storage_dir: FileSystemDirectoryHandle = JsFuture::from(storage_manager.get_directory())
-        .await
-        .map_err(|_| WebFsDataStoreError::StorageManagerUnavailable)?
-        .into();
+    let storage_dir = match JsFuture::from(storage_manager.get_directory()).await {
+        Ok(dir) => FileSystemDirectoryHandle::from(dir),
+        Err(err) => {
+            let err_msg = format!("{err:?}");
+            return Err(WebFsDataStoreError::StorageManagerUnavailable(err_msg));
+        }
+    };
 
     Ok(storage_dir)
 }
@@ -253,8 +258,11 @@ async fn storage_manager() -> Result<StorageManager, WebFsDataStoreError> {
 
 #[derive(Debug, thiserror::Error)]
 pub enum WebFsDataStoreError {
+    #[error("failed to remove block: {0}")]
+    RemovalFailed(String),
+
     #[error("failed to retrieve storage manager")]
-    StorageManagerUnavailable,
+    StorageManagerUnavailable(String),
 
     #[error("failed to get browser window object")]
     WindowUnavailable,
