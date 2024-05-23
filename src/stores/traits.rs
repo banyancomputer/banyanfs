@@ -141,7 +141,7 @@ pub enum DataStoreError {
     /// The store knew about the block but failed to actually retreive the block containing the
     /// data. This error may be permanent or ephemeral, the caller will need to use additional
     /// details to determine.
-    #[error("failed to retreive block from network")]
+    #[error("failed to retrieve block")]
     RetrievalFailure,
 
     /// Should use this error primarily for authentication or authorization failures. The active

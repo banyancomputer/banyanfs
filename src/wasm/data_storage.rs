@@ -1,4 +1,6 @@
-use js_sys::Uint8Array;
+use async_trait::async_trait;
+//use js_sys::Uint8Array;
+use tracing::warn;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     File, FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemGetFileOptions,
@@ -7,8 +9,9 @@ use web_sys::{
 
 use crate::api::ApiClient;
 use crate::codec::meta::Cid;
-use crate::error::BanyanFsError;
-use crate::stores::{ApiSyncableStore, MemoryDataStore, MemorySyncTracker};
+use crate::stores::{
+    ApiSyncableStore, DataStore, DataStoreError, MemoryDataStore, MemorySyncTracker,
+};
 
 // todo(sstelfox): I really want WASM aware versions of this that can be shared between browser
 // tabs, likely this means using the filesystem for the data store and indexdb for the sync
@@ -133,118 +136,132 @@ pub(crate) fn initialize_store(api_client: ApiClient) -> WasmDataStorage {
 //    }
 //}
 
+//pub struct IndexedDbSyncTracker;
+
 //#[async_trait(?Send)]
-//impl DelayedDataStore for DataStorage {
-//    async fn sync(&mut self, client: &Self::Client) -> Result<(), DataStoreError> {
-//        let to_sync = self.unsynced_cids().await;
-//        let mut inner_write = self.inner.write().await;
-//
-//        for cid in to_sync.iter() {
-//            let data = match inner_write
-//                .retrieve(cid)
-//                .await
-//                .map_err(|_| DataStoreError::LookupFailure)?
-//            {
-//                Some(data) => data,
-//                None => {
-//                    tracing::warn!("didn't have copy of block requiring sync: {cid:?}, unsynced data size may be out of sync");
-//
-//                    inner_write.unsynced_cids.remove(cid);
-//                    inner_write.stored_cids.remove(cid);
-//
-//                    continue;
-//                }
-//            };
-//
-//            storage_host::blocks::store(client, cid, &data)
-//                .await
-//                .map_err(|_| DataStoreError::StoreFailure)?;
-//
-//            inner_write
-//                .mark_synced(cid)
-//                .await
-//                .map_err(|_| DataStoreError::StoreFailure)?;
-//        }
-//
-//        inner_write.unsynced_data_size = 0;
-//
-//        Ok(())
-//    }
-//
-//    async fn unsynced_data_size(&self) -> u64 {
-//        let inner = self.inner.read().await;
-//        inner.unsynced_data_size()
-//    }
+//impl SyncTracker for MemorySyncTracker {
+//    todo!()
 //}
 
-async fn get_block(cid: &Cid) -> Result<Option<File>, BanyanFsError> {
+pub struct WebFsDataStore;
+
+#[async_trait(?Send)]
+impl DataStore for WebFsDataStore {
+    async fn contains_cid(&self, cid: Cid) -> Result<bool, DataStoreError> {
+        let block = get_block(&cid).await?;
+        Ok(block.is_some())
+    }
+
+    async fn remove(&mut self, _cid: Cid, _recusrive: bool) -> Result<(), DataStoreError> {
+        todo!()
+    }
+
+    async fn retrieve(&self, cid: Cid) -> Result<Vec<u8>, DataStoreError> {
+        let _block_file = get_block(&cid).await?;
+
+        todo!()
+    }
+
+    async fn store(
+        &mut self,
+        _cid: Cid,
+        _data: Vec<u8>,
+        _immediate: bool,
+    ) -> Result<(), DataStoreError> {
+        todo!()
+    }
+}
+
+async fn get_block(cid: &Cid) -> Result<Option<File>, DataStoreError> {
     let storage_dir = storage_directory().await?;
 
     let name = format!("{:?}.blk", cid.as_base64url_multicodec());
     let fh = match JsFuture::from(storage_dir.get_file_handle(&name)).await {
         Ok(fh) => FileSystemFileHandle::from(fh),
-        Err(_) => return Ok(None),
+        Err(err) => {
+            warn!("error attempting to retrieve block {err:?}");
+            return Ok(None);
+        }
     };
 
-    let file = JsFuture::from(fh.get_file())
-        .await
-        .map(File::from)
-        .map_err(|e| format!("failed to retrieve file content: {e:?}"))?;
+    let file = match JsFuture::from(fh.get_file()).await {
+        Ok(file) => File::from(file),
+        Err(err) => {
+            warn!("failed to retrieve file content: {err:?}");
+            return Err(DataStoreError::RetrievalFailure);
+        }
+    };
 
     Ok(Some(file))
 }
 
-async fn put_block(cid: &Cid, data: &[u8]) -> Result<(), BanyanFsError> {
-    let _storage_dir = storage_directory().await?;
+//async fn put_block(cid: &Cid, data: &[u8]) -> Result<(), DataStoreError> {
+//    let storage_dir = storage_directory().await?;
+//
+//    let name = format!("{:?}.blk", cid.as_base64url_multicodec());
+//    let mut open_opts = FileSystemGetFileOptions::new();
+//    open_opts.create(true);
+//
+//    let fh = JsFuture::from(storage_dir.get_file_handle_with_options(&name, &open_opts))
+//        .await
+//        .map(FileSystemFileHandle::from)
+//        .map_err(|e| format!("failed to open storage directory: {e:?}"))?;
+//
+//    let writer = JsFuture::from(fh.create_writable())
+//        .await
+//        .map(FileSystemWritableFileStream::from)
+//        .map_err(|e| format!("failed to get writable file handle: {e:?}"))?;
+//
+//    let write_promise = writer
+//        .write_with_u8_array(&data)
+//        .map_err(|e| format!("failed to create storage future: {e:?}"))?;
+//
+//    JsFuture::from(write_promise)
+//        .await
+//        .map_err(|e| format!("failed to store data: {e:?}"))?;
+//
+//    Ok(())
+//}
 
-    //let name = format!("{:?}.blk", cid.as_base64url_multicodec());
-    //let mut open_opts = FileSystemGetFileOptions::new();
-    //open_opts.create(true);
+//async fn remove_block(cid: &Cid) -> Result<(), DataStoreError> {
+//    let storage_dir = storage_directory().await?;
+//
+//    let name = format!("{:?}.blk", cid.as_base64url_multicodec());
+//    JsFuture::from(storage_dir.remove_entry(&name))
+//        .await
+//        .map_err(|e| format!("failed to remove file: {e:?}"))?;
+//
+//    Ok(())
+//}
 
-    //let fh = JsFuture::from(storage_dir.get_file_handle_with_options(&name, &open_opts))
-    //    .await
-    //    .map(FileSystemFileHandle::from)
-    //    .map_err(|e| format!("failed to open storage directory: {e:?}"))?;
-
-    //let writer = JsFuture::from(fh.create_writable())
-    //    .await
-    //    .map(FileSystemWritableFileStream::from)
-    //    .map_err(|e| format!("failed to get writable file handle: {e:?}"))?;
-
-    //let write_promise = writer
-    //    .write_with_u8_array(&Uint8Array::from(data))
-    //    .map_err(|e| format!("failed to create storage future: {e:?}"))?;
-
-    //JsFuture::from(write_promise)
-    //    .await
-    //    .map_err(|e| format!("failed to store data: {e:?}"))?;
-
-    Ok(())
-}
-
-async fn remove_block(cid: &Cid) -> Result<(), BanyanFsError> {
-    let storage_dir = storage_directory().await?;
-
-    let name = format!("{:?}.blk", cid.as_base64url_multicodec());
-    JsFuture::from(storage_dir.remove_entry(&name))
-        .await
-        .map_err(|e| format!("failed to remove file: {e:?}"))?;
-
-    Ok(())
-}
-
-async fn storage_directory() -> Result<FileSystemDirectoryHandle, BanyanFsError> {
+async fn storage_directory() -> Result<FileSystemDirectoryHandle, WebFsDataStoreError> {
     let storage_manager = storage_manager().await?;
 
     let storage_dir: FileSystemDirectoryHandle = JsFuture::from(storage_manager.get_directory())
         .await
-        .map_err(|e| format!("failed to resolve storage manager: {e:?}"))?
+        .map_err(|_| WebFsDataStoreError::StorageManagerUnavailable)?
         .into();
 
     Ok(storage_dir)
 }
 
-async fn storage_manager() -> Result<StorageManager, BanyanFsError> {
-    let window = web_sys::window().ok_or("failed to get browser window object")?;
+async fn storage_manager() -> Result<StorageManager, WebFsDataStoreError> {
+    let window = web_sys::window().ok_or(WebFsDataStoreError::WindowUnavailable)?;
+
     Ok(window.navigator().storage())
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum WebFsDataStoreError {
+    #[error("failed to retrieve storage manager")]
+    StorageManagerUnavailable,
+
+    #[error("failed to get browser window object")]
+    WindowUnavailable,
+}
+
+impl From<WebFsDataStoreError> for DataStoreError {
+    fn from(err: WebFsDataStoreError) -> DataStoreError {
+        DataStoreError::Implementation(err.to_string())
+    }
 }
