@@ -1,7 +1,7 @@
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
 use rand::Rng;
-use winnow::binary::le_u64;
+use winnow::binary::le_u32;
 use winnow::binary::length_take;
 use winnow::error::ErrMode;
 use winnow::token::take;
@@ -48,7 +48,7 @@ impl EncryptedDataChunk {
         &'a self,
         options: &DataOptions,
         access_key: &AccessKey,
-    ) -> Result<DataChunk, DataChunkError> {
+    ) -> Result<DataChunk, EncryptedDataChunkError> {
         let mut plaintext_payload = Vec::from(self.payload.clone());
         if let Err(err) = access_key.decrypt_buffer(
             self.nonce.clone(),
@@ -57,16 +57,16 @@ impl EncryptedDataChunk {
             self.authentication_tag.clone(),
         ) {
             tracing::error!("failed to decrypt chunk: {err}");
-            return Err(DataChunkError::DecryptError);
+            return Err(EncryptedDataChunkError::DecryptError);
         }
 
         let (_remaining, plaintext_data) =
-            length_take(le_u64::<&[u8], ErrMode<winnow::error::ContextError>>)
+            length_take(le_u32::<&[u8], ErrMode<winnow::error::ContextError>>)
                 .parse_peek(plaintext_payload.as_slice())
-                .map_err(|_| DataChunkError::PlainTextLengthParseError)?;
+                .map_err(|_| EncryptedDataChunkError::PlainTextLengthParseError)?;
 
         let chunk = DataChunk::from_slice(plaintext_data, options)
-            .map_err(|_| DataChunkError::ChunkLengthError)?;
+            .map_err(|_| EncryptedDataChunkError::ChunkLengthError)?;
         Ok(chunk)
     }
 
@@ -75,7 +75,11 @@ impl EncryptedDataChunk {
         options: &DataOptions,
         writer: &mut W,
     ) -> std::io::Result<(usize, Cid)> {
-        let mut chunk_data = vec![0; options.chunk_size()];
+        let mut chunk_data = vec![
+            0;
+            usize::try_from(options.chunk_size())
+                .expect("Architectures below 32 bit are not supported")
+        ];
         rng.fill(chunk_data.as_mut_slice());
 
         let cid = crate::utils::calculate_cid(&chunk_data);
@@ -85,7 +89,7 @@ impl EncryptedDataChunk {
     }
 
     pub fn parse<'a>(input: Stream<'a>, options: &DataOptions) -> ParserResult<'a, Self> {
-        if !options.encrypted() {
+        if !options.encrypted {
             unimplemented!("unencrypted data blocks are not yet supported");
         }
         let (input, nonce) = Nonce::parse(input)?;
@@ -97,7 +101,7 @@ impl EncryptedDataChunk {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum DataChunkError {
+pub enum EncryptedDataChunkError {
     #[error("Error Decrypting a chunk")]
     DecryptError,
     #[error("Error parsing the length field of the chunk after decryption")]

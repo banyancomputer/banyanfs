@@ -4,11 +4,9 @@ use winnow::binary::le_u8;
 use winnow::token::literal;
 use winnow::Parser;
 
-use super::data_options::DataOptions;
+use super::data_options::{DataOptions, DataOptionsError};
 use super::encrypted_data_chunk::EncryptedDataChunk;
-use crate::codec::crypto::{AuthenticationTag, Nonce};
 use crate::codec::header::BANYAN_DATA_MAGIC;
-use crate::codec::meta::{BlockSize, BlockSizeError};
 use crate::codec::{Cid, ParserResult, Stream};
 use crate::utils::std_io_err;
 
@@ -22,31 +20,13 @@ pub struct DataBlock {
 
 impl DataBlock {
     /// The amount of payload a small encrypted block can hold.
-    pub const SMALL_ENCRYPTED_SIZE: usize = {
-        let options = DataOptions {
-            ecc_present: true,
-            encrypted: true,
-            block_size: BlockSize::small(),
-        };
-        options.chunk_data_size() * options.block_size.chunk_count() as usize
-    };
-
-    /// The amount of payload a standard encrypted block can hold.
-    pub const STANDARD_ENCRYPTED_SIZE: usize = {
-        let options = DataOptions {
-            ecc_present: true,
-            encrypted: true,
-            block_size: BlockSize::standard(),
-        };
-        options.chunk_data_size() * options.block_size.chunk_count() as usize
-    };
-
-    pub fn chunk_size(&self) -> usize {
-        self.data_options().chunk_size()
+    pub fn small_encrypted_data_size() -> usize {
+        DataOptions::small_encrypted_no_ecc().block_data_size()
     }
 
-    pub fn chunk_data_size(&self) -> usize {
-        self.data_options().chunk_data_size()
+    /// The amount of payload a standard encrypted block can hold.
+    pub fn standard_encrypted_data_size() -> usize {
+        DataOptions::standard_encrypted_no_ecc().block_data_size()
     }
 
     pub fn cid(&self) -> Result<Cid, DataBlockError> {
@@ -71,7 +51,7 @@ impl DataBlock {
             unimplemented!("parity blocks are not yet supported");
         }
 
-        if !self.data_options.encrypted() {
+        if !self.data_options.encrypted {
             unimplemented!("unencrypted data blocks are not yet supported");
         }
 
@@ -89,7 +69,7 @@ impl DataBlock {
         }
 
         // Pad our data block
-        let needed_chunks = self.max_chunk_count() - self.contents.len();
+        let needed_chunks = usize::from(self.data_options.chunk_count()) - self.contents.len();
         for _ in 0..needed_chunks {
             let (_size, cid) =
                 EncryptedDataChunk::encode_padding_chunk(rng, &self.data_options, &mut data_buffer)
@@ -138,12 +118,8 @@ impl DataBlock {
         self.contents.is_empty()
     }
 
-    pub fn max_chunk_count(&self) -> usize {
-        self.data_options().block_size().chunk_count() as usize
-    }
-
     pub fn is_full(&self) -> bool {
-        self.contents.len() >= self.max_chunk_count()
+        self.contents.len() >= self.data_options.chunk_count().into()
     }
 
     pub fn parse<'a>(input: Stream<'a>) -> ParserResult<'a, Self> {
@@ -164,11 +140,11 @@ impl DataBlock {
             unimplemented!("ecc encoding is not yet supported");
         }
 
-        if !data_options.encrypted() {
+        if !data_options.encrypted {
             unimplemented!("unencrypted data blocks are not yet supported");
         }
 
-        let chunk_count = data_options.block_size().chunk_count() as usize;
+        let chunk_count = data_options.chunk_count() as usize;
         let mut contents = Vec::with_capacity(chunk_count);
         let mut input = input;
         for _ in 0..chunk_count {
@@ -215,36 +191,28 @@ impl DataBlock {
         Ok(())
     }
 
-    pub fn remaining_space(&self) -> u64 {
-        let block_size = self.data_options.block_size();
+    pub fn remaining_chunks(&self) -> u8 {
+        self.data_options.chunk_count()
+            - u8::try_from(self.contents.len())
+                .expect("If this fails we have bad logic in code where we build self.contents")
+    }
 
-        let total_chunks = block_size.chunk_count();
-        let remaining_chunks = total_chunks - self.contents.len() as u64;
-
-        remaining_chunks * self.chunk_data_size() as u64
+    pub fn remaining_space(&self) -> usize {
+        usize::from(self.remaining_chunks()) * self.data_options.chunk_data_size()
     }
 
     pub fn small() -> Result<Self, DataBlockError> {
-        let data_options = DataOptions {
-            ecc_present: false,
-            encrypted: true,
-            block_size: BlockSize::small(),
-        };
+        let data_options = DataOptions::small_encrypted_no_ecc();
 
         Ok(Self {
             data_options,
             cid: Arc::new(RwLock::new(None)),
-
             contents: Vec::new(),
         })
     }
 
     pub fn standard() -> Result<Self, DataBlockError> {
-        let data_options = DataOptions {
-            ecc_present: false,
-            encrypted: true,
-            block_size: BlockSize::small(),
-        };
+        let data_options = DataOptions::standard_encrypted_no_ecc();
 
         Ok(Self {
             data_options,
@@ -268,8 +236,8 @@ pub enum DataBlockError {
     #[error("cid lock was poisoned")]
     LockPoisoned,
 
-    #[error("block size was invalid: {0}")]
-    Size(#[from] BlockSizeError),
+    #[error("block options are invalid: {0}")]
+    OptionsError(#[from] DataOptionsError),
 }
 
 fn banyan_data_magic_tag(input: Stream) -> ParserResult<&[u8]> {

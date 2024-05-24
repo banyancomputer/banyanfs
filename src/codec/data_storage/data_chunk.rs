@@ -1,8 +1,7 @@
-use super::data_options::DataOptions;
+use super::data_options::{DataOptions, DataOptionsError};
 use super::encrypted_data_chunk::EncryptedDataChunk;
 use super::DataBlockError;
 use crate::codec::crypto::AccessKey;
-use crate::codec::BlockSizeError;
 use crate::utils::std_io_err;
 
 use elliptic_curve::rand_core::CryptoRngCore;
@@ -15,10 +14,9 @@ pub struct DataChunk {
 impl DataChunk {
     pub fn from_slice(data: &[u8], options: &DataOptions) -> Result<Self, DataBlockError> {
         if data.len() > options.chunk_data_size() {
-            return Err(DataBlockError::Size(BlockSizeError::ChunkTooLarge(
-                data.len(),
-                options.chunk_data_size(),
-            )));
+            return Err(DataBlockError::OptionsError(
+                DataOptionsError::ChunkTooLarge(data.len(), options.chunk_data_size()),
+            ));
         }
         Ok(Self {
             contents: data.into(),
@@ -35,7 +33,7 @@ impl DataChunk {
         options: &DataOptions,
         access_key: &AccessKey,
     ) -> std::io::Result<EncryptedDataChunk> {
-        if !options.encrypted() {
+        if !options.encrypted {
             //should probably actually be an error "can't encrypt chunk for unenrypted options" or similar
             unimplemented!("unencrypted data blocks are not yet supported");
         }
@@ -45,7 +43,7 @@ impl DataChunk {
         }
 
         // write out the true data length
-        let chunk_length = self.contents.len() as u64;
+        let chunk_length = self.contents.len() as u32;
         let chunk_length_bytes = chunk_length.to_le_bytes();
 
         // We need to prepend the length of the data, the pad the remaining space with random

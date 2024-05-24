@@ -549,8 +549,8 @@ impl DirectoryHandle {
             )
             .await?;
 
-        const SMALL_BLOCK_THRESHOLD: usize = DataBlock::SMALL_ENCRYPTED_SIZE * 8;
-        let block_creator = if data_size > SMALL_BLOCK_THRESHOLD as u64 {
+        let small_block_threshold: usize = DataBlock::small_encrypted_data_size() * 8;
+        let block_creator = if data_size > small_block_threshold as u64 {
             || match DataBlock::small() {
                 Ok(ab) => Ok(ab),
                 Err(err) => {
@@ -574,7 +574,7 @@ impl DirectoryHandle {
 
         let mut remaining_data = data;
         let mut active_block = block_creator()?;
-        let active_block_chunk_size = active_block.chunk_data_size();
+        let active_block_chunk_size = active_block.data_options().chunk_data_size();
         let node_data_key = AccessKey::generate(rng);
         let mut content_references = Vec::new();
 
@@ -612,7 +612,6 @@ impl DirectoryHandle {
                             OperationError::Other("failed to encode block")
                         })?;
 
-                let block_size = *active_block.data_options().block_size();
                 let cid = active_block
                     .cid()
                     .map_err(|_| OperationError::Other("unable to access block cid"))?;
@@ -625,7 +624,8 @@ impl DirectoryHandle {
                     .map(|(i, cid)| ContentLocation::data(cid, i as u64))
                     .collect::<Vec<_>>();
 
-                let content_ref = ContentReference::new(cid, block_size, locations);
+                let content_ref =
+                    ContentReference::new(cid, active_block.data_options(), locations);
                 content_references.push(content_ref);
 
                 active_block = block_creator()?;
@@ -646,7 +646,6 @@ impl DirectoryHandle {
                     OperationError::Other("failed to encode block")
                 })?;
 
-            let block_size = *active_block.data_options().block_size();
             let cid = active_block
                 .cid()
                 .map_err(|_| OperationError::Other("unable to access block cid"))?;
@@ -659,7 +658,7 @@ impl DirectoryHandle {
                 .map(|(i, cid)| ContentLocation::data(cid, i as u64))
                 .collect::<Vec<_>>();
 
-            let content_ref = ContentReference::new(cid, block_size, locations);
+            let content_ref = ContentReference::new(cid, active_block.data_options(), locations);
             content_references.push(content_ref);
         }
 
