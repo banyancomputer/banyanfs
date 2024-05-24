@@ -577,6 +577,7 @@ impl DirectoryHandle {
         let active_block_chunk_size = active_block.data_options().chunk_data_size();
         let node_data_key = AccessKey::generate(rng);
         let mut content_references = Vec::new();
+        let mut content_indexes = Vec::new();
 
         while !remaining_data.is_empty() {
             let data_to_read = std::cmp::min(remaining_data.len(), active_block_chunk_size);
@@ -595,10 +596,10 @@ impl DirectoryHandle {
                     OperationError::Other("Error encrypting chunk")
                 })?;
 
-            active_block.push_chunk(chunk).map_err(|err| {
+            content_indexes.push(active_block.push_chunk(chunk).map_err(|err| {
                 tracing::error!("failed to push chunk: {:?}", err);
                 OperationError::Other("expected remaining capacity")
-            })?;
+            })?);
 
             if active_block.is_full() {
                 let mut sealed_block = Vec::new();
@@ -618,11 +619,11 @@ impl DirectoryHandle {
 
                 store.store(cid.clone(), sealed_block, false).await?;
 
-                let locations = cids
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, cid)| ContentLocation::data(cid, i as u64))
+                let locations = content_indexes
+                    .iter()
+                    .map(|i| ContentLocation::data(cids[*i].clone(), *i as u64))
                     .collect::<Vec<_>>();
+                content_indexes.clear();
 
                 let content_ref =
                     ContentReference::new(cid, active_block.data_options(), locations);
@@ -652,11 +653,11 @@ impl DirectoryHandle {
 
             store.store(cid.clone(), sealed_block, false).await?;
 
-            let locations = cids
-                .into_iter()
-                .enumerate()
-                .map(|(i, cid)| ContentLocation::data(cid, i as u64))
+            let locations = content_indexes
+                .iter()
+                .map(|i| ContentLocation::data(cids[*i].clone(), *i as u64))
                 .collect::<Vec<_>>();
+            content_indexes.clear();
 
             let content_ref = ContentReference::new(cid, active_block.data_options(), locations);
             content_references.push(content_ref);

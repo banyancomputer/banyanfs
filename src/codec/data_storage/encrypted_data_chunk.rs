@@ -28,6 +28,25 @@ impl EncryptedDataChunk {
         }
     }
 
+    pub async fn cid(&self) -> Cid {
+        let mut encoded = Vec::new();
+
+        self.nonce
+            .encode(&mut encoded)
+            .await
+            .expect("Infalliable unless we run out of heap");
+        encoded
+            .write_all(&self.payload)
+            .await
+            .expect("Infalliable unless we run out of heap");
+        self.authentication_tag
+            .encode(&mut encoded)
+            .await
+            .expect("Infalliable unless we run out of heap");
+
+        crate::utils::calculate_cid(&encoded)
+    }
+
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,

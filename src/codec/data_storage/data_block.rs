@@ -177,7 +177,8 @@ impl DataBlock {
         Self::parse(input)
     }
 
-    pub fn push_chunk(&mut self, chunk: EncryptedDataChunk) -> Result<(), DataBlockError> {
+    // On success returns the index of the chunk that was pushed in
+    pub fn push_chunk(&mut self, chunk: EncryptedDataChunk) -> Result<usize, DataBlockError> {
         if self.is_full() {
             return Err(DataBlockError::Full);
         }
@@ -188,7 +189,7 @@ impl DataBlock {
 
         self.contents.push(chunk);
 
-        Ok(())
+        Ok(self.contents.len() - 1)
     }
 
     pub fn remaining_chunks(&self) -> u8 {
