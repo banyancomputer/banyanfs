@@ -241,9 +241,7 @@ impl NodeData {
         })
     }
 
-    pub(crate) fn empty_file(
-        locked_access_key: SymLockedAccessKey,
-    ) -> Self {
+    pub(crate) fn empty_file(locked_access_key: SymLockedAccessKey) -> Self {
         Self::File {
             permissions: FilePermissions::default(),
             associated_data: HashMap::new(),
