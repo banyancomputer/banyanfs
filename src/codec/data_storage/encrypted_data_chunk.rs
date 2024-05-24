@@ -13,54 +13,38 @@ use crate::codec::crypto::AuthenticationTag;
 use crate::codec::crypto::Nonce;
 use crate::codec::{Cid, ParserResult, Stream};
 
-pub struct EncryptedDataChunk {
-    nonce: Nonce,
-    payload: Box<[u8]>,
-    authentication_tag: AuthenticationTag,
-}
+pub struct EncryptedDataChunk(Box<[u8]>);
 
 impl EncryptedDataChunk {
-    pub fn new(nonce: Nonce, payload: Box<[u8]>, authentication_tag: AuthenticationTag) -> Self {
-        Self {
-            nonce,
-            payload,
-            authentication_tag,
-        }
+    pub fn new(data: Box<[u8]>) -> Self {
+        Self(data)
     }
 
-    pub async fn cid(&self) -> Cid {
+    pub async fn from_parts(nonce: Nonce, data: &[u8], tag: AuthenticationTag) -> Self {
         let mut encoded = Vec::new();
-
-        self.nonce
+        nonce
             .encode(&mut encoded)
             .await
-            .expect("Infalliable unless we run out of heap");
-        encoded
-            .write_all(&self.payload)
+            .expect("Can only fail if allocator is starved");
+        encoded.extend_from_slice(data);
+        tag.encode(&mut encoded)
             .await
-            .expect("Infalliable unless we run out of heap");
-        self.authentication_tag
-            .encode(&mut encoded)
-            .await
-            .expect("Infalliable unless we run out of heap");
+            .expect("Can only fail if allocator is starved");
+        Self(encoded.into_boxed_slice())
+    }
 
-        crate::utils::calculate_cid(&encoded)
+    pub fn cid(&self) -> Cid {
+        crate::utils::calculate_cid(&self.0)
     }
 
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
     ) -> std::io::Result<(usize, Cid)> {
-        let mut encoded = Vec::new();
+        let cid = self.cid();
 
-        self.nonce.encode(&mut encoded).await?;
-        encoded.write_all(&self.payload).await?;
-        self.authentication_tag.encode(&mut encoded).await?;
-
-        let cid = crate::utils::calculate_cid(&encoded);
-
-        writer.write_all(&encoded).await?;
-        Ok((encoded.len(), cid))
+        writer.write_all(&self.0).await?;
+        Ok((self.0.len(), cid))
     }
 
     pub fn decrypt<'a>(
@@ -68,13 +52,28 @@ impl EncryptedDataChunk {
         options: &DataOptions,
         access_key: &AccessKey,
     ) -> Result<DataChunk, EncryptedDataChunkError> {
-        let mut plaintext_payload = Vec::from(self.payload.clone());
-        if let Err(err) = access_key.decrypt_buffer(
-            self.nonce.clone(),
-            &[],
-            &mut plaintext_payload,
-            self.authentication_tag.clone(),
-        ) {
+        if self.0.len()
+            != usize::try_from(options.chunk_size())
+                .expect("This code assumes it is running on a 32 bit or large platform")
+        {
+            return Err(EncryptedDataChunkError::ChunkLengthError);
+        }
+        let nonce = Nonce::from_bytes(
+            self.0[..Nonce::size()]
+                .try_into()
+                .expect("We have checked the size above"),
+        );
+        let authentication_tag = AuthenticationTag::from_bytes(
+            &self.0[(self.0.len() - AuthenticationTag::size())..]
+                .try_into()
+                .expect("We have checked the size above"),
+        );
+        let mut plaintext_payload =
+            Vec::from(&self.0[Nonce::size()..(self.0.len() - AuthenticationTag::size())]);
+
+        if let Err(err) =
+            access_key.decrypt_buffer(nonce, &[], &mut plaintext_payload, authentication_tag)
+        {
             tracing::error!("failed to decrypt chunk: {err}");
             return Err(EncryptedDataChunkError::DecryptError);
         }
@@ -111,11 +110,10 @@ impl EncryptedDataChunk {
         if !options.encrypted {
             unimplemented!("unencrypted data blocks are not yet supported");
         }
-        let (input, nonce) = Nonce::parse(input)?;
-        let (input, payload) = take(options.chunk_payload_size()).parse_peek(input)?;
-        let (input, tag) = AuthenticationTag::parse(input)?;
 
-        Ok((input, Self::new(nonce, payload.into(), tag)))
+        let (input, data) = take(options.chunk_size()).parse_peek(input)?;
+
+        Ok((input, Self::new(data.into())))
     }
 }
 

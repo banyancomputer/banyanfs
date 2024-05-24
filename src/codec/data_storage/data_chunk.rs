@@ -34,7 +34,7 @@ impl DataChunk {
         access_key: &AccessKey,
     ) -> std::io::Result<EncryptedDataChunk> {
         if !options.encrypted {
-            //should probably actually be an error "can't encrypt chunk for unenrypted options" or similar
+            //should probably actually be an error "can't encrypt chunk for unencrypted options" or similar
             unimplemented!("unencrypted data blocks are not yet supported");
         }
         if self.contents.len() > options.chunk_data_size() {
@@ -58,10 +58,6 @@ impl DataChunk {
             .encrypt_buffer(rng, &[], &mut payload)
             .map_err(|_| std_io_err("failed to encrypt chunk"))?;
 
-        Ok(EncryptedDataChunk::new(
-            nonce,
-            payload.into_boxed_slice(),
-            tag,
-        ))
+        Ok(EncryptedDataChunk::from_parts(nonce, payload.as_slice(), tag).await)
     }
 }
