@@ -170,6 +170,7 @@ pub enum DataOptionsError {
     ChunkCountTooLarge(u8),
 }
 
+#[cfg(test)]
 mod test {
     use super::*;
     use winnow::Partial;
