@@ -527,50 +527,61 @@ impl DirectoryHandle {
         };
 
         let data_size = data.len() as u64;
-        let new_permanent_id = if let Some(existing_file) = existing_file {
-            let inner_read = self.inner.read().await;
-            let parent_node = inner_read.by_id(existing_file)?;
-            let permatnet_id = parent_node.permanent_id();
-            drop(inner_read);
-            permatnet_id
-        } else {
-            let (parent_path, name) = path.split_at(path.len() - 1);
-            let file_name = NodeName::try_from(name[0]).map_err(OperationError::InvalidName)?;
+        let new_permanent_id = match existing_file {
+            Some(existing_file) => {
+                let inner_read = self.inner.read().await;
+                let node = inner_read.by_id(existing_file)?;
+                let permanent_id = node.permanent_id();
+                drop(inner_read);
+                permanent_id
+            }
+            None => {
+                let (parent_path, name) = path.split_at(path.len() - 1);
+                let file_name = NodeName::try_from(name[0]).map_err(OperationError::InvalidName)?;
 
-            tracing::info!(?path, ?file_name, "drive::write");
+                tracing::info!(?path, ?file_name, "drive::write");
 
-            let parent_id = match walk_path(&self.inner, self.cwd_id, parent_path, 0).await? {
-                WalkState::FoundNode { node_id } => node_id,
-                WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
-            };
+                let parent_id = match walk_path(&self.inner, self.cwd_id, parent_path, 0).await? {
+                    WalkState::FoundNode { node_id } => node_id,
+                    WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
+                };
 
-            tracing::info!(?parent_id, ?parent_path, "drive::write::parent_id");
+                tracing::info!(?parent_id, ?parent_path, "drive::write::parent_id");
 
-            let inner_read = self.inner.read().await;
-            let parent_node = inner_read.by_id(parent_id)?;
-            let parent_perm_id = parent_node.permanent_id();
-            drop(inner_read);
+                let inner_read = self.inner.read().await;
+                let parent_node = inner_read.by_id(parent_id)?;
+                let parent_perm_id = parent_node.permanent_id();
+                drop(inner_read);
 
-            // todo(sstelfox): handle the special case of an empty file, it shouldn't be a stub and
-            // doesn't need to go through the encoding process.
-
-            let node_name = file_name.clone();
-            self.insert_node(
-                rng,
-                parent_perm_id,
-                |rng, new_node_id, parent_id, actor_id| async move {
-                    NodeBuilder::file(node_name)
-                        .with_parent(parent_id)
-                        .with_id(new_node_id)
-                        .with_owner(actor_id)
-                        .with_size_hint(data_size)
-                        .build(rng)
-                        .map_err(OperationError::CreationFailed)
-                },
-            )
-            .await?
+                let node_name = file_name.clone();
+                self.insert_node(
+                    rng,
+                    parent_perm_id,
+                    |rng, new_node_id, parent_id, actor_id| async move {
+                        NodeBuilder::file(node_name)
+                            .with_parent(parent_id)
+                            .with_id(new_node_id)
+                            .with_owner(actor_id)
+                            .with_size_hint(data_size)
+                            .build(rng)
+                            .map_err(OperationError::CreationFailed)
+                    },
+                )
+                .await?
+            }
         };
 
+        let node_data_key = AccessKey::generate(rng);
+        if data.is_empty() {
+            let mut inner_write = self.inner.write().await;
+            let locked_key = node_data_key
+                .lock_with(rng, &data_key)
+                .map_err(|_| OperationError::Other("failed to seal node data key"))?;
+            let node = inner_write.by_perm_id_mut(&new_permanent_id).await?;
+            let node_data = node.data_mut().await;
+            *node_data = NodeData::empty_file(locked_key);
+            return Ok(());
+        }
 
         const SMALL_BLOCK_THRESHOLD: usize = DataBlock::SMALL_ENCRYPTED_SIZE * 8;
         let block_creator = if data_size > SMALL_BLOCK_THRESHOLD as u64 {
@@ -596,7 +607,6 @@ impl DirectoryHandle {
         let mut remaining_data = data;
         let mut active_block = block_creator()?;
         let active_block_chunk_size = active_block.chunk_size();
-        let node_data_key = AccessKey::generate(rng);
         let mut content_references = Vec::new();
 
         while !remaining_data.is_empty() {
