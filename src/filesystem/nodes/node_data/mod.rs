@@ -12,6 +12,7 @@ use crate::filesystem::FileContent;
 
 mod child_map;
 use child_map::ChildMap;
+use crate::codec::crypto::SymLockedAccessKey;
 
 use self::child_map::ChildMapEntry;
 
@@ -240,6 +241,20 @@ impl NodeData {
         })
     }
 
+    pub(crate) fn empty_file(
+        locked_access_key: SymLockedAccessKey,
+    ) -> Self {
+        Self::File {
+            permissions: FilePermissions::default(),
+            associated_data: HashMap::new(),
+            content: FileContent::Encrypted {
+                locked_access_key,
+                cid: Cid::default(),
+                data_size: 0,
+                content: Vec::new(),
+            },
+        }
+    }
     pub(crate) fn full_file(content: FileContent) -> Self {
         Self::File {
             permissions: FilePermissions::default(),

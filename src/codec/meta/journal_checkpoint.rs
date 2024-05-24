@@ -24,7 +24,7 @@ impl JournalCheckpoint {
 
     pub(crate) fn initialize() -> Self {
         JournalCheckpoint {
-            merkle_root_cid: Cid::IDENTITY,
+            merkle_root_cid: Cid::default(),
             vector: VectorClock::initialize(),
         }
     }

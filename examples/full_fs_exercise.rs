@@ -58,6 +58,10 @@ async fn main() {
         let mut root = drive.root().await.unwrap();
         let _contents = root.ls(&["testing", "paths", "deeply"]).await.unwrap();
 
+        root.write(&mut rng, &mut memory_store, &["testing", "poem-♥.txt"], b"")
+            .await
+            .unwrap();
+
         root.write(
             &mut rng,
             &mut memory_store,
