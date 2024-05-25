@@ -81,3 +81,12 @@ impl<I> From<chacha20poly1305::Error> for SymLockedAccessKeyError<I> {
         SymLockedAccessKeyError::CryptoFailure(err.to_string())
     }
 }
+impl Default for SymLockedAccessKey {
+    fn default() -> Self {
+        Self {
+            nonce: Nonce::default(),
+            cipher_text: [0u8; AccessKey::size()],
+            tag: AuthenticationTag::default(),
+        }
+    }
+}
