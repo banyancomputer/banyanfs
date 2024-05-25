@@ -569,15 +569,11 @@ impl DirectoryHandle {
             }
         };
 
-        let node_data_key = AccessKey::generate(rng);
         if data.is_empty() {
             let mut inner_write = self.inner.write().await;
-            let locked_key = node_data_key
-                .lock_with(rng, &data_key)
-                .map_err(|_| OperationError::Other("failed to seal node data key"))?;
             let node = inner_write.by_perm_id_mut(&new_permanent_id).await?;
             let node_data = node.data_mut().await;
-            *node_data = NodeData::empty_file(locked_key);
+            *node_data = NodeData::empty_file();
             return Ok(());
         }
 
@@ -605,6 +601,7 @@ impl DirectoryHandle {
         let mut remaining_data = data;
         let mut active_block = block_creator()?;
         let active_block_chunk_size = active_block.chunk_size();
+        let node_data_key = AccessKey::generate(rng);
         let mut content_references = Vec::new();
 
         while !remaining_data.is_empty() {
