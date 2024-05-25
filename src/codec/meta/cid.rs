@@ -10,8 +10,6 @@ const CID_LENGTH: usize = 32;
 pub struct Cid([u8; CID_LENGTH]);
 
 impl Cid {
-    const IDENTITY: Cid = Cid([0u8; CID_LENGTH]);
-
     pub fn as_base64url_multicodec(&self) -> String {
         use base64::engine::general_purpose::URL_SAFE_NO_PAD;
         use base64::Engine;
@@ -107,6 +105,6 @@ impl TryFrom<&str> for Cid {
 
 impl Default for Cid {
     fn default() -> Self {
-        Self::IDENTITY
+        Self([0u8; CID_LENGTH])
     }
 }
