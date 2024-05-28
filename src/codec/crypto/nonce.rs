@@ -51,12 +51,6 @@ impl Deref for Nonce {
     }
 }
 
-impl Default for Nonce {
-    fn default() -> Self {
-        Self([0u8; NONCE_LENGTH])
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
