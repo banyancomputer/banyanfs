@@ -489,6 +489,8 @@ impl DirectoryHandle {
             }
 
             Ok(file_data)
+        } else if node_content.is_empty() {
+            Ok(Vec::new())
         } else {
             unimplemented!()
         }

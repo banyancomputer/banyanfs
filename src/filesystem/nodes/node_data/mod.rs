@@ -11,7 +11,6 @@ use crate::filesystem::nodes::{NodeKind, NodeName};
 use crate::filesystem::FileContent;
 
 mod child_map;
-use crate::codec::crypto::SymLockedAccessKey;
 use child_map::ChildMap;
 
 use self::child_map::ChildMapEntry;
@@ -122,7 +121,7 @@ impl NodeData {
         let mut child_pairs = self
             .children()
             .map(|child_map| child_map.iter().collect::<Vec<_>>())
-            .unwrap_or_else(Vec::new);
+            .unwrap_or_default();
         child_pairs.sort_by(|(_, a), (_, b)| a.permanent_id().cmp(b.permanent_id()));
         child_pairs
             .into_iter()
@@ -193,7 +192,7 @@ impl NodeData {
     pub(crate) fn remove_child(&mut self, name: &NodeName) -> Result<PermanentId, NodeDataError> {
         let child_map = self.children_mut().ok_or(NodeDataError::NotAParent)?;
         match child_map.remove(name) {
-            Some(id) => Ok(id.permanent_id().clone()),
+            Some(id) => Ok(*id.permanent_id()),
             None => Err(NodeDataError::ChildNameMissing),
         }
     }
@@ -245,12 +244,7 @@ impl NodeData {
         Self::File {
             permissions: FilePermissions::default(),
             associated_data: HashMap::new(),
-            content: FileContent::Encrypted {
-                locked_access_key: SymLockedAccessKey::default(),
-                cid: Cid::default(),
-                data_size: 0,
-                content: Vec::new(),
-            },
+            content: FileContent::EmptyFile,
         }
     }
     pub(crate) fn full_file(content: FileContent) -> Self {

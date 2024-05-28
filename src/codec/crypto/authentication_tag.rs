@@ -47,11 +47,6 @@ impl Deref for AuthenticationTag {
     }
 }
 
-impl Default for AuthenticationTag {
-    fn default() -> Self {
-        Self([0u8; TAG_LENGTH])
-    }
-}
 impl From<[u8; TAG_LENGTH]> for AuthenticationTag {
     fn from(bytes: [u8; TAG_LENGTH]) -> Self {
         Self(bytes)
