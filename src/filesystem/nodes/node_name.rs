@@ -117,6 +117,13 @@ impl NodeName {
             Self::Named(name) => 2 + name.len(),
         }
     }
+
+    pub fn into_inner(self) -> String {
+        match self {
+            Self::Root => String::from(""),
+            Self::Named(name) => name,
+        }
+    }
 }
 
 impl std::convert::TryFrom<&str> for NodeName {

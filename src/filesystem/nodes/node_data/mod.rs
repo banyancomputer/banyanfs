@@ -215,8 +215,6 @@ impl NodeData {
     }
 
     pub(crate) fn size(&self) -> u64 {
-        tracing::warn!("size of child entries are not yet included in parents");
-
         match self {
             NodeData::AssociatedData { content } => content.size(),
             NodeData::Directory { .. } => {
