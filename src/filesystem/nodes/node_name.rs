@@ -118,7 +118,7 @@ impl NodeName {
         }
     }
 
-    pub fn into_inner(self) -> String {
+    pub(crate) fn into_inner(self) -> String {
         match self {
             Self::Root => String::from(""),
             Self::Named(name) => name,

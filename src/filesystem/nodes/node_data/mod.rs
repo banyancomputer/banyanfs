@@ -11,7 +11,6 @@ use crate::filesystem::nodes::{NodeKind, NodeName};
 use crate::filesystem::FileContent;
 
 mod child_map;
-use crate::codec::crypto::SymLockedAccessKey;
 use child_map::ChildMap;
 
 use self::child_map::ChildMapEntry;
