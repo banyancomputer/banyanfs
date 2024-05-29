@@ -243,12 +243,7 @@ impl NodeData {
         Self::File {
             permissions: FilePermissions::default(),
             associated_data: HashMap::new(),
-            content: FileContent::Encrypted {
-                locked_access_key: SymLockedAccessKey::default(),
-                cid: Cid::default(),
-                data_size: 0,
-                content: Vec::new(),
-            },
+            content: FileContent::EmptyFile,
         }
     }
 
