@@ -260,10 +260,7 @@ fn decode_optional_key(input: Stream) -> ParserResult<Option<AsymLockedAccessKey
 
     if cfg!(feature = "strict") && presence_flag != 0 && presence_flag != KEY_PRESENT_BIT {
         return Err(winnow::error::ErrMode::Cut(
-            winnow::error::ParserError::from_error_kind(
-                &input,
-                winnow::error::ErrorKind::Verify,
-            ),
+            winnow::error::ParserError::from_error_kind(&input, winnow::error::ErrorKind::Verify),
         ));
     }
 

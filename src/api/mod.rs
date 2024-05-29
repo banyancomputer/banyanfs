@@ -9,4 +9,4 @@ pub mod storage_host;
 
 pub(crate) mod client;
 
-pub use client::ApiClient;
+pub use client::{ApiClient, ApiError, VecStream};

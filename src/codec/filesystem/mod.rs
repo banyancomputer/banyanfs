@@ -6,4 +6,4 @@ mod node_kind;
 pub use block_kind::BlockKind;
 pub use directory_permissions::DirectoryPermissions;
 pub use file_permissions::FilePermissions;
-pub(crate) use node_kind::NodeKind;
+pub use node_kind::NodeKind;
