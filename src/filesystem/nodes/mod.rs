@@ -501,9 +501,9 @@ pub(crate) mod test {
 
         let mut buffer = Vec::new();
         test_node.encode(&mut buffer).await.unwrap();
+        #[rustfmt::skip]
         assert_eq!(
             buffer,
-            #[rustfmt::skip]
             &[
                 // cid (32 bytes)
                 123, 213, 174, 5, 166, 228, 27, 101, 174, 250, 234, 210, 62, 78, 210, 81, 217, 42, 190, 46, 153, 237, 109, 11, 254, 212, 23, 217, 223, 1, 12, 205,
