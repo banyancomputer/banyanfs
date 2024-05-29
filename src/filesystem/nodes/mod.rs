@@ -32,7 +32,6 @@ use winnow::stream::Offset;
 use winnow::token::take;
 use winnow::Parser;
 
-use crate::codec::crypto::AccessKey;
 use crate::codec::filesystem::NodeKind;
 use crate::codec::meta::{ActorId, Cid, PermanentId};
 use crate::codec::{ParserResult, Stream, VectorClock};
@@ -317,11 +316,7 @@ impl Node {
     }
 
     #[tracing::instrument(skip(input))]
-    pub(crate) fn parse<'a>(
-        input: Stream<'a>,
-        allocated_id: NodeId,
-        data_key: Option<&AccessKey>,
-    ) -> ParserResult<'a, Self> {
+    pub(crate) fn parse<'a>(input: Stream<'a>, allocated_id: NodeId) -> ParserResult<'a, Self> {
         tracing::trace!(allocated_id, "begin");
 
         let (input, cid) = Cid::parse(input)?;
@@ -477,8 +472,13 @@ impl std::fmt::Debug for Node {
 #[cfg(test)]
 pub(crate) mod test {
     use crate::codec::crypto::Fingerprint;
+    use chacha20poly1305::aead::rand_core::SeedableRng;
+    use rand_chacha::ChaCha20Rng;
 
     use super::*;
+
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::*;
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
@@ -494,5 +494,101 @@ pub(crate) mod test {
         assert!(!test_node.cid.is_dirty().await);
         let _mut_data = test_node.data_mut().await;
         assert!(test_node.cid.is_dirty().await);
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_empty_file_round_trip() {
+        let mut rng = ChaCha20Rng::from_entropy();
+        let test_node = setup_test_node(&mut rng, NodeData::empty_file()).await;
+
+        let mut buffer = Vec::new();
+        test_node.encode(&mut buffer).await.unwrap();
+        #[rustfmt::skip]
+        assert_eq!(
+            buffer,
+            &[
+                // cid (32 bytes)
+                123, 213, 174, 5, 166, 228, 27, 101, 174, 250, 234, 210, 62, 78, 210, 81, 217, 42, 190, 46, 153, 237, 109, 11, 254, 212, 23, 217, 223, 1, 12, 205,
+                // node_data_len (4 bytes)
+                88, 0, 0, 0,
+                // permanent_id (8 bytes)
+                2, 2, 2, 2, 2, 2, 2, 2,
+                // vector_clock (8 bytes)
+                0, 0, 0, 0, 0, 0, 0, 0,
+                // parent_present flag (1 byte) + parent_id (8 bytes)
+                1, 1, 1, 1, 1, 1, 1, 1, 1,
+                // owner_id (fingerprint; 32 bytes)
+                4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  4, 4, 4, 4,
+                // created_at (8 bytes)
+                210, 2, 150, 73, 0, 0, 0, 0,
+                // modified_at (8 bytes)
+                211, 2, 150, 73, 0, 0, 0, 0,
+                // name_type (1 byte) + name_length (1  byte) + name (7 bytes)
+                1, 7, 84, 101, 115, 116, 68, 105, 114,
+                // metadata entries len (1 byte) + permission flag (1 byte) + children count (2 byte)
+                0, 0, 0, 0,
+                // content len (1 byte) + file type (1 byte)
+                0, 4
+            ]
+        );
+        let (remaining, parsed) = Node::parse(Stream::new(&buffer), test_node.id).unwrap();
+        let remaining: Vec<u8> = remaining.to_vec();
+        assert_eq!(Vec::<u8>::new(), remaining);
+        assert_node_equality(&test_node, &parsed);
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_stub_round_trip() {
+        let mut rng = ChaCha20Rng::from_entropy();
+        let test_node = setup_test_node(&mut rng, NodeData::stub_file(0)).await;
+
+        let mut buffer = Vec::new();
+        test_node.encode(&mut buffer).await.unwrap();
+        assert_eq!(
+            buffer,
+            &[
+                109, 189, 51, 2, 84, 119, 226, 201, 232, 249, 220, 227, 132, 28, 156, 227, 97, 219,
+                54, 151, 65, 76, 53, 249, 89, 192, 207, 115, 130, 127, 85, 5, 96, 0, 0, 0, 2, 2, 2,
+                2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 4, 4, 4, 4,
+                4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 210,
+                2, 150, 73, 0, 0, 0, 0, 211, 2, 150, 73, 0, 0, 0, 0, 1, 7, 84, 101, 115, 116, 68,
+                105, 114, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0
+            ]
+        );
+        let (remaining, parsed) = Node::parse(Stream::new(&buffer), test_node.id).unwrap();
+        let remaining: Vec<u8> = remaining.to_vec();
+        assert_eq!(Vec::<u8>::new(), remaining);
+        assert_node_equality(&test_node, &parsed);
+    }
+
+    fn assert_node_equality(test_node: &Node, parsed: &Node) {
+        assert_eq!(test_node.id, parsed.id);
+        assert_eq!(test_node.parent_id, parsed.parent_id);
+        assert_eq!(test_node.permanent_id, parsed.permanent_id);
+        assert_eq!(test_node.owner_id, parsed.owner_id);
+        assert_eq!(test_node.created_at, parsed.created_at);
+        assert_eq!(test_node.modified_at, parsed.modified_at);
+        assert_eq!(test_node.name, parsed.name);
+        assert_eq!(test_node.metadata, parsed.metadata);
+        assert_eq!(test_node.inner.kind(), parsed.inner.kind());
+        assert_eq!(test_node.inner.size(), parsed.inner.size());
+    }
+
+    async fn setup_test_node(rng: &mut ChaCha20Rng, inner: NodeData) -> Node {
+        let mut test_node = NodeBuilder::file(NodeName::Named("TestDir".into()))
+            .with_id(5)
+            .with_owner(ActorId::from(Fingerprint::from([4; Fingerprint::size()])))
+            .with_parent(PermanentId::from_bytes([1u8; 8]))
+            .build(rng)
+            .unwrap();
+
+        test_node.inner = inner;
+        test_node.permanent_id = PermanentId::from_bytes([2u8; 8]);
+        test_node.created_at = 1234567890;
+        test_node.modified_at = 1234567891;
+
+        test_node
     }
 }
