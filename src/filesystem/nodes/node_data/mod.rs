@@ -247,6 +247,7 @@ impl NodeData {
             content: FileContent::EmptyFile,
         }
     }
+    
     pub(crate) fn full_file(content: FileContent) -> Self {
         Self::File {
             permissions: FilePermissions::default(),

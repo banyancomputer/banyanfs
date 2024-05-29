@@ -531,9 +531,7 @@ impl DirectoryHandle {
             Some(existing_file) => {
                 let inner_read = self.inner.read().await;
                 let node = inner_read.by_id(existing_file)?;
-                let permanent_id = node.permanent_id();
-                drop(inner_read);
-                permanent_id
+                node.permanent_id()
             }
             None => {
                 let (parent_path, name) = path.split_at(path.len() - 1);

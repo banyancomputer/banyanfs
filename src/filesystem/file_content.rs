@@ -161,7 +161,12 @@ impl FileContent {
     }
 
     pub fn is_empty(&self) -> bool {
-        matches!(self, Self::EmptyFile)
+        match self {
+            Self::EmptyFile => true,
+            Self::Encrypted {data_size,..} => *data_size < 1u64,
+            Self::Public {data_size,..} => *data_size < 1u64,
+            Self::Stub {..} => true,
+        }
     }
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
