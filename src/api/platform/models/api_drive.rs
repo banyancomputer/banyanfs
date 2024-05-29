@@ -1,9 +1,5 @@
-use serde::{Deserialize, Serialize};
-
 use crate::api::platform::{DriveKind, StorageClass};
-
-use super::api_drive_access::ApiDriveAccess;
-
+use serde::{Deserialize, Serialize};
 pub type ApiDriveId = String;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -23,10 +19,6 @@ pub struct ApiDrive {
 
     #[serde(rename = "updated_at", skip_serializing_if = "Option::is_none")]
     _updated_at: Option<String>,
-
-    // Only present in the response to bucket creation
-    #[serde(rename = "access", skip_serializing_if = "Option::is_none")]
-    _access: Option<ApiDriveAccess>,
 }
 
 #[derive(Debug, Default, Serialize)]

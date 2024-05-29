@@ -11,7 +11,6 @@ pub(crate) struct CreateRequest {
     #[serde(rename = "type")]
     pub(crate) kind: DriveKind,
     pub(crate) storage_class: StorageClass,
-    pub(crate) fingerprint: String,
 }
 
 #[async_trait(?Send)]

@@ -132,29 +132,7 @@ impl TombCompat {
         name: String,
         storage_class: String,
         bucket_type: String,
-        mut private_key_pem: String,
-        public_key_pem: String,
     ) -> BanyanFsResult<WasmBucketMount> {
-        let private_key = match SigningKey::from_pkcs8_pem(&private_key_pem) {
-            Ok(key) => Arc::new(key),
-            Err(err) => return Err(format!("failed to load private key: {err}").into()),
-        };
-        private_key_pem.zeroize();
-
-        if self.key.key_id() != private_key.key_id() {
-            tracing::warn!(init_key_id = ?self.key.key_id(), private_key_id = ?private_key.key_id(), "provided private key doesn't match initialized webkey");
-            //return Err("provided private key doesn't match initialized webkey".into());
-        }
-
-        let public_key = match VerifyingKey::from_spki(&public_key_pem) {
-            Ok(key) => key,
-            Err(err) => return Err(format!("failed to load public key: {err}").into()),
-        };
-
-        if private_key.key_id() != public_key.key_id() {
-            return Err("provided public key doesn't match provided private key".into());
-        }
-
         // Just confirm they're valid and the kind we support
         let sc = StorageClass::from_str(&storage_class)?;
         if sc != StorageClass::Hot {
@@ -166,7 +144,7 @@ impl TombCompat {
             return Err("only interactive buckets are allowed to be created".into());
         }
 
-        let id = platform::drives::create(&self.client, &name, &public_key).await?;
+        let id = platform::drives::create(&self.client, &name).await?;
 
         let wasm_bucket = WasmBucket(TombBucket::from_components(id.clone(), name, sc, dk));
         let wasm_mount =
