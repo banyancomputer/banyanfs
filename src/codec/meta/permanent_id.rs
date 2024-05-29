@@ -56,6 +56,8 @@ impl std::fmt::Debug for PermanentId {
 mod test {
     use super::*;
     use rand::rngs::OsRng;
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::*;
 
     impl PermanentId {
         pub fn from_bytes(bytes: [u8; 8]) -> Self {

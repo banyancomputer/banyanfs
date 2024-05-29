@@ -163,9 +163,9 @@ impl FileContent {
     pub fn is_empty(&self) -> bool {
         match self {
             Self::EmptyFile => true,
-            Self::Encrypted {data_size,..} => *data_size < 1u64,
-            Self::Public {data_size,..} => *data_size < 1u64,
-            Self::Stub {..} => true,
+            Self::Encrypted { data_size, .. } => *data_size < 1u64,
+            Self::Public { data_size, .. } => *data_size < 1u64,
+            Self::Stub { .. } => true,
         }
     }
 

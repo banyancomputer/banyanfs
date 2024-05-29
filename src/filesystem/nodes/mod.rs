@@ -477,6 +477,9 @@ pub(crate) mod test {
 
     use super::*;
 
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::*;
+
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_mut_data_access_marks_cid_dirty() {
@@ -535,6 +538,7 @@ pub(crate) mod test {
         assert_node_equality(&test_node, &parsed);
     }
 
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_stub_round_trip() {
         let mut rng = ChaCha20Rng::from_entropy();
