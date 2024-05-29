@@ -3,25 +3,26 @@ use winnow::binary::{le_u16, le_u64};
 use winnow::combinator::repeat;
 use winnow::{unpeek, Parser};
 
+use crate::codec::data_storage::data_options::DataOptions;
 use crate::codec::filesystem::BlockKind;
-use crate::codec::{BlockSize, Cid, ParserResult, Stream};
+use crate::codec::{Cid, ParserResult, Stream};
 
 #[derive(Clone, Debug)]
 pub struct ContentReference {
     data_block_cid: Cid,
-    block_size: BlockSize,
+    data_options: DataOptions,
     chunks: Vec<ContentLocation>,
 }
 
 impl ContentReference {
     pub(crate) fn new(
         data_block_cid: Cid,
-        block_size: BlockSize,
+        data_options: DataOptions,
         chunks: Vec<ContentLocation>,
     ) -> Self {
         Self {
             data_block_cid,
-            block_size,
+            data_options,
             chunks,
         }
     }
@@ -39,7 +40,7 @@ impl ContentReference {
         writer: &mut W,
     ) -> std::io::Result<usize> {
         let mut written_bytes = self.data_block_cid.encode(writer).await?;
-        written_bytes += self.block_size.encode(writer).await?;
+        written_bytes += self.data_options.encode(writer).await?;
 
         let chunks_count = self.chunks.len();
         if chunks_count > u16::MAX as usize {
@@ -63,14 +64,14 @@ impl ContentReference {
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, data_block_cid) = Cid::parse(input)?;
-        let (input, block_size) = BlockSize::parse(input)?;
+        let (input, data_options) = DataOptions::parse(input)?;
 
         let (input, chunk_count) = le_u16.parse_peek(input)?;
         let (input, chunks) = ContentLocation::parse_many(input, chunk_count)?;
 
         let content_ref = Self {
             data_block_cid,
-            block_size,
+            data_options,
             chunks,
         };
 
@@ -83,7 +84,7 @@ impl ContentReference {
 
     #[allow(dead_code)]
     pub fn size(&self) -> usize {
-        let base_size = Cid::size() + BlockSize::size() + 2;
+        let base_size = Cid::size() + DataOptions::size() + 2;
         let chunk_size = self.chunks.iter().map(ContentLocation::size).sum::<usize>();
         base_size + chunk_size
     }

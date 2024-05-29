@@ -240,6 +240,14 @@ impl NodeData {
         })
     }
 
+    pub(crate) fn empty_file() -> Self {
+        Self::File {
+            permissions: FilePermissions::default(),
+            associated_data: HashMap::new(),
+            content: FileContent::EmptyFile,
+        }
+    }
+
     pub(crate) fn full_file(content: FileContent) -> Self {
         Self::File {
             permissions: FilePermissions::default(),

@@ -7,6 +7,7 @@
 //! be found outside their ideal location but we're cleaning things up as we go.
 
 pub mod crypto;
+pub mod data_storage;
 pub mod filesystem;
 pub mod header;
 pub mod meta;

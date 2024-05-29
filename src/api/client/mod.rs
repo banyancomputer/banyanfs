@@ -5,10 +5,11 @@ mod expiring_token;
 mod platform_token;
 mod storage_host_auth;
 mod traits;
+pub(crate) mod utils;
 
 pub use error::ApiClientError;
+pub use utils::{api_fingerprint_key, VecStream};
 
-pub(crate) mod utils;
 pub(crate) use api_auth::ApiAuth;
 pub(crate) use direct_response::DirectResponse;
 pub(crate) use expiring_token::ExpiringToken;

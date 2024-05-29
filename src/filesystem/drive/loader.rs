@@ -198,8 +198,6 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                         .filesystem_key()
                         .ok_or(DriveLoaderError::KeyNotAvailable("filesystem key missing"))?;
 
-                    let data_key = drive_access.data_key();
-
                     // todo(sstelfox): we ideally want to stream this data and selectively parse
                     // things, but that has impacts on the encryption which would need to be managed
                     // carefully. Since this only covers the realized view of the filesystem (the
@@ -225,7 +223,6 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                         Stream::new(fs_buffer.as_slice()),
                         drive_access.clone(),
                         journal_start.clone(),
-                        data_key,
                     )
                     .map_err(|e| match e {
                         ErrMode::Incomplete(_) => winnow::error::ErrMode::Cut(

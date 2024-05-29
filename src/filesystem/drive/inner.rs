@@ -7,7 +7,6 @@ use tracing::instrument;
 use winnow::binary::le_u64;
 use winnow::Parser;
 
-use crate::codec::crypto::AccessKey;
 use crate::codec::*;
 use crate::filesystem::drive::DriveAccess;
 use crate::filesystem::nodes::{Node, NodeBuilder, NodeId};
@@ -357,12 +356,11 @@ impl InnerDrive {
         self.nodes.iter().map(|(_, node)| node)
     }
 
-    pub(crate) fn parse<'a>(
-        input: Stream<'a>,
+    pub(crate) fn parse(
+        input: Stream<'_>,
         drive_access: DriveAccess,
         journal_start: JournalCheckpoint,
-        data_key: Option<&AccessKey>,
-    ) -> ParserResult<'a, Self> {
+    ) -> ParserResult<'_, Self> {
         tracing::trace!(available_data = ?input.len(), "inner_drive::parse");
 
         let (remaining, root_pid) = PermanentId::parse(input)?;
@@ -382,7 +380,7 @@ impl InnerDrive {
             let entry = nodes.vacant_entry();
             let node_id = entry.key();
 
-            let (remaining, node) = Node::parse(node_input, node_id, data_key)?;
+            let (remaining, node) = Node::parse(node_input, node_id)?;
             node_input = remaining;
             let permanent_id = node.permanent_id();
 
@@ -557,13 +555,9 @@ pub(crate) mod test {
         let encoding_res = inner.encode(&mut encoded).await;
         assert!(encoding_res.is_ok());
 
-        let (remaining, parsed) = InnerDrive::parse(
-            Partial::new(encoded.as_slice()),
-            access.to_owned(),
-            journal,
-            None,
-        )
-        .unwrap();
+        let (remaining, parsed) =
+            InnerDrive::parse(Partial::new(encoded.as_slice()), access.to_owned(), journal)
+                .unwrap();
         assert!(remaining.is_empty());
         assert_eq!(inner.nodes.len(), parsed.nodes.len());
         for (_, node) in inner.nodes {

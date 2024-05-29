@@ -10,8 +10,8 @@ use crate::codec::filesystem::NodeKind;
 use crate::codec::*;
 
 use crate::codec::crypto::{AccessKey, SigningKey};
+use crate::codec::data_storage::{data_chunk::DataChunk, DataBlock};
 use crate::codec::filesystem::BlockKind;
-use crate::codec::header::DataBlock;
 use crate::filesystem::drive::{DirectoryEntry, InnerDrive, OperationError, WalkState};
 use crate::filesystem::nodes::{Node, NodeData, NodeId, NodeName};
 use crate::filesystem::{ContentLocation, ContentReference, FileContent, NodeBuilder};
@@ -32,6 +32,13 @@ pub struct DirectoryHandle {
 }
 
 impl DirectoryHandle {
+    /// Retrieves the [`DirectoryEntry`] for the current working directory.
+    pub async fn entry(&self) -> Result<DirectoryEntry, OperationError> {
+        let inner_read = self.inner.read().await;
+        let node = inner_read.by_id(self.cwd_id)?;
+        DirectoryEntry::try_from(node)
+    }
+
     /// Allows traversing the filesystem both up and down. Does not allow invalid character in any
     /// of the path elements (primarily "/"). Will report an error if you attempt to traverse above
     /// the root of the filesystem or into/through an invalid node type.
@@ -435,12 +442,6 @@ impl DirectoryHandle {
                 .unlock(data_key)
                 .map_err(|_| OperationError::AccessDenied)?;
 
-            let author_id = read_node.owner_id();
-            let verifying_key = inner_read
-                .access()
-                .actor_key(&author_id)
-                .ok_or(OperationError::AccessDenied)?;
-
             let mut file_data = Vec::new();
 
             for content_ref in node_content.content_references()? {
@@ -452,15 +453,11 @@ impl DirectoryHandle {
 
                 let data_chunk = store.retrieve(content_ref.data_block_cid()).await?;
 
-                let (_remaining, block) = DataBlock::parse_with_magic(
-                    Stream::new(&data_chunk),
-                    &unlocked_key,
-                    &verifying_key,
-                )
-                .map_err(|err| {
-                    tracing::error!("parsing of data block failed: {err:?}");
-                    OperationError::BlockCorrupted(content_ref.data_block_cid())
-                })?;
+                let (_remaining, block) = DataBlock::parse_with_magic(Stream::new(&data_chunk))
+                    .map_err(|err| {
+                        tracing::error!("parsing of data block failed: {err:?}");
+                        OperationError::BlockCorrupted(content_ref.data_block_cid())
+                    })?;
                 // todo(sstelfox): still stuff remaining which means this decoder is sloppy
                 //tracing::info!(?remaining, "drive::read::remaining");
                 //debug_assert!(remaining.is_empty(), "no extra data should be present");
@@ -470,18 +467,28 @@ impl DirectoryHandle {
                         unimplemented!("indirect reference loading");
                     }
 
-                    let data = block
-                        .get_chunk_data(location.block_index() as usize)
+                    let encrypted_chunk = block
+                        .get_chunk(location.block_index() as usize)
                         .map_err(|err| {
                             tracing::error!("failed to retrieve block chunk: {err:?}");
                             OperationError::BlockCorrupted(content_ref.data_block_cid())
                         })?;
+                    let chunk = encrypted_chunk
+                        .decrypt(&block.data_options(), &unlocked_key)
+                        .map_err(|_| {
+                            OperationError::BlockCorrupted(content_ref.data_block_cid())
+                        })?;
 
-                    file_data.extend_from_slice(data);
+                    // &unlocked_key,
+                    // &verifying_key,
+
+                    file_data.extend_from_slice(chunk.data());
                 }
             }
 
             Ok(file_data)
+        } else if node_content.is_empty() {
+            Ok(Vec::new())
         } else {
             unimplemented!()
         }
@@ -512,61 +519,76 @@ impl DirectoryHandle {
 
         drop(inner_read);
 
-        let (parent_path, name) = path.split_at(path.len() - 1);
-        let file_name = NodeName::try_from(name[0]).map_err(OperationError::InvalidName)?;
-
-        tracing::info!(?path, ?file_name, "drive::write");
-
-        let parent_id = match walk_path(&self.inner, self.cwd_id, parent_path, 0).await? {
-            WalkState::FoundNode { node_id } => node_id,
-            WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
+        let existing_file = match walk_path(&self.inner, self.cwd_id, path, 0).await {
+            Ok(WalkState::FoundNode { node_id }) => Some(node_id),
+            _ => None,
         };
 
-        tracing::info!(?parent_id, "drive::write::parent_id");
-
-        let inner_read = self.inner.read().await;
-        let parent_node = inner_read.by_id(parent_id)?;
-        let parent_perm_id = parent_node.permanent_id();
-        drop(inner_read);
-
         let data_size = data.len() as u64;
-        let node_name = file_name.clone();
+        let new_permanent_id = match existing_file {
+            Some(existing_file) => {
+                let inner_read = self.inner.read().await;
+                let node = inner_read.by_id(existing_file)?;
+                node.permanent_id()
+            }
+            None => {
+                let (parent_path, name) = path.split_at(path.len() - 1);
+                let file_name = NodeName::try_from(name[0]).map_err(OperationError::InvalidName)?;
 
-        // todo(sstelfox): handle the special case of an empty file, it shouldn't be a stub and
-        // doesn't need to go through the encoding process.
+                tracing::info!(?path, ?file_name, "drive::write");
 
-        let new_permanent_id = self
-            .insert_node(
-                rng,
-                parent_perm_id,
-                |rng, new_node_id, parent_id, actor_id| async move {
-                    NodeBuilder::file(node_name)
-                        .with_parent(parent_id)
-                        .with_id(new_node_id)
-                        .with_owner(actor_id)
-                        .with_size_hint(data_size)
-                        .build(rng)
-                        .map_err(OperationError::CreationFailed)
-                },
-            )
-            .await?;
+                let parent_id = match walk_path(&self.inner, self.cwd_id, parent_path, 0).await? {
+                    WalkState::FoundNode { node_id } => node_id,
+                    WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
+                };
 
-        const SMALL_BLOCK_THRESHOLD: usize = DataBlock::SMALL_ENCRYPTED_SIZE * 8;
-        let block_creator = if data_size > SMALL_BLOCK_THRESHOLD as u64 {
-            || match DataBlock::small() {
-                Ok(ab) => Ok(ab),
-                Err(err) => {
+                tracing::info!(?parent_id, ?parent_path, "drive::write::parent_id");
+
+                let inner_read = self.inner.read().await;
+                let parent_node = inner_read.by_id(parent_id)?;
+                let parent_perm_id = parent_node.permanent_id();
+                drop(inner_read);
+
+                let node_name = file_name.clone();
+                self.insert_node(
+                    rng,
+                    parent_perm_id,
+                    |rng, new_node_id, parent_id, actor_id| async move {
+                        NodeBuilder::file(node_name)
+                            .with_parent(parent_id)
+                            .with_id(new_node_id)
+                            .with_owner(actor_id)
+                            .with_size_hint(data_size)
+                            .build(rng)
+                            .map_err(OperationError::CreationFailed)
+                    },
+                )
+                .await?
+            }
+        };
+
+        if data.is_empty() {
+            let mut inner_write = self.inner.write().await;
+            let node = inner_write.by_perm_id_mut(&new_permanent_id).await?;
+            let node_data = node.data_mut().await;
+            *node_data = NodeData::empty_file();
+            return Ok(());
+        }
+
+        let small_block_threshold: usize = DataBlock::small_encrypted_data_size() * 8;
+        let block_creator = if data_size > small_block_threshold as u64 {
+            || {
+                DataBlock::small().map_err(|err| {
                     tracing::error!("failed to create data block: {:?}", err);
-                    Err(OperationError::Other("data block failed"))
-                }
+                    OperationError::Other("data block failed")
+                })
             }
         } else {
-            || match DataBlock::standard() {
-                Ok(ab) => Ok(ab),
-                Err(err) => {
+            || {
+                DataBlock::standard().map_err(|err| {
                     tracing::error!("failed to create data block: {:?}", err);
-                    Err(OperationError::Other("data block failed"))
-                }
+                    OperationError::Other("data block failed")
+                })
             }
         };
 
@@ -576,47 +598,59 @@ impl DirectoryHandle {
 
         let mut remaining_data = data;
         let mut active_block = block_creator()?;
-        let active_block_chunk_size = active_block.chunk_size();
+        let active_block_chunk_size = active_block.data_options().chunk_data_size();
         let node_data_key = AccessKey::generate(rng);
         let mut content_references = Vec::new();
+        let mut content_indexes = Vec::new();
 
         while !remaining_data.is_empty() {
             let data_to_read = std::cmp::min(remaining_data.len(), active_block_chunk_size);
             let (chunk_data, next_data) = remaining_data.split_at(data_to_read);
             remaining_data = next_data;
 
-            active_block
-                .push_chunk(chunk_data.to_vec())
+            let chunk = DataChunk::from_slice(chunk_data, &active_block.data_options())
                 .map_err(|err| {
                     tracing::error!("failed to push chunk: {:?}", err);
                     OperationError::Other("expected remaining capacity")
+                })?
+                .encrypt(rng, &active_block.data_options(), &node_data_key)
+                .await
+                .map_err(|err| {
+                    tracing::error!("Failed to encrypt chunk: {:?}", err);
+                    OperationError::Other("Error encrypting chunk")
                 })?;
+
+            content_indexes.push(active_block.push_chunk(chunk).map_err(|err| {
+                tracing::error!("failed to push chunk: {:?}", err);
+                OperationError::Other("expected remaining capacity")
+            })?);
 
             if active_block.is_full() {
                 let mut sealed_block = Vec::new();
 
-                let (_, cids) = active_block
-                    .encode(rng, &node_data_key, &self.current_key, &mut sealed_block)
-                    .await
-                    .map_err(|err| {
-                        tracing::error!("failed to encode block: {:?}", err);
-                        OperationError::Other("failed to encode block")
-                    })?;
+                let (_, cids) =
+                    active_block
+                        .encode(rng, &mut sealed_block)
+                        .await
+                        .map_err(|err| {
+                            tracing::error!("failed to encode block: {:?}", err);
+                            OperationError::Other("failed to encode block")
+                        })?;
 
-                let block_size = *active_block.data_options().block_size();
                 let cid = active_block
                     .cid()
                     .map_err(|_| OperationError::Other("unable to access block cid"))?;
 
                 store.store(cid.clone(), sealed_block, false).await?;
 
-                let locations = cids
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, cid)| ContentLocation::data(cid, i as u64))
+                let locations = content_indexes
+                    .iter()
+                    .map(|i| ContentLocation::data(cids[*i].clone(), *i as u64))
                     .collect::<Vec<_>>();
+                content_indexes.clear();
 
-                let content_ref = ContentReference::new(cid, block_size, locations);
+                let content_ref =
+                    ContentReference::new(cid, active_block.data_options(), locations);
                 content_references.push(content_ref);
 
                 active_block = block_creator()?;
@@ -630,27 +664,26 @@ impl DirectoryHandle {
             let mut sealed_block = Vec::new();
 
             let (_, cids) = active_block
-                .encode(rng, &node_data_key, &self.current_key, &mut sealed_block)
+                .encode(rng, &mut sealed_block)
                 .await
                 .map_err(|err| {
                     tracing::error!("failed to encode block: {:?}", err);
                     OperationError::Other("failed to encode block")
                 })?;
 
-            let block_size = *active_block.data_options().block_size();
             let cid = active_block
                 .cid()
                 .map_err(|_| OperationError::Other("unable to access block cid"))?;
 
             store.store(cid.clone(), sealed_block, false).await?;
 
-            let locations = cids
-                .into_iter()
-                .enumerate()
-                .map(|(i, cid)| ContentLocation::data(cid, i as u64))
+            let locations = content_indexes
+                .iter()
+                .map(|i| ContentLocation::data(cids[*i].clone(), *i as u64))
                 .collect::<Vec<_>>();
+            content_indexes.clear();
 
-            let content_ref = ContentReference::new(cid, block_size, locations);
+            let content_ref = ContentReference::new(cid, active_block.data_options(), locations);
             content_references.push(content_ref);
         }
 

@@ -1,5 +1,6 @@
 use futures::{AsyncWrite, AsyncWriteExt};
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 use winnow::{token::take, Parser};
 
 use crate::codec::{ParserResult, Stream};
