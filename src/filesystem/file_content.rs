@@ -12,7 +12,7 @@ const FILE_CONTENT_TYPE_PUBLIC: u8 = 0x02;
 
 const FILE_CONTENT_TYPE_ENCRYPTED: u8 = 0x03;
 
-const FILE_CONTENTY_TYPE_EMPTY: u8 = 0x04;
+const FILE_CONTENT_TYPE_EMPTY: u8 = 0x04;
 
 // todo(sstelfox): need to rename NodeContent...
 #[derive(Clone, Debug)]
@@ -104,12 +104,8 @@ impl FileContent {
 
         match self {
             Self::EmptyFile => {
-                writer.write_all(&[FILE_CONTENTY_TYPE_EMPTY]).await?;
+                writer.write_all(&[FILE_CONTENT_TYPE_EMPTY]).await?;
                 written_bytes += 1;
-
-                let data_size_bytes = 0u64.to_le_bytes();
-                writer.write_all(&data_size_bytes).await?;
-                written_bytes += data_size_bytes.len();
             }
             Self::Stub { data_size } => {
                 writer.write_all(&[FILE_CONTENT_TYPE_STUB]).await?;
@@ -172,7 +168,7 @@ impl FileContent {
         let (input, content_type) = le_u8.parse_peek(input)?;
 
         let parsed = match content_type {
-            FILE_CONTENTY_TYPE_EMPTY => (Stream::default(), FileContent::EmptyFile),
+            FILE_CONTENT_TYPE_EMPTY => (input, FileContent::EmptyFile),
             FILE_CONTENT_TYPE_STUB => {
                 let (input, data_size) = le_u64.parse_peek(input)?;
                 (input, FileContent::Stub { data_size })

@@ -51,3 +51,48 @@ impl std::fmt::Debug for PermanentId {
         write!(f, "PermanentId(0x{id_str})")
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use rand::rngs::OsRng;
+
+    impl PermanentId {
+        pub fn from_bytes(bytes: [u8; 8]) -> Self {
+            Self(bytes)
+        }
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_permanent_id_round_trip_random() {
+        let mut rng = OsRng;
+        let original_id = PermanentId::generate(&mut rng);
+
+        let mut buffer = Vec::new();
+        original_id.encode(&mut buffer).await.unwrap();
+
+        let (remaining, parsed_id) = PermanentId::parse(Stream::new(&buffer)).unwrap();
+
+        assert_eq!(Vec::<u8>::new(), remaining.to_vec());
+        assert_eq!(original_id, parsed_id);
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn test_permanent_id_round_trip_hardcoded() {
+        for val in [0u8, 1u8, 255u8] {
+            let original_id = PermanentId::from_bytes([val; PERMANENT_ID_SIZE]);
+
+            let mut buffer = Vec::new();
+            original_id.encode(&mut buffer).await.unwrap();
+
+            let (remaining, parsed_id) = PermanentId::parse(Stream::new(&buffer)).unwrap();
+
+            assert_eq!(Vec::<u8>::new(), remaining.to_vec());
+
+            assert_eq!(original_id, parsed_id);
+            assert_eq!(original_id.as_bytes(), &[val; PERMANENT_ID_SIZE]);
+        }
+    }
+}
