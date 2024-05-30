@@ -34,8 +34,8 @@ pub fn crypto_rng() -> ChaCha20Rng {
 #[cfg(target_arch = "wasm32")]
 pub fn crypto_rng() -> ChaCha20Rng {
     let mut seed = [0u8; 32];
-    getrandom::getrandom(&mut seed).expect();
-    Ok(ChaCha20Rng::from_seed(seed))
+    getrandom::getrandom(&mut seed).expect("getrandom being available");
+    ChaCha20Rng::from_seed(seed)
 }
 
 /// Helper utility to get the current time in milliseconds since the Unix epoch. This is the finest
