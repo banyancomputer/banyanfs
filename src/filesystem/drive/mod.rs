@@ -28,7 +28,7 @@ use crate::codec::crypto::*;
 use crate::codec::header::*;
 use crate::codec::*;
 
-use crate::filesystem::nodes::{Node, NodeBuilderError};
+use crate::filesystem::nodes::{Node, NodeBuilderError, NodeName};
 
 /// The core entry point of the library, a `Drive` is the means through which the BanyanFS
 /// filesystem's public or private data is accessed. Initial creation of a new drive requires a
@@ -282,9 +282,38 @@ impl Drive {
         Ok(root_cid)
     }
 
+
     pub async fn verifying_keys(&self) -> Vec<(VerifyingKey, AccessMask)> {
         let inner = self.inner.read().await;
         inner.access().verifying_keys()
+    }
+  
+    pub async fn full_path_from_root(
+        &self,
+        target: &PermanentId,
+    ) -> Result<Vec<String>, OperationError> {
+        let inner_read = &self.inner.read().await;
+        let target_node = inner_read
+            .by_perm_id(target)
+            .map_err(|_| OperationError::MissingPermanentId(*target))?;
+
+        let target_node_name = match target_node.name() {
+            NodeName::Root => return Ok(Vec::new()),
+            NodeName::Named(name) => name.to_string(),
+        };
+
+        let mut path = vec![target_node_name];
+        while let Some(parent_id) = target_node.parent_id() {
+            let parent_node = inner_read.by_perm_id(&parent_id)?;
+
+            match parent_node.name() {
+                NodeName::Root => break,
+                NodeName::Named(name) => path.push(name.to_string()),
+            }
+        }
+        path.reverse();
+
+        Ok(path)
     }
 }
 

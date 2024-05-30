@@ -21,7 +21,7 @@ pub fn calculate_cid(data: &[u8]) -> Cid {
 ///
 /// Selection of RNG may change in the future which would affect this return type. Should generally
 /// treat the returned type as an object implementing the `rand::CrytoRngCore` trait.
-#[cfg(not(taget_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm32"))]
 pub fn crypto_rng() -> ChaCha20Rng {
     ChaCha20Rng::from_entropy()
 }
@@ -31,11 +31,11 @@ pub fn crypto_rng() -> ChaCha20Rng {
 ///
 /// Selection of RNG may change in the future which would affect this return type. Should generally
 /// treat the returned type as an object implementing the `rand::CrytoRngCore` trait.
-#[cfg(taget_arch = "wasm32")]
+#[cfg(target_arch = "wasm32")]
 pub fn crypto_rng() -> ChaCha20Rng {
     let mut seed = [0u8; 32];
-    getrandom::getrandom(&mut seed).expect();
-    Ok(ChaCha20Rng::from_seed(seed))
+    getrandom::getrandom(&mut seed).expect("getrandom being available");
+    ChaCha20Rng::from_seed(seed)
 }
 
 /// Helper utility to get the current time in milliseconds since the Unix epoch. This is the finest
