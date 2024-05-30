@@ -293,17 +293,17 @@ impl Drive {
 
         let target_node_name = match target_node.name() {
             NodeName::Root => return Ok(Vec::new()),
-            NoneName::Named(name) => name.to_string(),
+            NodeName::Named(name) => name.to_string(),
         };
 
-        let mut path = vec![target_node_name()];
+        let mut path = vec![target_node_name];
         while let Some(parent_id) = target_node.parent_id() {
             let parent_node = inner_read.by_perm_id(&parent_id)?;
 
-            let parent_name = match parent_node.name() {
+            match parent_node.name() {
                 NodeName::Root => break,
                 NodeName::Named(name) => path.push(name.to_string()),
-            };
+            }
         }
         path.reverse();
 
