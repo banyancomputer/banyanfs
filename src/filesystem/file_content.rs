@@ -17,12 +17,16 @@ const FILE_CONTENT_TYPE_ENCRYPTED: u8 = 0x03;
 pub enum FileContent {
     Encrypted {
         locked_access_key: SymLockedAccessKey,
+
+        /// This is the blake3 CID of the plaintext content of the File
         cid: Cid,
         data_size: u64,
         content: Vec<ContentReference>,
     },
     Public {
+        /// This is the blake3 CID of the plaintext content of the File
         cid: Cid,
+
         data_size: u64,
         content: Vec<ContentReference>,
     },
