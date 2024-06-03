@@ -287,7 +287,7 @@ impl Drive {
         target: &PermanentId,
     ) -> Result<Vec<String>, OperationError> {
         let inner_read = &self.inner.read().await;
-        let target_node = inner_read
+        let mut target_node = inner_read
             .by_perm_id(target)
             .map_err(|_| OperationError::MissingPermanentId(*target))?;
 
@@ -304,6 +304,7 @@ impl Drive {
                 NodeName::Root => break,
                 NodeName::Named(name) => path.push(name.to_string()),
             }
+            target_node = parent_node
         }
         path.reverse();
 
