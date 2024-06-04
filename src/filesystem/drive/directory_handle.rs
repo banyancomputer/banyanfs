@@ -702,6 +702,40 @@ impl DirectoryHandle {
         inner_write.clean_drive().await?;
         Ok(())
     }
+
+    pub async fn cid(&self, path: &[&str]) -> Result<Cid, OperationError> {
+        if path.is_empty() {
+            return Err(OperationError::UnexpectedEmptyPath);
+        }
+
+        let inner_read = self.inner.read().await;
+        let actor_id = self.current_key.actor_id();
+        if !inner_read.access().has_read_access(&actor_id) {
+            return Err(OperationError::AccessDenied);
+        }
+        drop(inner_read);
+
+        let target_node_id = match walk_path(&self.inner, self.cwd_id, path, 0).await? {
+            WalkState::FoundNode { node_id } => node_id,
+            WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
+        };
+
+        let inner_read = self.inner.read().await;
+
+        let read_node = inner_read.by_id(target_node_id)?;
+        let node_content = match read_node.data() {
+            NodeData::File { content, .. } => content,
+            NodeData::AssociatedData { content, .. } => content,
+            _ => return Err(OperationError::NotReadable),
+        };
+
+        if node_content.is_stub() || node_content.is_empty() {
+            return Err(OperationError::NotAvailable);
+        }
+
+        // This is fine to unwrap, previous if statement prevents any errors
+        Ok(node_content.cid().unwrap())
+    }
 }
 
 // todo: should these operations be using the permanent ids? Is that worth the extra
