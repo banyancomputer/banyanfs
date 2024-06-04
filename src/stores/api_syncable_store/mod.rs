@@ -36,6 +36,13 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStore<MS, ST> {
     }
 }
 
+impl<MS: DataStore, ST: SyncTracker + Clone> ApiSyncableStore<MS, ST> {
+    pub async fn tracker(&self) -> ST {
+        let inner = self.inner.read().await;
+        inner.sync_tracker().clone()
+    }
+}
+
 #[async_trait(?Send)]
 impl<MS: DataStore, ST: SyncTracker> DataStore for ApiSyncableStore<MS, ST> {
     async fn contains_cid(&self, cid: Cid) -> Result<bool, DataStoreError> {
