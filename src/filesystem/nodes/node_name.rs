@@ -1,4 +1,7 @@
-use std::io::{Error as StdError, ErrorKind as StdErrorKind};
+use std::{
+    fmt::Display,
+    io::{Error as StdError, ErrorKind as StdErrorKind},
+};
 
 use futures::{AsyncWrite, AsyncWriteExt};
 use winnow::{binary::le_u8, Parser};
@@ -127,11 +130,11 @@ impl std::convert::TryFrom<&str> for NodeName {
     }
 }
 
-impl ToString for NodeName {
-    fn to_string(&self) -> String {
+impl Display for NodeName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NodeName::Root => String::new(),
-            NodeName::Named(name) => name.to_string(),
+            NodeName::Root => f.write_str(""),
+            NodeName::Named(name) => f.write_str(name),
         }
     }
 }
