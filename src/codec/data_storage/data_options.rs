@@ -1,5 +1,4 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::error::FromExternalError;
 use winnow::{token::take, Parser};
 
 use crate::codec::crypto::{AuthenticationTag, Nonce};
@@ -126,19 +125,22 @@ impl DataOptions {
         let error_correction_count = (data_options[1] & 0b1111_0000) >> 4;
         let chunk_size_exponent = data_options[1] & 0b1111;
 
-        let data_options = DataOptions::new(
+        let data_options = match DataOptions::new(
             encrypted,
             chunk_count_exponent,
             error_correction_count,
             chunk_size_exponent,
-        )
-        .map_err(|data_options_err| {
-            winnow::error::ErrMode::Cut(winnow::error::ContextError::from_external_error(
-                &input,
-                winnow::error::ErrorKind::Verify,
-                data_options_err,
-            ))
-        })?;
+        ) {
+            Ok(dopt) => dopt,
+            Err(_) => {
+                let err = winnow::error::ParserError::from_error_kind(
+                    &input,
+                    winnow::error::ErrorKind::Verify,
+                );
+                return Err(winnow::error::ErrMode::Cut(err));
+            }
+        };
+
         Ok((input, data_options))
     }
 
