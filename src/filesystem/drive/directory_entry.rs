@@ -14,6 +14,8 @@ pub struct DirectoryEntry {
     name: NodeName,
     kind: NodeKind,
 
+    mime_type: Option<mime::MediaType>,
+
     size: u64,
 }
 
@@ -48,6 +50,17 @@ impl DirectoryEntry {
     pub fn size(&self) -> u64 {
         self.size
     }
+
+    pub fn mime_type(&self) -> Option<mime::MediaType> {
+        match self.kind {
+            NodeKind::File => self.mime_type.clone(),
+            NodeKind::Directory => None,
+            NodeKind::AssociatedData => None,
+            NodeKind::InternalLink => None,
+            NodeKind::NativeMount => None,
+            NodeKind::Unknown(_) => None,
+        }
+    }
 }
 
 impl TryFrom<&Node> for DirectoryEntry {
@@ -62,6 +75,8 @@ impl TryFrom<&Node> for DirectoryEntry {
 
             name: node.name().clone(),
             kind: node.kind().clone(),
+
+            mime_type: node.mime_type(),
 
             size: node.size(),
         })

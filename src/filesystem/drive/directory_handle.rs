@@ -13,7 +13,7 @@ use crate::codec::crypto::{AccessKey, SigningKey};
 use crate::codec::data_storage::{data_chunk::DataChunk, DataBlock};
 use crate::codec::filesystem::BlockKind;
 use crate::filesystem::drive::{DirectoryEntry, InnerDrive, OperationError, WalkState};
-use crate::filesystem::nodes::{Node, NodeData, NodeId, NodeName};
+use crate::filesystem::nodes::{MetadataKey, MimeGuesser, Node, NodeData, NodeId, NodeName};
 use crate::filesystem::{ContentLocation, ContentReference, FileContent, NodeBuilder};
 use crate::stores::DataStore;
 
@@ -65,7 +65,7 @@ impl DirectoryHandle {
     }
 
     /// Changes the permission on the target node. Currently not implemented and changes are
-    /// expected to combine the [`FilePermissions`] with the [`crate::codec::filesystem::DirectoryPermissions`] all at once.
+    /// expected to combine the [`FilePermissions`] with the ::new(crate::codec::filesystem::DirectoryPermissions`] all at once.
     pub async fn chmod(
         &self,
         _path: &[&str],
@@ -693,8 +693,19 @@ impl DirectoryHandle {
 
         let mut inner_write = self.inner.write().await;
         let node = inner_write.by_perm_id_mut(&new_permanent_id).await?;
-        let node_data = node.data_mut().await;
+        let mime_type = {
+            let node_name = node.name().clone();
+            MimeGuesser::default()
+                .with_name(node_name)
+                // .with_data(content_references.map())
+                .guess_mime_type()
+        };
+        if let Some(mime_type) = mime_type {
+            node.set_attribute(MetadataKey::MimeType, mime_type.to_string().into())
+                .await;
+        }
 
+        let node_data = node.data_mut().await;
         let file_content =
             FileContent::encrypted(locked_key, plaintext_cid, data_size, content_references);
         *node_data = NodeData::full_file(file_content);

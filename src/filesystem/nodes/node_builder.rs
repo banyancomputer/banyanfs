@@ -7,6 +7,7 @@ use crate::codec::meta::{ActorId, VectorClock};
 use crate::filesystem::nodes::{
     CidCache, Node, NodeData, NodeId, NodeName, NodeNameError, PermanentId,
 };
+use crate::prelude::nodes::metadata::MetadataKey;
 
 pub(crate) struct NodeBuilder {
     id: Option<NodeId>,
@@ -17,7 +18,7 @@ pub(crate) struct NodeBuilder {
     size_hint: Option<u64>,
 
     kind: NodeKind,
-    metadata: HashMap<String, Vec<u8>>,
+    metadata: HashMap<MetadataKey, Vec<u8>>,
 }
 
 impl NodeBuilder {

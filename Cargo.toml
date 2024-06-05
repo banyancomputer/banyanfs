@@ -61,6 +61,10 @@ reqwest = { version = "^0.12", default-features = false, optional = true, featur
 serde = { version = "^1", features = ["derive"], optional = true }
 serde_json = { version = "^1", optional = true }
 url = { version = "^2", optional = true }
+#mime = "0.3.17"
+mime = {git = "https://github.com/PlamenHristov/mime.git", rev = "c30e3db"}
+mime_guess = "2.0.4"
+
 
 [[example]]
 name = "full_fs_exercise"

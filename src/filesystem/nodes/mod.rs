@@ -13,6 +13,7 @@
 //! guarantee the major version will be increased when a breaking change is made).
 
 mod cid_cache;
+mod metadata;
 mod node_builder;
 mod node_data;
 mod node_name;
@@ -27,6 +28,7 @@ use std::collections::HashMap;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
 use futures::{AsyncWrite, AsyncWriteExt};
+use mime;
 use winnow::binary::{le_i64, le_u32, le_u8};
 use winnow::stream::Offset;
 use winnow::token::take;
@@ -36,6 +38,7 @@ use crate::codec::filesystem::NodeKind;
 use crate::codec::meta::{ActorId, Cid, PermanentId};
 use crate::codec::{ParserResult, Stream, VectorClock};
 use crate::filesystem::drive::OperationError;
+pub use crate::prelude::nodes::metadata::{MetadataKey, MimeGuesser};
 
 pub(crate) type NodeId = usize;
 
@@ -75,7 +78,7 @@ pub struct Node {
     modified_at: i64,
 
     name: NodeName,
-    metadata: HashMap<String, Vec<u8>>,
+    metadata: HashMap<MetadataKey, Vec<u8>>,
 
     inner: NodeData,
 }
@@ -250,7 +253,7 @@ impl Node {
         self.inner.kind()
     }
 
-    pub fn metadata(&self) -> &HashMap<String, Vec<u8>> {
+    pub fn metadata(&self) -> &HashMap<MetadataKey, Vec<u8>> {
         &self.metadata
     }
 
@@ -293,7 +296,7 @@ impl Node {
         encoded_size += self
             .metadata()
             .iter()
-            .map(|(k, v)| (2 + k.as_bytes().len() + v.len()) as u64)
+            .map(|(k, v)| (2 + k.as_str().len() + v.len()) as u64)
             .sum::<u64>();
 
         encoded_size
@@ -355,18 +358,17 @@ impl Node {
         for _ in 0..metadata_entries {
             let (meta_buf, key_len) = le_u8.parse_peek(input)?;
             let (meta_buf, key) = take(key_len).parse_peek(meta_buf)?;
-            let key_str = String::from_utf8(key.to_vec()).map_err(|_| {
+            let key_metadata = MetadataKey::from_bytes(key).ok_or_else(|| {
                 winnow::error::ErrMode::Cut(winnow::error::ParserError::from_error_kind(
                     &input,
                     winnow::error::ErrorKind::Token,
                 ))
             })?;
-
             let (meta_buf, val_len) = le_u8.parse_peek(meta_buf)?;
             let (meta_buf, val) = take(val_len).parse_peek(meta_buf)?;
             let val = val.to_vec();
 
-            metadata.insert(key_str, val);
+            metadata.insert(key_metadata, val);
             input = meta_buf;
         }
 
@@ -440,7 +442,15 @@ impl Node {
         self.permanent_id
     }
 
-    pub async fn set_attribute(&mut self, key: String, value: Vec<u8>) -> Option<Vec<u8>> {
+    pub fn mime_type(&self) -> Option<mime::MediaType> {
+        self.metadata
+            .get(&MetadataKey::MimeType)
+            .and_then(|mime_str| {
+                mime::MediaType::parse(std::str::from_utf8(mime_str).unwrap()).ok()
+            })
+    }
+
+    pub async fn set_attribute(&mut self, key: MetadataKey, value: Vec<u8>) -> Option<Vec<u8>> {
         let old_value = self.metadata.insert(key, value);
         self.notify_of_change().await;
         old_value
