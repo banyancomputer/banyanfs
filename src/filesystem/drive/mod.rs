@@ -203,6 +203,19 @@ impl Drive {
         Ok(())
     }
 
+    /// Marks the key with the matching actor id as historical. Requires that the corresponding key
+    /// not be protected. Requires that the current key be an owner.
+    pub async fn remove_key(
+        &self,
+        current_key: &SigningKey,
+        removal_id: &ActorId,
+    ) -> Result<(), DriveAccessError> {
+        let mut inner_write = self.inner.write().await;
+        inner_write
+            .access_mut()
+            .remove_actor(current_key, removal_id)?;
+        Ok(())
+    }
     /// If the caller knows the [`PermanentId`] of a directory, they can retrieve a handle on it
     /// directly. Generally users will traverse the filesystem themselves to get this information,
     /// but that can be a costly operation. This allows the external cacheing of permanent IDs to
