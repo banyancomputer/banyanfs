@@ -18,7 +18,7 @@ impl AuthenticationTag {
     }
 
     pub fn from_bytes(data: &[u8; TAG_LENGTH]) -> Self {
-        Self(data.clone())
+        Self(*data)
     }
 
     pub async fn encode<W: AsyncWrite + Unpin + Send>(

@@ -3,7 +3,7 @@ mod mime_type;
 
 pub use mime_type::MimeGuesser;
 
-#[derive(Hash, Eq, PartialEq)]
+#[derive(Hash, Eq, PartialEq, Debug)]
 pub enum MetadataKey {
     MimeType,
 }

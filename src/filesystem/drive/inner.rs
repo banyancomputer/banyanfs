@@ -494,10 +494,10 @@ pub(crate) mod test {
 
     use super::*;
 
-    fn initialize_inner_drive() -> (ActorId, InnerDrive) {
+    fn initialize_inner_drive(signing_key: Option<SigningKey>) -> (ActorId, InnerDrive) {
         let mut rng = crate::utils::crypto_rng();
 
-        let signing_key = SigningKey::generate(&mut rng);
+        let signing_key = signing_key.unwrap_or_else(|| SigningKey::generate(&mut rng));
         let verifying_key = signing_key.verifying_key();
         let actor_id = verifying_key.actor_id();
 
@@ -511,7 +511,7 @@ pub(crate) mod test {
 
     #[test]
     fn test_drive_initialization() {
-        let (_, inner) = initialize_inner_drive();
+        let (_, inner) = initialize_inner_drive(None);
         assert!(inner.nodes.capacity() == 32);
         assert!(inner.nodes.len() == 1);
     }
@@ -520,7 +520,7 @@ pub(crate) mod test {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_node_creation() {
         let mut rng = crate::utils::crypto_rng();
-        let (actor_id, mut inner) = initialize_inner_drive();
+        let (actor_id, mut inner) = initialize_inner_drive(None);
 
         let create_node_res = inner
             .create_node(
@@ -549,7 +549,7 @@ pub(crate) mod test {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_drive_round_tripping() {
-        let inner = build_interesting_inner().await;
+        let inner = build_interesting_inner(None).await;
 
         let access = inner.access();
         let journal = inner.journal_start();
@@ -570,9 +570,9 @@ pub(crate) mod test {
     }
 
     // A fixture to make a relatively interesting inner
-    pub(crate) async fn build_interesting_inner() -> InnerDrive {
+    pub(crate) async fn build_interesting_inner(current_key: Option<SigningKey>) -> InnerDrive {
         let mut rng = crate::utils::crypto_rng();
-        let (actor_id, mut inner) = initialize_inner_drive();
+        let (actor_id, mut inner) = initialize_inner_drive(current_key);
 
         //           -----file_1
         //         /

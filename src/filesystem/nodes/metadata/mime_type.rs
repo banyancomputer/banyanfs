@@ -1,6 +1,5 @@
 use crate::prelude::nodes::NodeName;
 
-
 #[derive(Default)]
 pub struct MimeGuesser {
     name: Option<String>,
@@ -40,83 +39,91 @@ impl MimeGuesser {
     }
 
     fn extension_match(&self) -> Option<mime::MediaType> {
-        let guess = mime_guess::get_mime_extensions_str(
-            self.name.as_ref().map_or("", |name| name.as_str()),
-        );
-        if let Some(guess) = guess {
-            return mime::MediaType::parse(*guess.first()?).ok();
+        if let Some(name) = self.name.as_ref() {
+            let guess = mime_guess::from_path(name);
+            if !guess.is_empty() {
+                return mime::MediaType::parse(guess.first()?.as_ref()).ok();
+            }
         }
         None
     }
 
     fn pattern_match(&self) -> Option<mime::MediaType> {
-        let magic_bytes = &self.data.get(0..34)?;
+        let magic_bytes = &self.data[..];
 
         // Taken from https://mimesniff.spec.whatwg.org/
         match magic_bytes {
-            [0xFF, 0xD8, 0xFF, ..] => Some(mime::IMAGE_JPEG),
-            [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A] => Some(mime::IMAGE_PNG),
-            [0x47, 0x49, 0x46, 0x38, 0x37, 0x61, ..] | [0x47, 0x49, 0x46, 0x38, 0x39, 0x61, ..] => {
-                Some(mime::IMAGE_GIF)
-            }
-            [0x42, 0x4D, ..] => Some(mime::IMAGE_BMP),
-            [0x3C, 0x3F, 0x78, 0x6D, 0x6C, ..] => Some(mime::TEXT_XML),
-            [0x3C, 0x73, 0x76, 0x67, ..] => Some(mime::IMAGE_SVG),
-            [0x77, 0x4F, 0x46, 0x46, ..] => Some(mime::FONT_WOFF),
-            [0x77, 0x4F, 0x46, 0x32, ..] => Some(mime::FONT_WOFF2),
-            [0x25, 0x50, 0x44, 0x46, 0x2D, ..] => Some(mime::APPLICATION_PDF),
-            [0x7B, ..] => Some(mime::APPLICATION_JSON),
-            [0x46, 0x4F, 0x52, 0x4D, _, _, _, _, 0x41, 0x49, 0x46, 0x46, ..] => {
+            &[0xFF, 0xD8, 0xFF, ..] => Some(mime::IMAGE_JPEG),
+            &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, ..] => Some(mime::IMAGE_PNG),
+            &[b'G', b'I', b'F', b'8', b'7', b'a', ..]
+            | &[b'G', b'I', b'F', b'8', b'9', b'a', ..] => Some(mime::IMAGE_GIF),
+            &[b'B', b'M', ..] => Some(mime::IMAGE_BMP),
+            &[b'<', b'?', b'x', b'm', b'l', ..] => Some(mime::TEXT_XML),
+            &[b'<', b's', b'v', b'g', ..] => Some(mime::IMAGE_SVG),
+            &[b'w', b'O', b'F', b'F', ..] => Some(mime::FONT_WOFF),
+            &[b'w', b'O', b'F', b'2', ..] => Some(mime::FONT_WOFF2),
+            &[b'%', b'P', b'D', b'F', b'-', ..] => Some(mime::APPLICATION_PDF),
+            &[b'{', ..] => Some(mime::APPLICATION_JSON),
+            &[b'F', b'O', b'R', b'M', _, _, _, _, b'A', b'I', b'F', b'F', ..] => {
                 Some(mime::AUDIO_AIFF)
             }
-            [0x49, 0x44, 0x33, ..] => Some(mime::AUDIO_MPEG),
-            [0x4F, 0x67, 0x67, 0x53, 0x00, ..] => Some(mime::AUDIO_OGG),
-            [0x4D, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06, ..] => Some(mime::AUDIO_MIDI),
-            [0x52, 0x49, 0x46, 0x46, _, _, _, _, 0x41, 0x56, 0x49, 0x20, ..] => {
+            &[b'I', b'D', b'3', ..] => Some(mime::AUDIO_MPEG),
+            &[b'O', b'g', b'g', b'S', 0, ..] => Some(mime::AUDIO_OGG),
+            &[b'M', b'T', b'h', b'd', 0, 0, 0, 0x06, ..] => Some(mime::AUDIO_MIDI),
+            &[b'R', b'I', b'F', b'F', _, _, _, _, b'A', b'V', b'I', b' ', ..] => {
                 Some(mime::VIDEO_AVI)
             }
-            [0x52, 0x49, 0x46, 0x46, _, _, _, _, 0x57, 0x41, 0x56, 0x45, ..] => {
+            &[b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'A', b'V', b'E', ..] => {
                 Some(mime::AUDIO_WAVE)
             }
-            [0x1F, 0x8B, 0x08, ..] => Some(mime::APPLICATION_GZIP),
-            [0x50, 0x4B, 0x03, 0x04, ..] => Some(mime::APPLICATION_ZIP),
-            [0x52, 0x61, 0x72, 0x20, 0x1A, 0x07, 0x00, ..] => Some(mime::APPLICATION_RAR),
-            [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4C, 0x50, ..] => {
+            &[0x1F, 0x8B, 0x08, ..] => Some(mime::APPLICATION_GZIP),
+            &[b'P', b'K', 0x03, 0x04, ..] => Some(mime::APPLICATION_ZIP),
+            &[b'R', b'a', b'r', b' ', 0x1A, 0x07, 0, ..] => Some(mime::APPLICATION_RAR),
+            &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, b'L', b'P'] => {
                 Some(mime::APPLICATION_VND_MS_FONTOBJECT)
             }
-            [0x00, 0x01, 0x00, 0x00, ..] => Some(mime::FONT_TTF),
-            [0x4F, 0x54, 0x54, 0x4F, ..] => Some(mime::FONT_OTF),
-            [0x74, 0x74, 0x63, 0x66, ..] => Some(mime::FONT_COLLECTION),
-            [0x25, 0x21, 0x50, 0x53, 0x2D, 0x41, 0x64, 0x6F, 0x62, 0x65, 0x2D, ..] => {
+            &[0, 0x01, 0, 0, ..] => Some(mime::FONT_TTF),
+            &[b'O', b'T', b'T', b'O', ..] => Some(mime::FONT_OTF),
+            &[b't', b't', b'c', b'f', ..] => Some(mime::FONT_COLLECTION),
+            &[b'%', b'!', b'P', b'S', b'-', b'A', b'd', b'o', b'b', b'e', b'-', ..] => {
                 Some(mime::APPLICATION_POSTSCRIPT)
             }
-            [0xFE, 0xFF, 0x00, 0x00, ..]
-            | [0xFF, 0xFE, 0x00, 0x00, ..]
-            | [0xEF, 0xBB, 0xBF, 0x00, ..] => Some(mime::TEXT_PLAIN),
-            // TODO: And the mask
-            [0x3C, 0x21, 0x44, 0x4F, 0x43, 0x54, 0x59, 0x50, 0x45, 0x20, 0x48, 0x54, 0x4D, 0x4C, ..]
-            | [0x3C, 0x53, 0x43, 0x52, 0x49, 0x50, 0x54, ..]
-            | [0x3C, 0x49, 0x46, 0x52, 0x41, 0x4D, 0x45, ..]
-            | [0x3C, 0x54, 0x41, 0x42, 0x4C, 0x45, ..]
-            | [0x3C, 0x53, 0x54, 0x59, 0x4C, 0x45, ..]
-            | [0x3C, 0x54, 0x49, 0x54, 0x4C, 0x45, ..]
-            | [0x3C, 0x48, 0x45, 0x41, 0x44, ..]
-            | [0x3C, 0x48, 0x54, 0x4D, 0x4C, ..]
-            | [0x3C, 0x46, 0x4F, 0x4E, 0x54, ..]
-            | [0x3C, 0x42, 0x4F, 0x44, 0x59, ..]
-            | [0x3C, 0x44, 0x49, 0x56, ..]
-            | [0x3C, 0x21, 0x2D, 0x2D, ..]
-            | [0x3C, 0x48, 0x31, ..]
-            | [0x3C, 0x42, 0x52, ..]
-            | [0x3C, 0x41, ..]
-            | [0x3C, 0x42, ..]
-            | [0x3C, 0x50, ..] => Some(mime::TEXT_HTML),
+            &[0xFE, 0xFF, 0, 0, ..] | &[0xFF, 0xFE, 0, 0, ..] | &[0xEF, 0xBB, 0xBF, 0, ..] => {
+                Some(mime::TEXT_PLAIN)
+            }
+            [b'<', _, _, _, _, ..] => {
+                // case-insensitive match
+                match &magic_bytes[1..5]
+                    .iter()
+                    .map(|b| b & 0xDF)
+                    .collect::<Vec<_>>()[..]
+                {
+                    b"!DOC" => Some(mime::TEXT_HTML),
+                    b"SCRI" => Some(mime::TEXT_HTML),
+                    b"IFRA" => Some(mime::TEXT_HTML),
+                    b"TABL" => Some(mime::TEXT_HTML),
+                    b"STYL" => Some(mime::TEXT_HTML),
+                    b"TITL" => Some(mime::TEXT_HTML),
+                    b"HEAD" => Some(mime::TEXT_HTML),
+                    b"HTML" => Some(mime::TEXT_HTML),
+                    b"FONT" => Some(mime::TEXT_HTML),
+                    b"BODY" => Some(mime::TEXT_HTML),
+                    &[b'D', b'I', b'V', ..] => Some(mime::TEXT_HTML),
+                    &[b'!', b'-', b'-', ..] => Some(mime::TEXT_HTML),
+                    &[b'H', b'1', ..] => Some(mime::TEXT_HTML),
+                    &[b'B', b'R', ..] => Some(mime::TEXT_HTML),
+                    &[b'A', ..] => Some(mime::TEXT_HTML),
+                    &[b'B', ..] => Some(mime::TEXT_HTML),
+                    &[b'P', ..] => Some(mime::TEXT_HTML),
+                    _ => None,
+                }
+            }
             _ => None,
         }
     }
 
     fn algorithm_match(&self) -> Option<mime::MediaType> {
-        if self.is_mp4() == Some(mime::AUDIO_MP4) {
+        if self.is_mp4() {
             return Some(mime::AUDIO_MP4);
         }
         if self.is_mp3() {
@@ -124,59 +131,52 @@ impl MimeGuesser {
         }
         None
     }
-    fn is_mp4(&self) -> Option<mime::MediaType> {
-        let length = self.data.len();
-        if length < 12 {
-            return None;
+
+    fn is_mp4(&self) -> bool {
+        let data = &self.data;
+        if data.len() < 12 {
+            return false;
         }
-        let box_size = u32::from_be_bytes([self.data[0], self.data[1], self.data[2], self.data[3]]);
-        if length < box_size as usize || box_size % 4 != 0 {
-            return None;
+        let box_size = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
+        if data.len() < box_size as usize || box_size % 4 != 0 {
+            return false;
         }
-        if self.data[4..8] != [0x66, 0x74, 0x79, 0x70] {
-            return None;
+        if &data[4..8] != b"ftyp" {
+            return false;
         }
-        if self.data[8..11] == [0x6D, 0x70, 0x34] {
-            return Some(mime::AUDIO_MP4);
+        if &data[8..11] == b"mp4" {
+            return true;
         }
-        let mut bytes_read = 16;
-        while bytes_read < box_size as usize {
-            if self.data[bytes_read..bytes_read + 3] == [0x6D, 0x70, 0x34] {
-                return Some(mime::AUDIO_MP4);
-            }
-            bytes_read += 4;
-        }
-        None
+        data[16..]
+            .chunks_exact(4)
+            .take_while(|chunk| &chunk[..3] != b"mp4")
+            .last()
+            .map_or(false, |chunk| &chunk[..3] == b"mp4")
     }
 
     fn is_mp3(&self) -> bool {
-        let sequence = &self.data;
-        let length = sequence.len();
-        let mut s = 0;
+        let data = &self.data;
+        let mut offset = 0;
 
-        if !match_mp3_header(sequence, s) {
+        if !match_mp3_header(data, offset) {
             return false;
         }
 
-        let (version, bitrate_index, samplerate_index, pad) = parse_mp3_frame(sequence, s);
+        let (version, bitrate_index, sample_rate_index, pad) = parse_mp3_frame(data, offset);
         let bitrate = if version & 0x01 != 0 {
-            MimeGuesser::MP25_RATES[bitrate_index as usize]
+            Self::MP25_RATES[bitrate_index as usize]
         } else {
-            MimeGuesser::MP3_RATES[bitrate_index as usize]
+            Self::MP3_RATES[bitrate_index as usize]
         };
-        let sample_rate = MimeGuesser::SAMPLE_RATES[samplerate_index as usize];
+        let sample_rate = Self::SAMPLE_RATES[sample_rate_index as usize];
         let skipped_bytes = compute_mp3_frame_size(version, bitrate, sample_rate, pad);
 
-        if skipped_bytes < 4 || skipped_bytes > length - s {
+        if skipped_bytes < 4 || skipped_bytes > data.len() - offset {
             return false;
         }
-        s += skipped_bytes;
+        offset += skipped_bytes;
 
-        if !match_mp3_header(sequence, s) {
-            return false;
-        }
-
-        true
+        match_mp3_header(data, offset)
     }
 }
 
@@ -197,16 +197,16 @@ fn match_mp3_header(sequence: &[u8], s: usize) -> bool {
 fn parse_mp3_frame(sequence: &[u8], s: usize) -> (u8, u8, u8, u8) {
     let version = sequence[s + 1] & 0x18 >> 3;
     let bitrate_index = sequence[s + 2] & 0xf0 >> 4;
-    let samplerate_index = sequence[s + 2] & 0x0c >> 2;
+    let sample_rate_index = sequence[s + 2] & 0x0c >> 2;
     let pad = sequence[s + 2] & 0x02 >> 1;
-    (version, bitrate_index, samplerate_index, pad)
+    (version, bitrate_index, sample_rate_index, pad)
 }
 
-fn compute_mp3_frame_size(version: u8, bitrate: u32, samplerate: u32, pad: u8) -> usize {
+fn compute_mp3_frame_size(version: u8, bitrate: u32, sample_rate: u32, pad: u8) -> usize {
     let scale = if version == 1 { 72 } else { 144 };
-    let mut size = (bitrate as usize * scale / samplerate as usize) as usize;
+    let mut size = bitrate * scale / sample_rate;
     if pad != 0 {
         size += 1;
     }
-    size
+    size as usize
 }
