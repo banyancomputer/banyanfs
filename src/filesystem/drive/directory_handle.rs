@@ -65,7 +65,7 @@ impl DirectoryHandle {
     }
 
     /// Changes the permission on the target node. Currently not implemented and changes are
-    /// expected to combine the [`FilePermissions`] with the ::new(crate::codec::filesystem::DirectoryPermissions`] all at once.
+    /// expected to combine the [`FilePermissions`] with the [`crate::codec::filesystem::DirectoryPermissions`] all at once.
     pub async fn chmod(
         &self,
         _path: &[&str],
