@@ -974,11 +974,14 @@ mod test {
         let mut store = MemoryDataStore::default();
 
         let test_cases = vec![
-            // (b"<html><head><title>Test File</title></head><body><h1>Hello World!</h1></body></html>".to_vec(), "test.html"),
-            // (b"<HTML><HEAD><TITLE>Test File</TITLE></HEAD><BODY><H1>Hello World!</H1></BODY></HTML>".to_vec(), "TEST.HTML"),
-            // (b"<h1>Heading</h1><p>Paragraph</p>".to_vec(), "file.htm"),
+            (b"<html><head><title>Test File</title></head><body><h1>Hello World!</h1></body></html>".to_vec(), "test.html"),
+            (b"<HTML><HEAD><TITLE>Test File</TITLE></HEAD><BODY><H1>Hello World!</H1></BODY></HTML>".to_vec(), "TEST.HTML"),
+            (b"<h1>Heading</h1><p>Paragraph</p>".to_vec(), "file.htm"),
             (b"<div><span>Some text</span></div>".to_vec(), "page.php"),
-            // (b"<!DOCTYPE html><html><body>Content</body></html>".to_vec(), "invalid_file_name"),
+            (
+                b"<!docTYPE html><html><body>Content</body></html>".to_vec(),
+                "invalid_file_name",
+            ),
         ];
         for (data, file_name) in test_cases {
             handle

@@ -91,30 +91,28 @@ impl MimeGuesser {
             &[0xFE, 0xFF, 0, 0, ..] | &[0xFF, 0xFE, 0, 0, ..] | &[0xEF, 0xBB, 0xBF, 0, ..] => {
                 Some(mime::TEXT_PLAIN)
             }
-            [b'<', _, _, _, _, ..] => {
-                // case-insensitive match
-                match &magic_bytes[1..5]
-                    .iter()
-                    .map(|b| b & 0xDF)
-                    .collect::<Vec<_>>()[..]
-                {
-                    b"!DOC" => Some(mime::TEXT_HTML),
-                    b"SCRI" => Some(mime::TEXT_HTML),
-                    b"IFRA" => Some(mime::TEXT_HTML),
-                    b"TABL" => Some(mime::TEXT_HTML),
-                    b"STYL" => Some(mime::TEXT_HTML),
-                    b"TITL" => Some(mime::TEXT_HTML),
-                    b"HEAD" => Some(mime::TEXT_HTML),
-                    b"HTML" => Some(mime::TEXT_HTML),
-                    b"FONT" => Some(mime::TEXT_HTML),
-                    b"BODY" => Some(mime::TEXT_HTML),
-                    &[b'D', b'I', b'V', ..] => Some(mime::TEXT_HTML),
-                    &[b'!', b'-', b'-', ..] => Some(mime::TEXT_HTML),
-                    &[b'H', b'1', ..] => Some(mime::TEXT_HTML),
-                    &[b'B', b'R', ..] => Some(mime::TEXT_HTML),
-                    &[b'A', ..] => Some(mime::TEXT_HTML),
-                    &[b'B', ..] => Some(mime::TEXT_HTML),
-                    &[b'P', ..] => Some(mime::TEXT_HTML),
+            [b'<', ..] => {
+                match &magic_bytes[1..]
+                .iter()
+                // check if it's [a-zA-Z] and only then apply the case-insensitive conversion
+                .map(|&b| b.to_ascii_uppercase())
+                .collect::<Vec<_>>().as_slice() {
+                    [b'!', b'D', b'O', b'C', b'T', b'Y', b'P', b'E', b' ', b'H', b'T', b'M', b'L', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
+                    [b'H', b'T', b'M', b'L', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
+                    [b'H', b'E', b'A', b'D', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
+                    [b'S', b'C', b'R', b'I', b'P', b'T', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
+                    [b'I', b'F', b'R', b'A', b'M', b'E', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
+                    [b'H', b'1', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
+                    [b'D', b'I', b'V', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
+                    [b'F', b'O', b'N', b'T', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
+                    [b'T', b'A', b'B', b'L', b'E', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
+                    [b'A', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
+                    [b'S', b'T', b'Y', b'L', b'E', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
+                    [b'T', b'I', b'T', b'L', b'E', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
+                    [b'B', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
+                    [b'B', b'O', b'D', b'Y', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
+                    [b'B', b'R', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
+                    [b'P', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
                     _ => None,
                 }
             }
@@ -209,4 +207,7 @@ fn compute_mp3_frame_size(version: u8, bitrate: u32, sample_rate: u32, pad: u8) 
         size += 1;
     }
     size as usize
+}
+fn is_whitespace_or_tag_terminator(byte: u8) -> bool {
+    byte == b' ' || byte == b'>'
 }
