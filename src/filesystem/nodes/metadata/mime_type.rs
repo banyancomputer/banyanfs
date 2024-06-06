@@ -94,7 +94,6 @@ impl MimeGuesser {
             [b'<', ..] => {
                 match &magic_bytes[1..]
                 .iter()
-                // check if it's [a-zA-Z] and only then apply the case-insensitive conversion
                 .map(|&b| b.to_ascii_uppercase())
                 .collect::<Vec<_>>().as_slice() {
                     [b'!', b'D', b'O', b'C', b'T', b'Y', b'P', b'E', b' ', b'H', b'T', b'M', b'L', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
