@@ -93,24 +93,64 @@ impl MimeGuesser {
             }
             [b'<', ..] => {
                 match &magic_bytes[1..]
-                .iter()
-                .map(|&b| b.to_ascii_uppercase())
-                .collect::<Vec<_>>().as_slice() {
-                    [b'!', b'D', b'O', b'C', b'T', b'Y', b'P', b'E', b' ', b'H', b'T', b'M', b'L', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
-                    [b'H', b'T', b'M', b'L', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
-                    [b'H', b'E', b'A', b'D', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
-                    [b'S', b'C', b'R', b'I', b'P', b'T', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
-                    [b'I', b'F', b'R', b'A', b'M', b'E', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
-                    [b'H', b'1', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
-                    [b'D', b'I', b'V', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
-                    [b'F', b'O', b'N', b'T', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
-                    [b'T', b'A', b'B', b'L', b'E', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
+                    .iter()
+                    .map(|&b| b.to_ascii_uppercase())
+                    .collect::<Vec<_>>()
+                    .as_slice()
+                {
+                    [b'!', b'D', b'O', b'C', b'T', b'Y', b'P', b'E', b' ', b'H', b'T', b'M', b'L', tt, ..]
+                        if is_whitespace_or_tag_terminator(*tt) =>
+                    {
+                        Some(mime::TEXT_HTML)
+                    }
+                    [b'H', b'T', b'M', b'L', tt, ..] if is_whitespace_or_tag_terminator(*tt) => {
+                        Some(mime::TEXT_HTML)
+                    }
+                    [b'H', b'E', b'A', b'D', tt, ..] if is_whitespace_or_tag_terminator(*tt) => {
+                        Some(mime::TEXT_HTML)
+                    }
+                    [b'S', b'C', b'R', b'I', b'P', b'T', tt, ..]
+                        if is_whitespace_or_tag_terminator(*tt) =>
+                    {
+                        Some(mime::TEXT_HTML)
+                    }
+                    [b'I', b'F', b'R', b'A', b'M', b'E', tt, ..]
+                        if is_whitespace_or_tag_terminator(*tt) =>
+                    {
+                        Some(mime::TEXT_HTML)
+                    }
+                    [b'H', b'1', tt, ..] if is_whitespace_or_tag_terminator(*tt) => {
+                        Some(mime::TEXT_HTML)
+                    }
+                    [b'D', b'I', b'V', tt, ..] if is_whitespace_or_tag_terminator(*tt) => {
+                        Some(mime::TEXT_HTML)
+                    }
+                    [b'F', b'O', b'N', b'T', tt, ..] if is_whitespace_or_tag_terminator(*tt) => {
+                        Some(mime::TEXT_HTML)
+                    }
+                    [b'T', b'A', b'B', b'L', b'E', tt, ..]
+                        if is_whitespace_or_tag_terminator(*tt) =>
+                    {
+                        Some(mime::TEXT_HTML)
+                    }
                     [b'A', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
-                    [b'S', b'T', b'Y', b'L', b'E', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
-                    [b'T', b'I', b'T', b'L', b'E', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
+                    [b'S', b'T', b'Y', b'L', b'E', tt, ..]
+                        if is_whitespace_or_tag_terminator(*tt) =>
+                    {
+                        Some(mime::TEXT_HTML)
+                    }
+                    [b'T', b'I', b'T', b'L', b'E', tt, ..]
+                        if is_whitespace_or_tag_terminator(*tt) =>
+                    {
+                        Some(mime::TEXT_HTML)
+                    }
                     [b'B', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
-                    [b'B', b'O', b'D', b'Y', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
-                    [b'B', b'R', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
+                    [b'B', b'O', b'D', b'Y', tt, ..] if is_whitespace_or_tag_terminator(*tt) => {
+                        Some(mime::TEXT_HTML)
+                    }
+                    [b'B', b'R', tt, ..] if is_whitespace_or_tag_terminator(*tt) => {
+                        Some(mime::TEXT_HTML)
+                    }
                     [b'P', tt, ..] if is_whitespace_or_tag_terminator(*tt) => Some(mime::TEXT_HTML),
                     _ => None,
                 }
