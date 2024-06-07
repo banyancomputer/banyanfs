@@ -196,7 +196,7 @@ impl Node {
         node_data.write_all(&[entry_count]).await?;
 
         let mut sorted_metadata = self.metadata.iter().collect::<Vec<_>>();
-        sorted_metadata.sort_by(|(a, _), (b, _)| a.as_bytes().cmp(b.as_bytes()));
+        sorted_metadata.sort_by(|(a, _), (b, _)| a.as_bytes().cmp(&b.as_bytes()));
 
         for (key, val) in sorted_metadata.into_iter() {
             let key_bytes = key.as_bytes();
@@ -207,7 +207,7 @@ impl Node {
             }
 
             node_data.write_all(&[key_bytes_len as u8]).await?;
-            node_data.write_all(key_bytes).await?;
+            node_data.write_all(&key_bytes).await?;
 
             let val_bytes_len = val.len();
             if val_bytes_len > u8::MAX as usize {
@@ -296,7 +296,7 @@ impl Node {
         encoded_size += self
             .metadata()
             .iter()
-            .map(|(k, v)| (2 + k.as_str().len() + v.len()) as u64)
+            .map(|(k, v)| (2 + k.as_bytes().len() + v.len()) as u64)
             .sum::<u64>();
 
         encoded_size

@@ -7,18 +7,6 @@ pub struct MimeGuesser {
 }
 
 impl MimeGuesser {
-    const MP3_RATES: [u32; 15] = [
-        0, 32000, 40000, 48000, 56000, 64000, 80000, 96000, 112000, 128000, 160000, 192000, 224000,
-        256000, 320000,
-    ];
-
-    const MP25_RATES: [u32; 15] = [
-        0, 8000, 16000, 24000, 32000, 40000, 48000, 56000, 64000, 80000, 96000, 112000, 128000,
-        144000, 160000,
-    ];
-
-    const SAMPLE_RATES: [u32; 3] = [44100, 48000, 32000];
-
     pub fn with_name(mut self, name: NodeName) -> Self {
         match name {
             NodeName::Named(name) => self.name = Some(name.clone()),
@@ -161,11 +149,12 @@ impl MimeGuesser {
 
     fn algorithm_match(&self) -> Option<mime::MediaType> {
         if self.is_mp4() {
-            return Some(mime::AUDIO_MP4);
+            return Some(mime::VIDEO_MP4);
         }
-        if self.is_mp3() {
-            return Some(mime::AUDIO_MPEG);
+        if self.is_webm() {
+            return Some(mime::VIDEO_WEBM);
         }
+
         None
     }
 
@@ -178,75 +167,68 @@ impl MimeGuesser {
         if data.len() < box_size as usize || box_size % 4 != 0 {
             return false;
         }
-        if &data[4..8] != b"ftyp" {
-            return false;
-        }
-        if &data[8..11] == b"mp4" {
-            return true;
-        }
-        data[16..]
-            .chunks_exact(4)
-            .take_while(|chunk| &chunk[..3] != b"mp4")
-            .last()
-            .map_or(false, |chunk| &chunk[..3] == b"mp4")
-    }
 
-    fn is_mp3(&self) -> bool {
+        data.get(4..8) == Some(b"ftyp")
+            && (data.get(8..11) == Some(b"mp4")
+                || data[16..]
+                    .chunks_exact(4)
+                    .any(|chunk| chunk.starts_with(b"mp4")))
+    }
+    fn is_webm(&self) -> bool {
         let data = &self.data;
-        let mut offset = 0;
-
-        if !match_mp3_header(data, offset) {
+        if data.len() < 4 || data[..4] != [0x1A, 0x45, 0xDF, 0xA3] {
             return false;
         }
 
-        let (version, bitrate_index, sample_rate_index, pad) = parse_mp3_frame(data, offset);
-        let bitrate = if version & 0x01 != 0 {
-            Self::MP25_RATES[bitrate_index as usize]
-        } else {
-            Self::MP3_RATES[bitrate_index as usize]
-        };
-        let sample_rate = Self::SAMPLE_RATES[sample_rate_index as usize];
-        let skipped_bytes = compute_mp3_frame_size(version, bitrate, sample_rate, pad);
+        let skip_first_bytes = 4;
+        let chunk_size = 2;
+        let magic_bytes_delim = [0x42, 0x82];
+        for (chunk_idx, chunk) in data[skip_first_bytes..].chunks(chunk_size).enumerate() {
+            // went over 4 + 2 * 17 = 38 bytes
+            if chunk_idx >= 17 {
+                break;
+            }
 
-        if skipped_bytes < 4 || skipped_bytes > data.len() - offset {
-            return false;
+            if chunk != magic_bytes_delim {
+                continue;
+            }
+
+            let offset = skip_first_bytes + chunk_idx * chunk_size + magic_bytes_delim.len();
+            if let Some((_, number_size)) = data.get(offset..).map(|d| parse_vint(d, 0)) {
+                let start = offset + number_size;
+                let end = start + 4;
+                if data.get(start..end) == Some(b"webm") {
+                    return true;
+                }
+            }
         }
-        offset += skipped_bytes;
 
-        match_mp3_header(data, offset)
+        false
     }
 }
 
-fn match_mp3_header(sequence: &[u8], s: usize) -> bool {
-    let length = sequence.len();
-    if length - s < 4 {
-        return false;
+fn parse_vint(data: &[u8], offset: usize) -> (usize, usize) {
+    let mut mask = 128;
+    let max_vint_length = 8;
+    let mut number_size = 1;
+
+    while number_size < max_vint_length
+        && data.get(offset).is_none()
+        && (data.get(offset).unwrap() & mask == 0)
+    {
+        mask >>= 1;
+        number_size += 1;
     }
 
-    sequence[s] == 0xff
-        && sequence[s + 1] & 0xe0 == 0xe0
-        && (sequence[s + 1] & 0x06 >> 1) != 0
-        && (sequence[s + 2] & 0xf0 >> 4) != 15
-        && (sequence[s + 2] & 0x0c >> 2) != 3
-        && (4 - (sequence[s + 1] & 0x06 >> 1)) == 3
-}
+    let mut parsed_number = data.get(offset).map_or(0, |&b| (b & !mask) as usize);
 
-fn parse_mp3_frame(sequence: &[u8], s: usize) -> (u8, u8, u8, u8) {
-    let version = sequence[s + 1] & 0x18 >> 3;
-    let bitrate_index = sequence[s + 2] & 0xf0 >> 4;
-    let sample_rate_index = sequence[s + 2] & 0x0c >> 2;
-    let pad = sequence[s + 2] & 0x02 >> 1;
-    (version, bitrate_index, sample_rate_index, pad)
-}
-
-fn compute_mp3_frame_size(version: u8, bitrate: u32, sample_rate: u32, pad: u8) -> usize {
-    let scale = if version == 1 { 72 } else { 144 };
-    let mut size = bitrate * scale / sample_rate;
-    if pad != 0 {
-        size += 1;
+    for &b in data.get(offset + 1..offset + number_size).unwrap_or(&[]) {
+        parsed_number = (parsed_number << 8) | b as usize;
     }
-    size as usize
+
+    (parsed_number, number_size)
 }
+
 fn is_whitespace_or_tag_terminator(byte: u8) -> bool {
     byte == b' ' || byte == b'>'
 }
