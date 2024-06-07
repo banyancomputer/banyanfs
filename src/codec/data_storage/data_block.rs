@@ -122,7 +122,7 @@ impl DataBlock {
         self.contents.len() >= self.data_options.chunk_count().into()
     }
 
-    pub fn parse<'a>(input: Stream<'a>) -> ParserResult<'a, Self> {
+    pub fn parse(input: Stream<'_>) -> ParserResult<'_, Self> {
         let (input, version) = le_u8.parse_peek(input)?;
 
         if version != 0x01 {
@@ -172,7 +172,7 @@ impl DataBlock {
         Ok((input, block))
     }
 
-    pub fn parse_with_magic<'a>(input: Stream<'a>) -> ParserResult<'a, Self> {
+    pub fn parse_with_magic(input: Stream<'_>) -> ParserResult<'_, Self> {
         let (input, _magic) = banyan_data_magic_tag(input)?;
         Self::parse(input)
     }

@@ -47,8 +47,8 @@ impl EncryptedDataChunk {
         Ok((self.0.len(), cid))
     }
 
-    pub fn decrypt<'a>(
-        &'a self,
+    pub fn decrypt(
+        &self,
         options: &DataOptions,
         access_key: &AccessKey,
     ) -> Result<DataChunk, EncryptedDataChunkError> {
