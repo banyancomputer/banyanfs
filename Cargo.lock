@@ -1098,7 +1098,7 @@ checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 [[package]]
 name = "mime"
 version = "0.4.0-a.0"
-source = "git+https://github.com/PlamenHristov/mime.git?rev=c30e3db#c30e3db1b4414036baaac50e0914355385f56ec1"
+source = "git+https://github.com/banyancomputer/mime.git?rev=d1a1744#d1a1744cbe6b87e33a4258e6bef555efc99016dd"
 dependencies = [
  "mime-parse",
  "quoted-string",
@@ -1107,7 +1107,7 @@ dependencies = [
 [[package]]
 name = "mime-parse"
 version = "0.0.0"
-source = "git+https://github.com/PlamenHristov/mime.git?rev=c30e3db#c30e3db1b4414036baaac50e0914355385f56ec1"
+source = "git+https://github.com/banyancomputer/mime.git?rev=d1a1744#d1a1744cbe6b87e33a4258e6bef555efc99016dd"
 
 [[package]]
 name = "mime_guess"
