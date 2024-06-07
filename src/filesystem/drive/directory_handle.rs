@@ -1105,7 +1105,7 @@ mod test {
         let current_key = SigningKey::generate(&mut rng);
         let mut handle = interesting_handle(Some(current_key)).await;
         let mut store = MemoryDataStore::default();
-        let mp4_test_case: &[u8] = &[
+        let webm_test_case: &[u8] = &[
             0x1a, 0x45, 0xdf, 0xa3, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1f, 0x42, 0x86,
             0x81, 0x01, 0x42, 0xf7, 0x81, 0x01, 0x42, 0xf2, 0x81, 0x04, 0x42, 0xf3, 0x81, 0x08,
             0x42, 0x82, 0x84, 0x77, 0x65, 0x62, 0x6d, 0x42, 0x87, 0x81, 0x02, 0x42, 0x85, 0x81,
@@ -1115,7 +1115,7 @@ mod test {
         ];
         let file_name = "the_audio.mp4";
         handle
-            .write(&mut rng, &mut store, &[file_name], mp4_test_case)
+            .write(&mut rng, &mut store, &[file_name], webm_test_case)
             .await
             .unwrap();
 
