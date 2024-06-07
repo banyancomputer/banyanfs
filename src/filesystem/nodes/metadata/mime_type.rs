@@ -213,8 +213,8 @@ fn parse_vint(data: &[u8], offset: usize) -> (usize, usize) {
     let mut number_size = 1;
 
     while number_size < max_vint_length
-        && data.get(offset).is_none()
-        && (data.get(offset).unwrap() & mask == 0)
+        && data.get(offset).is_some()
+        && (data.get(offset).expect("already checked") & mask == 0)
     {
         mask >>= 1;
         number_size += 1;

@@ -24,6 +24,7 @@ pub(crate) use node_builder::{NodeBuilder, NodeBuilderError};
 pub(crate) use node_data::{NodeData, NodeDataError};
 pub use node_name::{NodeName, NodeNameError};
 
+use std::str::FromStr;
 use std::collections::HashMap;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 
@@ -446,7 +447,10 @@ impl Node {
         self.metadata
             .get(&MetadataKey::MimeType)
             .and_then(|mime_str| {
-                mime::MediaType::parse(std::str::from_utf8(mime_str).unwrap()).ok()
+                match std::str::from_utf8(mime_str) {
+                    Ok(s) => Some(mime::MediaType::from_str(s).ok()?),
+                    Err(_) => None,
+                }
             })
     }
 
