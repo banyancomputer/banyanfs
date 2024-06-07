@@ -1136,7 +1136,7 @@ mod test {
         assert_eq!(file_entry.kind(), NodeKind::File);
 
         let file_data = handle.read(&mut store, &[file_name]).await.unwrap();
-        assert_eq!(file_data.as_slice(), mp4_test_case);
+        assert_eq!(file_data.as_slice(), webm_test_case);
 
         let mime_type = file_entry.mime_type().unwrap();
         assert_eq!(mime_type, "video/webm");
