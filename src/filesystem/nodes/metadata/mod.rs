@@ -1,6 +1,8 @@
 use std::str::FromStr;
+#[cfg(feature = "mime-type")]
 mod mime_type;
 
+#[cfg(feature = "mime-type")]
 pub use mime_type::MimeGuesser;
 
 #[derive(Hash, Eq, PartialEq, Debug)]

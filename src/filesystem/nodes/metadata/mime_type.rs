@@ -67,7 +67,7 @@ impl MimeGuesser {
             &[0x1F, 0x8B, 0x08, ..] => Some(mime::APPLICATION_GZIP),
             &[b'P', b'K', 0x03, 0x04, ..] => Some(mime::APPLICATION_ZIP),
             &[b'R', b'a', b'r', b' ', 0x1A, 0x07, 0, ..] => Some(mime::APPLICATION_RAR),
-            &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, b'L', b'P'] => {
+            &[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, b'L', b'P'] => {
                 Some(mime::APPLICATION_VND_MS_FONTOBJECT)
             }
             &[0, 0x01, 0, 0, ..] => Some(mime::FONT_TTF),

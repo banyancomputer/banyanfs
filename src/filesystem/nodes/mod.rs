@@ -13,7 +13,7 @@
 //! guarantee the major version will be increased when a breaking change is made).
 
 mod cid_cache;
-mod metadata;
+pub mod metadata;
 mod node_builder;
 mod node_data;
 mod node_name;
@@ -26,10 +26,8 @@ pub use node_name::{NodeName, NodeNameError};
 
 use std::collections::HashMap;
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
-use std::str::FromStr;
 
 use futures::{AsyncWrite, AsyncWriteExt};
-use mime;
 use winnow::binary::{le_i64, le_u32, le_u8};
 use winnow::stream::Offset;
 use winnow::token::take;
@@ -39,7 +37,7 @@ use crate::codec::filesystem::NodeKind;
 use crate::codec::meta::{ActorId, Cid, PermanentId};
 use crate::codec::{ParserResult, Stream, VectorClock};
 use crate::filesystem::drive::OperationError;
-pub use crate::prelude::nodes::metadata::{MetadataKey, MimeGuesser};
+pub use metadata::MetadataKey;
 
 pub(crate) type NodeId = usize;
 
@@ -443,7 +441,10 @@ impl Node {
         self.permanent_id
     }
 
+
+   #[cfg(feature = "mime-type")]
     pub fn mime_type(&self) -> Option<mime::MediaType> {
+       use std::str::FromStr;
         self.metadata
             .get(&MetadataKey::MimeType)
             .and_then(|mime_str| match std::str::from_utf8(mime_str) {

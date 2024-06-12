@@ -13,7 +13,9 @@ use crate::codec::crypto::{AccessKey, SigningKey};
 use crate::codec::data_storage::{data_chunk::DataChunk, DataBlock};
 use crate::codec::filesystem::BlockKind;
 use crate::filesystem::drive::{DirectoryEntry, InnerDrive, OperationError, WalkState};
-use crate::filesystem::nodes::{MetadataKey, MimeGuesser, Node, NodeData, NodeId, NodeName};
+use crate::filesystem::nodes::{Node, NodeData, NodeId, NodeName};
+#[cfg(feature = "mime-type")]
+use crate::filesystem::nodes::metadata::{MetadataKey, MimeGuesser};
 use crate::filesystem::{ContentLocation, ContentReference, FileContent, NodeBuilder};
 use crate::stores::DataStore;
 
@@ -693,14 +695,10 @@ impl DirectoryHandle {
 
         let mut inner_write = self.inner.write().await;
         let node = inner_write.by_perm_id_mut(&new_permanent_id).await?;
-        if let Some(mime_type) = MimeGuesser::default()
-            .with_name(node.name().clone())
-            .with_data(data)
-            .guess_mime_type()
-        {
-            node.set_attribute(MetadataKey::MimeType, mime_type.to_string().into())
-                .await;
-        }
+
+        #[cfg(feature = "mime-type")]
+        set_mime_type(data, node).await;
+
         let node_data = node.data_mut().await;
         let file_content =
             FileContent::encrypted(locked_key, plaintext_cid, data_size, content_references);
@@ -770,10 +768,23 @@ fn walk_path<'a>(
     .boxed()
 }
 
+#[cfg(feature = "mime-type")]
+async fn set_mime_type(data: &[u8], node: &mut Node) {
+    if let Some(mime_type) = MimeGuesser::default()
+        .with_name(node.name().clone())
+        .with_data(data)
+        .guess_mime_type()
+    {
+        node.set_attribute(MetadataKey::MimeType, mime_type.to_string().into())
+            .await;
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::filesystem::drive::inner::test::build_interesting_inner;
+    #[cfg(feature = "mime-type")]
     use crate::prelude::MemoryDataStore;
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
@@ -965,6 +976,8 @@ mod test {
             cwd_id: root_id,
         }
     }
+
+    #[cfg(feature = "mime-type")]
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn sniff_html_mime_type() {
@@ -1013,6 +1026,7 @@ mod test {
         }
     }
 
+    #[cfg(feature = "mime-type")]
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn sniff_mp3_file_mime_type() {
@@ -1057,6 +1071,7 @@ mod test {
         assert_eq!(mime_type, "audio/mpeg");
     }
 
+    #[cfg(feature = "mime-type")]
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn sniff_mp4_file_mime_type() {
@@ -1098,6 +1113,7 @@ mod test {
         assert_eq!(mime_type, "video/mp4");
     }
 
+    #[cfg(feature = "mime-type")]
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn sniff_webm_file_mime_type() {
