@@ -1,10 +1,9 @@
-use std::path::PathBuf;
 use async_trait::async_trait;
 use directories::ProjectDirs;
+use std::path::PathBuf;
 
 use crate::codec::Cid;
 use crate::stores::traits::{DataStore, DataStoreError};
-
 
 pub struct LocalDataStore {
     data_dir: PathBuf,
@@ -35,16 +34,19 @@ impl DataStore for LocalDataStore {
         std::fs::read(path).map_err(|_| DataStoreError::LookupFailure)
     }
 
-    async fn store(&mut self, cid: Cid, data: Vec<u8>, _immediate: bool)
-                   -> Result<(), DataStoreError>
-    {
+    async fn store(
+        &mut self,
+        cid: Cid,
+        data: Vec<u8>,
+        _immediate: bool,
+    ) -> Result<(), DataStoreError> {
         let path = self.cid_to_path(&cid);
         std::fs::write(path, data).map_err(|_| DataStoreError::StoreFailure)?;
         Ok(())
     }
 }
 
-impl  Default for LocalDataStore {
+impl Default for LocalDataStore {
     fn default() -> Self {
         let proj_dirs = ProjectDirs::from("computer", "Banyan", "banyan-fuse").unwrap();
         let data_dir = proj_dirs.data_dir().to_owned();

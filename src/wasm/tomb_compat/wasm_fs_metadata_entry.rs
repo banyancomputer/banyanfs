@@ -72,7 +72,8 @@ impl TryFrom<DirectoryEntry> for WasmFsMetadataEntry {
 
         #[cfg(feature = "mime-type")]
         if let Some(mime_type) = dir_entry.mime_type() {
-            js_sys::Reflect::set(&metadata, &sValue::from_str(MetadataKey::MimeType), &JsValue::from_str(mime_type.to_string()))
+            let js_key = JsValue::from_str(MetadataKey::MimeType.as_str());
+            js_sys::Reflect::set(&metadata, &js_key, &JsValue::from_str(mime_type.as_ref()))
                 .map_err(|_| "failed to convert mime_type")?;
         }
 
