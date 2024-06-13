@@ -5,6 +5,8 @@ use wasm_bindgen::prelude::*;
 use crate::codec::filesystem::NodeKind;
 use crate::filesystem::nodes::NodeName;
 use crate::filesystem::DirectoryEntry;
+#[cfg(feature = "mime-type")]
+use crate::prelude::nodes::MetadataKey;
 
 use super::BanyanFsError;
 
@@ -67,6 +69,12 @@ impl TryFrom<DirectoryEntry> for WasmFsMetadataEntry {
         let size_value = dir_entry.size() as u32;
         js_sys::Reflect::set(&metadata, &js_key, &size_value.into())
             .map_err(|_| "failed to convert size")?;
+
+        #[cfg(feature = "mime-type")]
+        if let Some(mime_type) = dir_entry.mime_type() {
+            js_sys::Reflect::set(&metadata, &sValue::from_str(MetadataKey::MimeType), &JsValue::from_str(mime_type.to_string()))
+                .map_err(|_| "failed to convert mime_type")?;
+        }
 
         Ok(Self {
             name,
