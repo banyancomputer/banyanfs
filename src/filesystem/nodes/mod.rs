@@ -441,10 +441,9 @@ impl Node {
         self.permanent_id
     }
 
-
-   #[cfg(feature = "mime-type")]
+    #[cfg(feature = "mime-type")]
     pub fn mime_type(&self) -> Option<mime::MediaType> {
-       use std::str::FromStr;
+        use std::str::FromStr;
         self.metadata
             .get(&MetadataKey::MimeType)
             .and_then(|mime_str| match std::str::from_utf8(mime_str) {

@@ -13,9 +13,9 @@ use crate::codec::crypto::{AccessKey, SigningKey};
 use crate::codec::data_storage::{data_chunk::DataChunk, DataBlock};
 use crate::codec::filesystem::BlockKind;
 use crate::filesystem::drive::{DirectoryEntry, InnerDrive, OperationError, WalkState};
-use crate::filesystem::nodes::{Node, NodeData, NodeId, NodeName};
 #[cfg(feature = "mime-type")]
 use crate::filesystem::nodes::metadata::{MetadataKey, MimeGuesser};
+use crate::filesystem::nodes::{Node, NodeData, NodeId, NodeName};
 use crate::filesystem::{ContentLocation, ContentReference, FileContent, NodeBuilder};
 use crate::stores::DataStore;
 
