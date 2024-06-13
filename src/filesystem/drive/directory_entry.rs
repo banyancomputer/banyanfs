@@ -14,6 +14,7 @@ pub struct DirectoryEntry {
     name: NodeName,
     kind: NodeKind,
 
+    #[cfg(feature = "mime-type")]
     mime_type: Option<mime::MediaType>,
 
     size: u64,
@@ -51,6 +52,7 @@ impl DirectoryEntry {
         self.size
     }
 
+    #[cfg(feature = "mime-type")]
     pub fn mime_type(&self) -> Option<mime::MediaType> {
         match self.kind {
             NodeKind::File => self.mime_type.clone(),
@@ -76,6 +78,7 @@ impl TryFrom<&Node> for DirectoryEntry {
             name: node.name().clone(),
             kind: node.kind().clone(),
 
+            #[cfg(feature = "mime-type")]
             mime_type: node.mime_type(),
 
             size: node.size(),

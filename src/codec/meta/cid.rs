@@ -1,5 +1,5 @@
 use futures::{AsyncWrite, AsyncWriteExt};
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use winnow::{token::take, Parser};
 
 use crate::codec::{ParserResult, Stream};
@@ -66,6 +66,12 @@ pub enum CidError {
 }
 
 impl std::fmt::Debug for Cid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_base64url_multicodec())
+    }
+}
+
+impl Display for Cid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_base64url_multicodec())
     }
