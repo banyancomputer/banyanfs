@@ -734,12 +734,7 @@ impl DirectoryHandle {
             _ => return Err(OperationError::NotReadable),
         };
 
-        if node_content.is_stub() || node_content.is_empty() {
-            return Err(OperationError::NotAvailable);
-        }
-
-        // This is fine to unwrap, previous if statement prevents any errors
-        Ok(node_content.cid().unwrap())
+        node_content.cid().ok_or(OperationError::NotAvailable)
     }
 }
 
