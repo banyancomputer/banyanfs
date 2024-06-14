@@ -1,8 +1,10 @@
+mod get_all_request;
 mod get_current_request;
 mod get_request;
 mod pull_request;
 mod push_request;
 
+use get_all_request::GetAllRequest;
 use get_current_request::GetCurrentRequest;
 use get_request::GetRequest;
 use pull_request::PullRequest;
@@ -15,6 +17,12 @@ use crate::api::client::{ApiClient, ApiError};
 use crate::api::platform::{ApiMetadata, ApiMetadataId};
 use crate::codec::crypto::Fingerprint;
 use crate::codec::Cid;
+
+pub async fn get_all(client: &ApiClient, drive_id: &str) -> Result<Vec<ApiMetadata>, ApiError> {
+    client
+        .platform_request_full(GetAllRequest::new(drive_id.into()))
+        .await
+}
 
 pub async fn get_current(client: &ApiClient, drive_id: &str) -> Result<ApiMetadata, ApiError> {
     client
