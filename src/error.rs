@@ -2,11 +2,19 @@
 
 use std::fmt::{self, Display, Formatter};
 
+use crate::api::ApiError;
+
 /// A common catch all minimal error type for the BanyanFS library. A more specific concrete set of
 /// errors will be added in the future now that the primary interfaces and operations have been
 /// defined. The specific error text must be referred to identity what failure occurred.
 #[derive(Debug)]
 pub struct BanyanFsError(pub(crate) String);
+
+impl From<ApiError> for BanyanFsError {
+    fn from(error: ApiError) -> Self {
+        Self::from(error.to_string())
+    }
+}
 
 impl From<&'static str> for BanyanFsError {
     fn from(val: &'static str) -> Self {
