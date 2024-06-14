@@ -5,9 +5,8 @@ use elliptic_curve::rand_core::CryptoRngCore;
 use crate::codec::filesystem::NodeKind;
 use crate::codec::meta::{ActorId, VectorClock};
 use crate::filesystem::nodes::{
-    CidCache, Node, NodeData, NodeId, NodeName, NodeNameError, PermanentId,
+    CidCache, MetadataKey, Node, NodeData, NodeId, NodeName, NodeNameError, PermanentId,
 };
-use crate::prelude::nodes::metadata::MetadataKey;
 
 pub(crate) struct NodeBuilder {
     id: Option<NodeId>,

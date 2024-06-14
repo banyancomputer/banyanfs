@@ -120,7 +120,6 @@ impl InnerDrive {
         while let Some(node_id) = node_list.pop() {
             // Because of the work above we can assume that once we get here all of a nodes children are up to date
             let node_mut = self.by_id_mut_untracked(node_id)?;
-
             // Update child CIDs and sizes
             let child_pids = node_mut.data().ordered_child_pids();
             let mut child_data = Vec::new();
@@ -487,12 +486,12 @@ impl InnerDrive {
 
 #[cfg(test)]
 pub(crate) mod test {
-    use crate::filesystem::nodes::NodeName;
-    use crate::prelude::*;
+    use super::*;
 
     use winnow::Partial;
 
-    use super::*;
+    use crate::codec::crypto::SigningKey;
+    use crate::filesystem::nodes::NodeName;
 
     fn initialize_inner_drive(signing_key: Option<SigningKey>) -> (ActorId, InnerDrive) {
         let mut rng = crate::utils::crypto_rng();
@@ -543,7 +542,7 @@ pub(crate) mod test {
         assert_eq!(new_node.parent_id().unwrap(), inner.root_pid);
         let root_children = inner.root_node().unwrap().ordered_child_pids();
         assert_eq!(root_children.len(), 1);
-        assert_eq!(root_children.get(0).unwrap(), &node_pid);
+        assert_eq!(root_children.first().unwrap(), &node_pid);
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]

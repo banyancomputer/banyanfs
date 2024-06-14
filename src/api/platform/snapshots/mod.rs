@@ -12,13 +12,13 @@ use crate::codec::Cid;
 
 pub async fn create(
     client: &ApiClient,
-    bucket_id: &str,
+    drive_id: &str,
     metadata_id: &str,
     cids: &[Cid],
 ) -> Result<ApiSnapshotId, ApiError> {
     let resp = client
         .platform_request_full(CreateRequest::new(
-            bucket_id.into(),
+            drive_id.into(),
             metadata_id.into(),
             cids,
         ))
@@ -27,21 +27,21 @@ pub async fn create(
     Ok(resp.snapshot_id())
 }
 
-pub async fn get_all(client: &ApiClient, bucket_id: &str) -> Result<Vec<ApiSnapshot>, ApiError> {
+pub async fn get_all(client: &ApiClient, drive_id: &str) -> Result<Vec<ApiSnapshot>, ApiError> {
     client
-        .platform_request_full(GetAllRequest::new(bucket_id.into()))
+        .platform_request_full(GetAllRequest::new(drive_id.into()))
         .await
 }
 
 pub async fn restore(
     client: &ApiClient,
-    bucket_id: &str,
+    drive_id: &str,
     snapshot_id: &str,
 ) -> Result<(), ApiError> {
     // note(sstelfox): The response isn't useful in this regard, the API should
     // be updated to return a 204
     client
-        .platform_request_full(RestoreRequest::new(bucket_id.into(), snapshot_id.into()))
+        .platform_request_full(RestoreRequest::new(drive_id.into(), snapshot_id.into()))
         .await?;
 
     Ok(())
