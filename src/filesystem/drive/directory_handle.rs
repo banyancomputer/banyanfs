@@ -455,14 +455,14 @@ impl DirectoryHandle {
 
                 let data_chunk = store.retrieve(content_ref.data_block_cid()).await?;
 
-                let (_remaining, block) = DataBlock::parse_with_magic(Stream::new(&data_chunk))
+                let (remaining, block) = DataBlock::parse_with_magic(Stream::new(&data_chunk))
                     .map_err(|err| {
                         tracing::error!("parsing of data block failed: {err:?}");
                         OperationError::BlockCorrupted(content_ref.data_block_cid())
                     })?;
-                // todo(sstelfox): still stuff remaining which means this decoder is sloppy
-                //tracing::info!(?remaining, "drive::read::remaining");
-                //debug_assert!(remaining.is_empty(), "no extra data should be present");
+
+                tracing::debug!(?remaining, "drive::read::remaining");
+                debug_assert!(remaining.is_empty(), "no extra data should be present");
 
                 for location in content_ref.chunks() {
                     if !matches!(location.block_kind(), BlockKind::Data) {
@@ -537,14 +537,14 @@ impl DirectoryHandle {
                 let (parent_path, name) = path.split_at(path.len() - 1);
                 let file_name = NodeName::try_from(name[0]).map_err(OperationError::InvalidName)?;
 
-                tracing::info!(?path, ?file_name, "drive::write");
+                tracing::debug!(?path, ?file_name, "drive::write");
 
                 let parent_id = match walk_path(&self.inner, self.cwd_id, parent_path, 0).await? {
                     WalkState::FoundNode { node_id } => node_id,
                     WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
                 };
 
-                tracing::info!(?parent_id, ?parent_path, "drive::write::parent_id");
+                tracing::debug!(?parent_id, ?parent_path, "drive::write::parent_id");
 
                 let inner_read = self.inner.read().await;
                 let parent_node = inner_read.by_id(parent_id)?;
@@ -660,7 +660,7 @@ impl DirectoryHandle {
         }
 
         if !active_block.is_empty() {
-            tracing::info!("writing trailing block");
+            tracing::debug!("writing trailing block");
 
             // todo(sstelfox): this is duplicated, need to extract it
             let mut sealed_block = Vec::new();
@@ -810,7 +810,7 @@ async fn set_mime_type(data: &[u8], node: &mut Node) {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     use crate::filesystem::drive::inner::test::build_interesting_inner;

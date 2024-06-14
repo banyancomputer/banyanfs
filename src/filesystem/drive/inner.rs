@@ -487,8 +487,11 @@ impl InnerDrive {
 #[cfg(test)]
 pub(crate) mod test {
     use super::*;
-    use crate::filesystem::nodes::NodeName;
+
     use winnow::Partial;
+
+    use crate::codec::crypto::SigningKey;
+    use crate::filesystem::nodes::NodeName;
 
     fn initialize_inner_drive(signing_key: Option<SigningKey>) -> (ActorId, InnerDrive) {
         let mut rng = crate::utils::crypto_rng();
