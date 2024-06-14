@@ -12,7 +12,7 @@ keywords = ["banyan", "filesystem", "encryption", "storage"]
 categories = ["filesystems", "cryptography", "storage"]
 
 [features]
-default = ["banyan-api", "pem", "tomb-compat"]
+default = ["banyan-api", "mime-type", "pem", "tomb-compat"]
 banyan-api = ["async-trait", "reqwest", "serde", "serde_json", "url"]
 mime-type = ["mime", "mime_guess"]
 local-store = ["directories"]
@@ -47,8 +47,8 @@ base64 = "^0.22"
 bytes = "^1"
 winnow = "^0.6"
 crdts = { version = "^7", default-features = false, features = [
-	"merkle",
-	"num",
+  "merkle",
+  "num",
 ] }
 slab = "^0.4"
 # TODO: This is convenient to use with both wasm and native, but we only need
@@ -56,14 +56,14 @@ slab = "^0.4"
 time = "^0.3"
 
 reqwest = { version = "^0.12", default-features = false, optional = true, features = [
-	"multipart",
-	"json",
-	"stream",
+  "multipart",
+  "json",
+  "stream",
 ] }
 serde = { version = "^1", features = ["derive"], optional = true }
 serde_json = { version = "^1", optional = true }
 url = { version = "^2", optional = true }
-mime = {git = "https://github.com/banyancomputer/mime.git", rev = "d1a1744" , optional = true}
+mime = { git = "https://github.com/banyancomputer/mime.git", rev = "d1a1744", optional = true }
 mime_guess = { version = "2.0.4", optional = true }
 directories = { version = "5.0.1", optional = true }
 
@@ -87,16 +87,16 @@ tracing-wasm = "^0.2"
 wasm-bindgen = { version = "^0.2" }
 wasm-bindgen-futures = "^0.4"
 web-sys = { version = "^0.3", default-features = false, features = [
-	"File",
-	"FileSystemDirectoryHandle",
-	"FileSystemFileHandle",
-	"FileSystemGetFileOptions",
-	"FileSystemGetDirectoryOptions",
-	"FileSystemWritableFileStream",
-	"Navigator",
-	"Storage",
-	"StorageManager",
-	"Window",
+  "File",
+  "FileSystemDirectoryHandle",
+  "FileSystemFileHandle",
+  "FileSystemGetFileOptions",
+  "FileSystemGetDirectoryOptions",
+  "FileSystemWritableFileStream",
+  "Navigator",
+  "Storage",
+  "StorageManager",
+  "Window",
 ] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
