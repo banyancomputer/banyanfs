@@ -7,17 +7,13 @@ pub(crate) struct CurrentUsage;
 
 #[derive(Deserialize)]
 pub struct CurrentUsageResponse {
-    hot_storage: u64,
-    archival_storage: u64,
+    data_size: usize,
+    meta_size: usize,
 }
 
 impl CurrentUsageResponse {
-    pub fn hot_usage(&self) -> u64 {
-        self.hot_storage
-    }
-
-    pub fn archival_usage(&self) -> u64 {
-        self.archival_storage
+    pub fn total_usage(&self) -> usize {
+        self.data_size + self.meta_size
     }
 }
 
