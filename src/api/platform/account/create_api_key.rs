@@ -12,12 +12,12 @@ use crate::api::platform::ApiUserKey;
 // permission over. We'll need a workflow to upgrade keys to the root of the account for things
 // like managing billing.
 #[derive(Serialize)]
-pub struct CreateUserKey {
+pub struct CreateApiKey {
     name: String,
     public_key: String,
 }
 
-impl CreateUserKey {
+impl CreateApiKey {
     pub fn new(name: &str, public_key: &str) -> Self {
         Self {
             name: name.to_string(),
@@ -27,7 +27,7 @@ impl CreateUserKey {
 }
 
 #[async_trait(?Send)]
-impl ApiRequest for CreateUserKey {
+impl ApiRequest for CreateApiKey {
     type Response = ApiUserKey;
 
     const METHOD: Method = Method::POST;
@@ -40,8 +40,8 @@ impl ApiRequest for CreateUserKey {
     }
 
     fn path(&self) -> String {
-        "/api/v1/auth/user_key".to_string()
+        "/api/v1/auth/api_key".to_string()
     }
 }
 
-impl PlatformApiRequest for CreateUserKey {}
+impl PlatformApiRequest for CreateApiKey {}

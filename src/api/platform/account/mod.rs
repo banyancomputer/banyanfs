@@ -1,11 +1,11 @@
-mod create_user_key;
+mod create_api_key;
 mod current_usage;
 mod current_usage_limit;
 mod get_storage_grant;
 mod rename_user_key;
 mod user_key_access;
 
-use create_user_key::CreateUserKey;
+use create_api_key::CreateApiKey;
 use current_usage::{CurrentUsage, CurrentUsageResponse};
 use current_usage_limit::{CurrentUsageLimit, CurrentUsageLimitResponse};
 use get_storage_grant::{GetStorageGrant, GetStorageGrantResponse};
@@ -51,7 +51,7 @@ pub async fn create_user_key(
         .to_spki()
         .map_err(|err| ApiError::InvalidData(err.to_string()))?;
 
-    let create_user_key = CreateUserKey::new(name, &public_key);
+    let create_user_key = CreateApiKey::new(name, &public_key);
     let response = client.platform_request_full(create_user_key).await?;
 
     if cfg!(feature = "strict") && response.fingerprint() != fingerprint {
