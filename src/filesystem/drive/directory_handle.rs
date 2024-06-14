@@ -812,9 +812,11 @@ async fn set_mime_type(data: &[u8], node: &mut Node) {
 #[cfg(test)]
 mod test {
     use super::*;
+
     use crate::filesystem::drive::inner::test::build_interesting_inner;
+
     #[cfg(feature = "mime-type")]
-    use crate::prelude::MemoryDataStore;
+    use crate::stores::MemoryDataStore;
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]

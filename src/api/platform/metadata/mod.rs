@@ -16,8 +16,8 @@ use futures::Stream;
 use crate::api::client::{ApiClient, ApiError};
 use crate::api::platform::{ApiMetadata, ApiMetadataId};
 
+use crate::codec::crypto::VerifyingKey;
 use crate::codec::Cid;
-use crate::prelude::VerifyingKey;
 
 pub async fn get_current(client: &ApiClient, drive_id: &str) -> Result<ApiMetadata, ApiError> {
     client

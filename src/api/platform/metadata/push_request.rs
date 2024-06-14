@@ -8,9 +8,8 @@ use serde::{Deserialize, Serialize};
 use crate::api::client::utils::api_fingerprint_key;
 use crate::api::client::{ApiError, ApiRequest, PlatformApiRequest};
 use crate::api::platform::{ApiDriveId, ApiMetadataId};
-
+use crate::codec::crypto::VerifyingKey;
 use crate::codec::Cid;
-use crate::prelude::VerifyingKey;
 
 pub(crate) struct PushRequest {
     drive_id: ApiDriveId,

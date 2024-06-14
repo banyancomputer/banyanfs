@@ -3,10 +3,10 @@ use std::fmt::{Display as StdDisplay, Formatter as StdFormatter, Result as StdRe
 use wasm_bindgen::prelude::*;
 
 use crate::codec::filesystem::NodeKind;
+#[cfg(feature = "mime-type")]
+use crate::filesystem::nodes::MetadataKey;
 use crate::filesystem::nodes::NodeName;
 use crate::filesystem::DirectoryEntry;
-#[cfg(feature = "mime-type")]
-use crate::prelude::nodes::MetadataKey;
 
 use super::BanyanFsError;
 

@@ -1,4 +1,4 @@
-use crate::prelude::nodes::NodeName;
+use crate::filesystem::nodes::NodeName;
 
 #[derive(Default)]
 pub struct MimeGuesser {
