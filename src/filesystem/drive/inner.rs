@@ -491,8 +491,6 @@ pub(crate) mod test {
     use crate::prelude::*;
     use winnow::Partial;
 
-    use super::*;
-
     fn initialize_inner_drive(signing_key: Option<SigningKey>) -> (ActorId, InnerDrive) {
         let mut rng = crate::utils::crypto_rng();
 
