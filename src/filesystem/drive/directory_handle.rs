@@ -13,6 +13,8 @@ use crate::codec::crypto::{AccessKey, SigningKey};
 use crate::codec::data_storage::{data_chunk::DataChunk, DataBlock};
 use crate::codec::filesystem::BlockKind;
 use crate::filesystem::drive::{DirectoryEntry, InnerDrive, OperationError, WalkState};
+#[cfg(feature = "mime-type")]
+use crate::filesystem::nodes::metadata::{MetadataKey, MimeGuesser};
 use crate::filesystem::nodes::{Node, NodeData, NodeId, NodeName};
 use crate::filesystem::{ContentLocation, ContentReference, FileContent, NodeBuilder};
 use crate::stores::DataStore;
@@ -693,8 +695,11 @@ impl DirectoryHandle {
 
         let mut inner_write = self.inner.write().await;
         let node = inner_write.by_perm_id_mut(&new_permanent_id).await?;
-        let node_data = node.data_mut().await;
 
+        #[cfg(feature = "mime-type")]
+        set_mime_type(data, node).await;
+
+        let node_data = node.data_mut().await;
         let file_content =
             FileContent::encrypted(locked_key, plaintext_cid, data_size, content_references);
         *node_data = NodeData::full_file(file_content);
@@ -797,16 +802,30 @@ fn walk_path<'a>(
     .boxed()
 }
 
+#[cfg(feature = "mime-type")]
+async fn set_mime_type(data: &[u8], node: &mut Node) {
+    if let Some(mime_type) = MimeGuesser::default()
+        .with_name(node.name().clone())
+        .with_data(data)
+        .guess_mime_type()
+    {
+        node.set_attribute(MetadataKey::MimeType, mime_type.to_string().into())
+            .await;
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::filesystem::drive::inner::test::build_interesting_inner;
+    #[cfg(feature = "mime-type")]
+    use crate::prelude::MemoryDataStore;
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn mv_dir_from_dir_to_cwd_specify_name() {
         let mut rng = crate::utils::crypto_rng();
-        let mut handle = interesting_handle().await;
+        let mut handle = interesting_handle(None).await;
         handle
             .mv(&mut rng, &["dir_1", "dir_2"], &["dir_2_new"])
             .await
@@ -826,7 +845,7 @@ mod test {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn mv_dir_from_dir_to_dir_specify_name() {
         let mut rng = crate::utils::crypto_rng();
-        let mut handle = interesting_handle().await;
+        let mut handle = interesting_handle(None).await;
         handle
             .mv(
                 &mut rng,
@@ -850,7 +869,7 @@ mod test {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn mv_file_from_dir_to_cwd_specify_name() {
         let mut rng = crate::utils::crypto_rng();
-        let mut handle = interesting_handle().await;
+        let mut handle = interesting_handle(None).await;
         handle
             .mv(
                 &mut rng,
@@ -874,7 +893,7 @@ mod test {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn mv_file_from_dir_to_dir_specify_name() {
         let mut rng = crate::utils::crypto_rng();
-        let mut handle = interesting_handle().await;
+        let mut handle = interesting_handle(None).await;
         handle
             .mv(
                 &mut rng,
@@ -898,7 +917,7 @@ mod test {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn mv_dir_from_dir_to_cwd_no_name() {
         let mut rng = crate::utils::crypto_rng();
-        let mut handle = interesting_handle().await;
+        let mut handle = interesting_handle(None).await;
         handle.mv(&mut rng, &["dir_1", "dir_2"], &[]).await.unwrap();
 
         let cwd_ls = handle.ls(&[]).await.unwrap();
@@ -915,7 +934,7 @@ mod test {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn mv_dir_from_dir_to_dir_no_name() {
         let mut rng = crate::utils::crypto_rng();
-        let mut handle = interesting_handle().await;
+        let mut handle = interesting_handle(None).await;
         handle
             .mv(&mut rng, &["dir_1", "dir_2", "dir_3"], &["dir_1"])
             .await
@@ -935,7 +954,7 @@ mod test {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn mv_file_from_dir_to_cwd_no_name() {
         let mut rng = crate::utils::crypto_rng();
-        let mut handle = interesting_handle().await;
+        let mut handle = interesting_handle(None).await;
         handle
             .mv(&mut rng, &["dir_1", "dir_2", "dir_3", "file_3"], &[])
             .await
@@ -955,7 +974,7 @@ mod test {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn mv_file_from_dir_to_dir_no_name() {
         let mut rng = crate::utils::crypto_rng();
-        let mut handle = interesting_handle().await;
+        let mut handle = interesting_handle(None).await;
         handle
             .mv(&mut rng, &["dir_1", "dir_2", "dir_3", "file_3"], &["dir_1"])
             .await
@@ -971,7 +990,7 @@ mod test {
         );
     }
 
-    async fn interesting_handle() -> DirectoryHandle {
+    async fn interesting_handle(current_key: Option<SigningKey>) -> DirectoryHandle {
         //           -----file_1
         //         /
         // root ---------file_2
@@ -982,13 +1001,194 @@ mod test {
         //                            \
         //                              ----file_5
         let mut rng = crate::utils::crypto_rng();
-        let inner = build_interesting_inner().await;
+        let inner = build_interesting_inner(current_key.clone()).await;
         let root_id = inner.root_node().unwrap().id();
         let inner = Arc::new(RwLock::new(inner));
         DirectoryHandle {
-            current_key: Arc::new(SigningKey::generate(&mut rng)),
+            current_key: Arc::new(current_key.unwrap_or_else(|| SigningKey::generate(&mut rng))),
             inner,
             cwd_id: root_id,
         }
+    }
+
+    #[cfg(feature = "mime-type")]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn sniff_html_mime_type() {
+        let mut rng = crate::utils::crypto_rng();
+        let current_key = SigningKey::generate(&mut rng);
+        let mut handle = interesting_handle(Some(current_key)).await;
+        let mut store = MemoryDataStore::default();
+
+        let test_cases = vec![
+            (b"<html><head><title>Test File</title></head><body><h1>Hello World!</h1></body></html>".to_vec(), "test.html"),
+            (b"<HTML><HEAD><TITLE>Test File</TITLE></HEAD><BODY><H1>Hello World!</H1></BODY></HTML>".to_vec(), "TEST.HTML"),
+            (b"<h1>Heading</h1><p>Paragraph</p>".to_vec(), "file.htm"),
+            (b"<div><span>Some text</span></div>".to_vec(), "page.php"),
+            (
+                b"<!docTYPE html><html><body>Content</body></html>".to_vec(),
+                "invalid_file_name",
+            ),
+        ];
+        for (data, file_name) in test_cases {
+            handle
+                .write(&mut rng, &mut store, &[file_name], &data)
+                .await
+                .unwrap();
+
+            let cwd_ls = handle.ls(&[]).await.unwrap();
+            assert_eq!(
+                cwd_ls
+                    .iter()
+                    .filter(|entry| entry.name() == NodeName::try_from(file_name).unwrap())
+                    .count(),
+                1
+            );
+
+            let file_entry = cwd_ls
+                .iter()
+                .find(|entry| entry.name() == NodeName::try_from(file_name).unwrap())
+                .unwrap();
+
+            assert_eq!(file_entry.kind(), NodeKind::File);
+
+            let file_data = handle.read(&mut store, &[file_name]).await.unwrap();
+            assert_eq!(file_data.as_slice(), data);
+
+            let mime_type = file_entry.mime_type().unwrap();
+            assert_eq!(mime_type, "text/html");
+        }
+    }
+
+    #[cfg(feature = "mime-type")]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn sniff_mp3_file_mime_type() {
+        let mut rng = crate::utils::crypto_rng();
+        let current_key = SigningKey::generate(&mut rng);
+        let mut handle = interesting_handle(Some(current_key)).await;
+        let mut store = MemoryDataStore::default();
+        let mp3_test_case: &[u8] = &[
+            0x49, 0x44, 0x33, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x22, 0x54, 0x53, 0x53, 0x45,
+            0x00, 0x00, 0x00, 0x0e, 0x00, 0x00, 0x03, 0x4c, 0x61, 0x76, 0x66, 0x36, 0x30, 0x2e,
+            0x33, 0x2e, 0x31, 0x30, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0xff, 0xfb, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+        let file_name = "the_audio.mp4";
+        handle
+            .write(&mut rng, &mut store, &[file_name], mp3_test_case)
+            .await
+            .unwrap();
+
+        let cwd_ls = handle.ls(&[]).await.unwrap();
+        assert_eq!(
+            cwd_ls
+                .iter()
+                .filter(|entry| entry.name() == NodeName::try_from(file_name).unwrap())
+                .count(),
+            1
+        );
+
+        let file_entry = cwd_ls
+            .iter()
+            .find(|entry| entry.name() == NodeName::try_from(file_name).unwrap())
+            .unwrap();
+
+        assert_eq!(file_entry.kind(), NodeKind::File);
+
+        let file_data = handle.read(&mut store, &[file_name]).await.unwrap();
+        assert_eq!(file_data.as_slice(), mp3_test_case);
+
+        let mime_type = file_entry.mime_type().unwrap();
+        assert_eq!(mime_type, "audio/mpeg");
+    }
+
+    #[cfg(feature = "mime-type")]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn sniff_mp4_file_mime_type() {
+        let mut rng = crate::utils::crypto_rng();
+        let current_key = SigningKey::generate(&mut rng);
+        let mut handle = interesting_handle(Some(current_key)).await;
+        let mut store = MemoryDataStore::default();
+        let mp4_test_case: &[u8] = &[
+            0x00, 0x00, 0x00, 0x1c, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0x00, 0x00,
+            0x02, 0x00, 0x69, 0x73, 0x6f, 0x6d, 0x69, 0x73, 0x6f, 0x32, 0x6d, 0x70, 0x34, 0x31,
+            0x00, 0x00, 0x00, 0x08,
+        ];
+        let file_name = "the_audio.mp3";
+        handle
+            .write(&mut rng, &mut store, &[file_name], mp4_test_case)
+            .await
+            .unwrap();
+
+        let cwd_ls = handle.ls(&[]).await.unwrap();
+        assert_eq!(
+            cwd_ls
+                .iter()
+                .filter(|entry| entry.name() == NodeName::try_from(file_name).unwrap())
+                .count(),
+            1
+        );
+
+        let file_entry = cwd_ls
+            .iter()
+            .find(|entry| entry.name() == NodeName::try_from(file_name).unwrap())
+            .unwrap();
+
+        assert_eq!(file_entry.kind(), NodeKind::File);
+
+        let file_data = handle.read(&mut store, &[file_name]).await.unwrap();
+        assert_eq!(file_data.as_slice(), mp4_test_case);
+
+        let mime_type = file_entry.mime_type().unwrap();
+        assert_eq!(mime_type, "video/mp4");
+    }
+
+    #[cfg(feature = "mime-type")]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn sniff_webm_file_mime_type() {
+        let mut rng = crate::utils::crypto_rng();
+        let current_key = SigningKey::generate(&mut rng);
+        let mut handle = interesting_handle(Some(current_key)).await;
+        let mut store = MemoryDataStore::default();
+        let webm_test_case: &[u8] = &[
+            0x1a, 0x45, 0xdf, 0xa3, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1f, 0x42, 0x86,
+            0x81, 0x01, 0x42, 0xf7, 0x81, 0x01, 0x42, 0xf2, 0x81, 0x04, 0x42, 0xf3, 0x81, 0x08,
+            0x42, 0x82, 0x84, 0x77, 0x65, 0x62, 0x6d, 0x42, 0x87, 0x81, 0x02, 0x42, 0x85, 0x81,
+            0x02, 0x18, 0x53, 0x80, 0x67, 0x01, 0x00, 0x00, 0x00, 0x00, 0x0d, 0xc0, 0x0a, 0x11,
+            0x4d, 0x9b, 0x74, 0x40, 0x3c, 0x4d, 0xbb, 0x8b, 0x53, 0xab, 0x84, 0x15, 0x49, 0xa9,
+            0x66, 0x53, 0xac, 0x81, 0xe5, 0x4d, 0xbb, 0x8c, 0x53, 0xab,
+        ];
+        let file_name = "the_audio.mp4";
+        handle
+            .write(&mut rng, &mut store, &[file_name], webm_test_case)
+            .await
+            .unwrap();
+
+        let cwd_ls = handle.ls(&[]).await.unwrap();
+        assert_eq!(
+            cwd_ls
+                .iter()
+                .filter(|entry| entry.name() == NodeName::try_from(file_name).unwrap())
+                .count(),
+            1
+        );
+
+        let file_entry = cwd_ls
+            .iter()
+            .find(|entry| entry.name() == NodeName::try_from(file_name).unwrap())
+            .unwrap();
+
+        assert_eq!(file_entry.kind(), NodeKind::File);
+
+        let file_data = handle.read(&mut store, &[file_name]).await.unwrap();
+        assert_eq!(file_data.as_slice(), webm_test_case);
+
+        let mime_type = file_entry.mime_type().unwrap();
+        assert_eq!(mime_type, "video/webm");
     }
 }

@@ -14,6 +14,8 @@ categories = ["filesystems", "cryptography", "storage"]
 [features]
 default = ["banyan-api", "pem", "tomb-compat"]
 banyan-api = ["async-trait", "reqwest", "serde", "serde_json", "url"]
+mime-type = ["mime", "mime_guess"]
+local-store = ["directories"]
 pem = ["p384/pem", "p384/pkcs8"]
 strict = []
 tomb-compat = ["banyan-api"]
@@ -61,6 +63,9 @@ reqwest = { version = "^0.12", default-features = false, optional = true, featur
 serde = { version = "^1", features = ["derive"], optional = true }
 serde_json = { version = "^1", optional = true }
 url = { version = "^2", optional = true }
+mime = {git = "https://github.com/banyancomputer/mime.git", rev = "d1a1744" , optional = true}
+mime_guess = { version = "2.0.4", optional = true }
+directories = { version = "5.0.1", optional = true }
 
 [[example]]
 name = "full_fs_exercise"

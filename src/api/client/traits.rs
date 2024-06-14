@@ -10,8 +10,6 @@ pub(crate) trait ApiRequest {
 
     const METHOD: Method = Method::GET;
 
-    const REQUIRES_AUTH: bool = true;
-
     async fn add_payload(
         &mut self,
         request_builder: RequestBuilder,
