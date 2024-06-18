@@ -12,6 +12,8 @@ const FILE_CONTENT_TYPE_PUBLIC: u8 = 0x02;
 
 const FILE_CONTENT_TYPE_ENCRYPTED: u8 = 0x03;
 
+const FILE_CONTENT_TYPE_EMPTY: u8 = 0x04;
+
 // todo(sstelfox): need to rename NodeContent...
 #[derive(Clone, Debug)]
 pub enum FileContent {
@@ -23,6 +25,7 @@ pub enum FileContent {
         data_size: u64,
         content: Vec<ContentReference>,
     },
+    EmptyFile,
     Public {
         /// This is the blake3 CID of the plaintext content of the File
         cid: Cid,
@@ -66,6 +69,7 @@ impl FileContent {
         match self {
             Self::Encrypted { cid, .. } | Self::Public { cid, .. } => Some(cid.clone()),
             Self::Stub { .. } => None,
+            Self::EmptyFile => None,
         }
     }
 
@@ -73,6 +77,7 @@ impl FileContent {
         match self {
             Self::Encrypted { content, .. } | Self::Public { content, .. } => Ok(content),
             Self::Stub { .. } => Err(FileContentError::NoContent),
+            Self::EmptyFile { .. } => Ok(&[]),
         }
     }
 
@@ -82,6 +87,7 @@ impl FileContent {
                 Some(content.iter().map(|c| c.data_block_cid()).collect())
             }
             Self::Stub { .. } => None,
+            Self::EmptyFile => None,
         }
     }
 
@@ -101,6 +107,10 @@ impl FileContent {
         let mut written_bytes = 0;
 
         match self {
+            Self::EmptyFile => {
+                writer.write_all(&[FILE_CONTENT_TYPE_EMPTY]).await?;
+                written_bytes += 1;
+            }
             Self::Stub { data_size } => {
                 writer.write_all(&[FILE_CONTENT_TYPE_STUB]).await?;
                 written_bytes += 1;
@@ -154,10 +164,20 @@ impl FileContent {
         matches!(self, Self::Stub { .. })
     }
 
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::EmptyFile => true,
+            Self::Encrypted { data_size, .. } => *data_size < 1u64,
+            Self::Public { data_size, .. } => *data_size < 1u64,
+            Self::Stub { .. } => true,
+        }
+    }
+
     pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, content_type) = le_u8.parse_peek(input)?;
 
         let parsed = match content_type {
+            FILE_CONTENT_TYPE_EMPTY => (input, FileContent::EmptyFile),
             FILE_CONTENT_TYPE_STUB => {
                 let (input, data_size) = le_u64.parse_peek(input)?;
                 (input, FileContent::Stub { data_size })
@@ -211,6 +231,7 @@ impl FileContent {
             FileContent::Encrypted { data_size, .. } => *data_size,
             FileContent::Public { data_size, .. } => *data_size,
             FileContent::Stub { data_size } => *data_size,
+            FileContent::EmptyFile => 0,
         }
     }
 }

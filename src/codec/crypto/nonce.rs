@@ -17,6 +17,10 @@ impl Nonce {
         &self.0
     }
 
+    pub fn from_bytes(data: &[u8; NONCE_LENGTH]) -> Self {
+        Self(*data)
+    }
+
     pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,

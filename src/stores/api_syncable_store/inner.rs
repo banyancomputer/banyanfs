@@ -175,7 +175,7 @@ impl<MS: DataStore, ST: SyncTracker> ApiSyncableStoreInner<MS, ST> {
         }
 
         if immediate {
-            tracing::warn!("immedate storage of blocks isn't support, only bulk metadata tagged uploads for now");
+            tracing::warn!("immediate storage of blocks isn't supported, only bulk metadata tagged uploads for now");
         }
 
         Ok(())

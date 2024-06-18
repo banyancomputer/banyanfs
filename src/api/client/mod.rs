@@ -30,7 +30,6 @@ use serde::Deserialize;
 use tracing::debug;
 
 use crate::codec::crypto::{SigningKey, VerifyingKey};
-use crate::prelude::BanyanFsError;
 
 /// An HTTP client for interacting with the Banyan API (both platform and storage hosts). Specific
 /// requests can be found the in appropriate module for their request type either
@@ -363,12 +362,6 @@ pub enum ApiError {
     #[cfg(target_arch = "wasm32")]
     #[error("WASM internal error: {0}")]
     WasmInternal(String),
-}
-
-impl From<ApiError> for BanyanFsError {
-    fn from(error: ApiError) -> Self {
-        Self::from(error.to_string())
-    }
 }
 
 /// This is the inner error type that the API will always return. We don't return this directly as

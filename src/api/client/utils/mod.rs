@@ -20,10 +20,11 @@ const FINGERPRINT_SIZE: usize = 20;
 
 const TOKEN_LIFETIME: Duration = Duration::from_secs(300);
 
-/// The API uses a truncated blake3 hash for key identification. This provides a convenient method
-/// to generate matching one from a public key.
+/// The API uses a truncated hex encoded blake3 hash for key identification in its JWTs. This
+/// generates the odd version specifically for that generation and should not be used for other
+/// things.
 ///
-/// todo(sstelfox): This needs to be reverted back to a standard size
+/// todo(sstelfox): This needs to be reverted back to a standard size (its tech debt)
 pub(crate) fn api_fingerprint_key(key: &VerifyingKey) -> String {
     let compressed_point = key.to_encoded_point(true);
     let compressed_point = compressed_point.as_bytes();

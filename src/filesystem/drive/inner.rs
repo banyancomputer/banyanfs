@@ -7,7 +7,6 @@ use tracing::instrument;
 use winnow::binary::le_u64;
 use winnow::Parser;
 
-use crate::codec::crypto::AccessKey;
 use crate::codec::*;
 use crate::filesystem::drive::DriveAccess;
 use crate::filesystem::nodes::{Node, NodeBuilder, NodeId};
@@ -121,7 +120,6 @@ impl InnerDrive {
         while let Some(node_id) = node_list.pop() {
             // Because of the work above we can assume that once we get here all of a nodes children are up to date
             let node_mut = self.by_id_mut_untracked(node_id)?;
-
             // Update child CIDs and sizes
             let child_pids = node_mut.data().ordered_child_pids();
             let mut child_data = Vec::new();
@@ -358,12 +356,11 @@ impl InnerDrive {
         self.nodes.iter().map(|(_, node)| node)
     }
 
-    pub(crate) fn parse<'a>(
-        input: Stream<'a>,
+    pub(crate) fn parse(
+        input: Stream<'_>,
         drive_access: DriveAccess,
         journal_start: JournalCheckpoint,
-        data_key: Option<&AccessKey>,
-    ) -> ParserResult<'a, Self> {
+    ) -> ParserResult<'_, Self> {
         tracing::trace!(available_data = ?input.len(), "inner_drive::parse");
 
         let (remaining, root_pid) = PermanentId::parse(input)?;
@@ -383,7 +380,7 @@ impl InnerDrive {
             let entry = nodes.vacant_entry();
             let node_id = entry.key();
 
-            let (remaining, node) = Node::parse(node_input, node_id, data_key)?;
+            let (remaining, node) = Node::parse(node_input, node_id)?;
             node_input = remaining;
             let permanent_id = node.permanent_id();
 
@@ -489,17 +486,17 @@ impl InnerDrive {
 
 #[cfg(test)]
 pub(crate) mod test {
-    use crate::filesystem::nodes::NodeName;
-    use crate::prelude::*;
+    use super::*;
 
     use winnow::Partial;
 
-    use super::*;
+    use crate::codec::crypto::SigningKey;
+    use crate::filesystem::nodes::NodeName;
 
-    fn initialize_inner_drive() -> (ActorId, InnerDrive) {
+    fn initialize_inner_drive(signing_key: Option<SigningKey>) -> (ActorId, InnerDrive) {
         let mut rng = crate::utils::crypto_rng();
 
-        let signing_key = SigningKey::generate(&mut rng);
+        let signing_key = signing_key.unwrap_or_else(|| SigningKey::generate(&mut rng));
         let verifying_key = signing_key.verifying_key();
         let actor_id = verifying_key.actor_id();
 
@@ -513,7 +510,7 @@ pub(crate) mod test {
 
     #[test]
     fn test_drive_initialization() {
-        let (_, inner) = initialize_inner_drive();
+        let (_, inner) = initialize_inner_drive(None);
         assert!(inner.nodes.capacity() == 32);
         assert!(inner.nodes.len() == 1);
     }
@@ -522,7 +519,7 @@ pub(crate) mod test {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_node_creation() {
         let mut rng = crate::utils::crypto_rng();
-        let (actor_id, mut inner) = initialize_inner_drive();
+        let (actor_id, mut inner) = initialize_inner_drive(None);
 
         let create_node_res = inner
             .create_node(
@@ -545,13 +542,13 @@ pub(crate) mod test {
         assert_eq!(new_node.parent_id().unwrap(), inner.root_pid);
         let root_children = inner.root_node().unwrap().ordered_child_pids();
         assert_eq!(root_children.len(), 1);
-        assert_eq!(root_children.get(0).unwrap(), &node_pid);
+        assert_eq!(root_children.first().unwrap(), &node_pid);
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_drive_round_tripping() {
-        let inner = build_interesting_inner().await;
+        let inner = build_interesting_inner(None).await;
 
         let access = inner.access();
         let journal = inner.journal_start();
@@ -560,13 +557,9 @@ pub(crate) mod test {
         let encoding_res = inner.encode(&mut encoded).await;
         assert!(encoding_res.is_ok());
 
-        let (remaining, parsed) = InnerDrive::parse(
-            Partial::new(encoded.as_slice()),
-            access.to_owned(),
-            journal,
-            None,
-        )
-        .unwrap();
+        let (remaining, parsed) =
+            InnerDrive::parse(Partial::new(encoded.as_slice()), access.to_owned(), journal)
+                .unwrap();
         assert!(remaining.is_empty());
         assert_eq!(inner.nodes.len(), parsed.nodes.len());
         for (_, node) in inner.nodes {
@@ -576,9 +569,9 @@ pub(crate) mod test {
     }
 
     // A fixture to make a relatively interesting inner
-    pub(crate) async fn build_interesting_inner() -> InnerDrive {
+    pub(crate) async fn build_interesting_inner(current_key: Option<SigningKey>) -> InnerDrive {
         let mut rng = crate::utils::crypto_rng();
-        let (actor_id, mut inner) = initialize_inner_drive();
+        let (actor_id, mut inner) = initialize_inner_drive(current_key);
 
         //           -----file_1
         //         /

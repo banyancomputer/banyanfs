@@ -121,7 +121,7 @@ impl NodeData {
         let mut child_pairs = self
             .children()
             .map(|child_map| child_map.iter().collect::<Vec<_>>())
-            .unwrap_or_else(Vec::new);
+            .unwrap_or_default();
         child_pairs.sort_by(|(_, a), (_, b)| a.permanent_id().cmp(b.permanent_id()));
         child_pairs
             .into_iter()
@@ -192,7 +192,7 @@ impl NodeData {
     pub(crate) fn remove_child(&mut self, name: &NodeName) -> Result<PermanentId, NodeDataError> {
         let child_map = self.children_mut().ok_or(NodeDataError::NotAParent)?;
         match child_map.remove(name) {
-            Some(id) => Ok(id.permanent_id().clone()),
+            Some(id) => Ok(*id.permanent_id()),
             None => Err(NodeDataError::ChildNameMissing),
         }
     }
@@ -214,8 +214,6 @@ impl NodeData {
     }
 
     pub(crate) fn size(&self) -> u64 {
-        tracing::warn!("size of child entries are not yet included in parents");
-
         match self {
             NodeData::AssociatedData { content } => content.size(),
             NodeData::Directory { .. } => {
@@ -238,6 +236,14 @@ impl NodeData {
         children.iter().fold(0, |acc, (name, entry)| {
             acc + name.size() as u64 + std::mem::size_of::<ChildMapEntry>() as u64 + entry.size()
         })
+    }
+
+    pub(crate) fn empty_file() -> Self {
+        Self::File {
+            permissions: FilePermissions::default(),
+            associated_data: HashMap::new(),
+            content: FileContent::EmptyFile,
+        }
     }
 
     pub(crate) fn full_file(content: FileContent) -> Self {

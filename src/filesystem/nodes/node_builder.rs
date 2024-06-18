@@ -5,7 +5,7 @@ use elliptic_curve::rand_core::CryptoRngCore;
 use crate::codec::filesystem::NodeKind;
 use crate::codec::meta::{ActorId, VectorClock};
 use crate::filesystem::nodes::{
-    CidCache, Node, NodeData, NodeId, NodeName, NodeNameError, PermanentId,
+    CidCache, MetadataKey, Node, NodeData, NodeId, NodeName, NodeNameError, PermanentId,
 };
 
 pub(crate) struct NodeBuilder {
@@ -17,7 +17,7 @@ pub(crate) struct NodeBuilder {
     size_hint: Option<u64>,
 
     kind: NodeKind,
-    metadata: HashMap<String, Vec<u8>>,
+    metadata: HashMap<MetadataKey, Vec<u8>>,
 }
 
 impl NodeBuilder {

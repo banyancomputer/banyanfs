@@ -28,7 +28,7 @@ use crate::codec::crypto::*;
 use crate::codec::header::*;
 use crate::codec::*;
 
-use crate::filesystem::nodes::{Node, NodeBuilderError};
+use crate::filesystem::nodes::{Node, NodeBuilderError, NodeName};
 
 /// The core entry point of the library, a `Drive` is the means through which the BanyanFS
 /// filesystem's public or private data is accessed. Initial creation of a new drive requires a
@@ -203,6 +203,19 @@ impl Drive {
         Ok(())
     }
 
+    /// Marks the key with the matching actor id as historical. Requires that the corresponding key
+    /// not be protected. Requires that the current key be an owner.
+    pub async fn remove_key(
+        &self,
+        current_key: &SigningKey,
+        removal_id: &ActorId,
+    ) -> Result<(), DriveAccessError> {
+        let mut inner_write = self.inner.write().await;
+        inner_write
+            .access_mut()
+            .remove_actor(current_key, removal_id)?;
+        Ok(())
+    }
     /// If the caller knows the [`PermanentId`] of a directory, they can retrieve a handle on it
     /// directly. Generally users will traverse the filesystem themselves to get this information,
     /// but that can be a costly operation. This allows the external cacheing of permanent IDs to
@@ -280,6 +293,35 @@ impl Drive {
         let root_cid = root_node.cid().await?;
 
         Ok(root_cid)
+    }
+
+    pub async fn full_path_from_root(
+        &self,
+        target: &PermanentId,
+    ) -> Result<Vec<String>, OperationError> {
+        let inner_read = &self.inner.read().await;
+        let mut target_node = inner_read
+            .by_perm_id(target)
+            .map_err(|_| OperationError::MissingPermanentId(*target))?;
+
+        let target_node_name = match target_node.name() {
+            NodeName::Root => return Ok(Vec::new()),
+            NodeName::Named(name) => name.to_string(),
+        };
+
+        let mut path = vec![target_node_name];
+        while let Some(parent_id) = target_node.parent_id() {
+            let parent_node = inner_read.by_perm_id(&parent_id)?;
+
+            match parent_node.name() {
+                NodeName::Root => break,
+                NodeName::Named(name) => path.push(name.to_string()),
+            }
+            target_node = parent_node
+        }
+        path.reverse();
+
+        Ok(path)
     }
 }
 

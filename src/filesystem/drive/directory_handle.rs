@@ -10,9 +10,11 @@ use crate::codec::filesystem::NodeKind;
 use crate::codec::*;
 
 use crate::codec::crypto::{AccessKey, SigningKey};
+use crate::codec::data_storage::{data_chunk::DataChunk, DataBlock};
 use crate::codec::filesystem::BlockKind;
-use crate::codec::header::DataBlock;
 use crate::filesystem::drive::{DirectoryEntry, InnerDrive, OperationError, WalkState};
+#[cfg(feature = "mime-type")]
+use crate::filesystem::nodes::metadata::{MetadataKey, MimeGuesser};
 use crate::filesystem::nodes::{Node, NodeData, NodeId, NodeName};
 use crate::filesystem::{ContentLocation, ContentReference, FileContent, NodeBuilder};
 use crate::stores::DataStore;
@@ -442,12 +444,6 @@ impl DirectoryHandle {
                 .unlock(data_key)
                 .map_err(|_| OperationError::AccessDenied)?;
 
-            let author_id = read_node.owner_id();
-            let verifying_key = inner_read
-                .access()
-                .actor_key(&author_id)
-                .ok_or(OperationError::AccessDenied)?;
-
             let mut file_data = Vec::new();
 
             for content_ref in node_content.content_references()? {
@@ -459,15 +455,11 @@ impl DirectoryHandle {
 
                 let data_chunk = store.retrieve(content_ref.data_block_cid()).await?;
 
-                let (_remaining, block) = DataBlock::parse_with_magic(
-                    Stream::new(&data_chunk),
-                    &unlocked_key,
-                    &verifying_key,
-                )
-                .map_err(|err| {
-                    tracing::error!("parsing of data block failed: {err:?}");
-                    OperationError::BlockCorrupted(content_ref.data_block_cid())
-                })?;
+                let (_remaining, block) = DataBlock::parse_with_magic(Stream::new(&data_chunk))
+                    .map_err(|err| {
+                        tracing::error!("parsing of data block failed: {err:?}");
+                        OperationError::BlockCorrupted(content_ref.data_block_cid())
+                    })?;
                 // todo(sstelfox): still stuff remaining which means this decoder is sloppy
                 //tracing::info!(?remaining, "drive::read::remaining");
                 //debug_assert!(remaining.is_empty(), "no extra data should be present");
@@ -477,18 +469,28 @@ impl DirectoryHandle {
                         unimplemented!("indirect reference loading");
                     }
 
-                    let data = block
-                        .get_chunk_data(location.block_index() as usize)
+                    let encrypted_chunk = block
+                        .get_chunk(location.block_index() as usize)
                         .map_err(|err| {
                             tracing::error!("failed to retrieve block chunk: {err:?}");
                             OperationError::BlockCorrupted(content_ref.data_block_cid())
                         })?;
+                    let chunk = encrypted_chunk
+                        .decrypt(&block.data_options(), &unlocked_key)
+                        .map_err(|_| {
+                            OperationError::BlockCorrupted(content_ref.data_block_cid())
+                        })?;
 
-                    file_data.extend_from_slice(data);
+                    // &unlocked_key,
+                    // &verifying_key,
+
+                    file_data.extend_from_slice(chunk.data());
                 }
             }
 
             Ok(file_data)
+        } else if node_content.is_empty() {
+            Ok(Vec::new())
         } else {
             unimplemented!()
         }
@@ -519,61 +521,76 @@ impl DirectoryHandle {
 
         drop(inner_read);
 
-        let (parent_path, name) = path.split_at(path.len() - 1);
-        let file_name = NodeName::try_from(name[0]).map_err(OperationError::InvalidName)?;
-
-        tracing::info!(?path, ?file_name, "drive::write");
-
-        let parent_id = match walk_path(&self.inner, self.cwd_id, parent_path, 0).await? {
-            WalkState::FoundNode { node_id } => node_id,
-            WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
+        let existing_file = match walk_path(&self.inner, self.cwd_id, path, 0).await {
+            Ok(WalkState::FoundNode { node_id }) => Some(node_id),
+            _ => None,
         };
 
-        tracing::info!(?parent_id, "drive::write::parent_id");
-
-        let inner_read = self.inner.read().await;
-        let parent_node = inner_read.by_id(parent_id)?;
-        let parent_perm_id = parent_node.permanent_id();
-        drop(inner_read);
-
         let data_size = data.len() as u64;
-        let node_name = file_name.clone();
+        let new_permanent_id = match existing_file {
+            Some(existing_file) => {
+                let inner_read = self.inner.read().await;
+                let node = inner_read.by_id(existing_file)?;
+                node.permanent_id()
+            }
+            None => {
+                let (parent_path, name) = path.split_at(path.len() - 1);
+                let file_name = NodeName::try_from(name[0]).map_err(OperationError::InvalidName)?;
 
-        // todo(sstelfox): handle the special case of an empty file, it shouldn't be a stub and
-        // doesn't need to go through the encoding process.
+                tracing::info!(?path, ?file_name, "drive::write");
 
-        let new_permanent_id = self
-            .insert_node(
-                rng,
-                parent_perm_id,
-                |rng, new_node_id, parent_id, actor_id| async move {
-                    NodeBuilder::file(node_name)
-                        .with_parent(parent_id)
-                        .with_id(new_node_id)
-                        .with_owner(actor_id)
-                        .with_size_hint(data_size)
-                        .build(rng)
-                        .map_err(OperationError::CreationFailed)
-                },
-            )
-            .await?;
+                let parent_id = match walk_path(&self.inner, self.cwd_id, parent_path, 0).await? {
+                    WalkState::FoundNode { node_id } => node_id,
+                    WalkState::MissingComponent { .. } => return Err(OperationError::PathNotFound),
+                };
 
-        const SMALL_BLOCK_THRESHOLD: usize = DataBlock::SMALL_ENCRYPTED_SIZE * 8;
-        let block_creator = if data_size > SMALL_BLOCK_THRESHOLD as u64 {
-            || match DataBlock::small() {
-                Ok(ab) => Ok(ab),
-                Err(err) => {
+                tracing::info!(?parent_id, ?parent_path, "drive::write::parent_id");
+
+                let inner_read = self.inner.read().await;
+                let parent_node = inner_read.by_id(parent_id)?;
+                let parent_perm_id = parent_node.permanent_id();
+                drop(inner_read);
+
+                let node_name = file_name.clone();
+                self.insert_node(
+                    rng,
+                    parent_perm_id,
+                    |rng, new_node_id, parent_id, actor_id| async move {
+                        NodeBuilder::file(node_name)
+                            .with_parent(parent_id)
+                            .with_id(new_node_id)
+                            .with_owner(actor_id)
+                            .with_size_hint(data_size)
+                            .build(rng)
+                            .map_err(OperationError::CreationFailed)
+                    },
+                )
+                .await?
+            }
+        };
+
+        if data.is_empty() {
+            let mut inner_write = self.inner.write().await;
+            let node = inner_write.by_perm_id_mut(&new_permanent_id).await?;
+            let node_data = node.data_mut().await;
+            *node_data = NodeData::empty_file();
+            return Ok(());
+        }
+
+        let small_block_threshold: usize = DataBlock::small_encrypted_data_size() * 8;
+        let block_creator = if data_size > small_block_threshold as u64 {
+            || {
+                DataBlock::small().map_err(|err| {
                     tracing::error!("failed to create data block: {:?}", err);
-                    Err(OperationError::Other("data block failed"))
-                }
+                    OperationError::Other("data block failed")
+                })
             }
         } else {
-            || match DataBlock::standard() {
-                Ok(ab) => Ok(ab),
-                Err(err) => {
+            || {
+                DataBlock::standard().map_err(|err| {
                     tracing::error!("failed to create data block: {:?}", err);
-                    Err(OperationError::Other("data block failed"))
-                }
+                    OperationError::Other("data block failed")
+                })
             }
         };
 
@@ -583,47 +600,59 @@ impl DirectoryHandle {
 
         let mut remaining_data = data;
         let mut active_block = block_creator()?;
-        let active_block_chunk_size = active_block.chunk_size();
+        let active_block_chunk_size = active_block.data_options().chunk_data_size();
         let node_data_key = AccessKey::generate(rng);
         let mut content_references = Vec::new();
+        let mut content_indexes = Vec::new();
 
         while !remaining_data.is_empty() {
             let data_to_read = std::cmp::min(remaining_data.len(), active_block_chunk_size);
             let (chunk_data, next_data) = remaining_data.split_at(data_to_read);
             remaining_data = next_data;
 
-            active_block
-                .push_chunk(chunk_data.to_vec())
+            let chunk = DataChunk::from_slice(chunk_data, &active_block.data_options())
                 .map_err(|err| {
                     tracing::error!("failed to push chunk: {:?}", err);
                     OperationError::Other("expected remaining capacity")
+                })?
+                .encrypt(rng, &active_block.data_options(), &node_data_key)
+                .await
+                .map_err(|err| {
+                    tracing::error!("Failed to encrypt chunk: {:?}", err);
+                    OperationError::Other("Error encrypting chunk")
                 })?;
+
+            content_indexes.push(active_block.push_chunk(chunk).map_err(|err| {
+                tracing::error!("failed to push chunk: {:?}", err);
+                OperationError::Other("expected remaining capacity")
+            })?);
 
             if active_block.is_full() {
                 let mut sealed_block = Vec::new();
 
-                let (_, cids) = active_block
-                    .encode(rng, &node_data_key, &self.current_key, &mut sealed_block)
-                    .await
-                    .map_err(|err| {
-                        tracing::error!("failed to encode block: {:?}", err);
-                        OperationError::Other("failed to encode block")
-                    })?;
+                let (_, cids) =
+                    active_block
+                        .encode(rng, &mut sealed_block)
+                        .await
+                        .map_err(|err| {
+                            tracing::error!("failed to encode block: {:?}", err);
+                            OperationError::Other("failed to encode block")
+                        })?;
 
-                let block_size = *active_block.data_options().block_size();
                 let cid = active_block
                     .cid()
                     .map_err(|_| OperationError::Other("unable to access block cid"))?;
 
                 store.store(cid.clone(), sealed_block, false).await?;
 
-                let locations = cids
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, cid)| ContentLocation::data(cid, i as u64))
+                let locations = content_indexes
+                    .iter()
+                    .map(|i| ContentLocation::data(cids[*i].clone(), *i as u64))
                     .collect::<Vec<_>>();
+                content_indexes.clear();
 
-                let content_ref = ContentReference::new(cid, block_size, locations);
+                let content_ref =
+                    ContentReference::new(cid, active_block.data_options(), locations);
                 content_references.push(content_ref);
 
                 active_block = block_creator()?;
@@ -637,27 +666,26 @@ impl DirectoryHandle {
             let mut sealed_block = Vec::new();
 
             let (_, cids) = active_block
-                .encode(rng, &node_data_key, &self.current_key, &mut sealed_block)
+                .encode(rng, &mut sealed_block)
                 .await
                 .map_err(|err| {
                     tracing::error!("failed to encode block: {:?}", err);
                     OperationError::Other("failed to encode block")
                 })?;
 
-            let block_size = *active_block.data_options().block_size();
             let cid = active_block
                 .cid()
                 .map_err(|_| OperationError::Other("unable to access block cid"))?;
 
             store.store(cid.clone(), sealed_block, false).await?;
 
-            let locations = cids
-                .into_iter()
-                .enumerate()
-                .map(|(i, cid)| ContentLocation::data(cid, i as u64))
+            let locations = content_indexes
+                .iter()
+                .map(|i| ContentLocation::data(cids[*i].clone(), *i as u64))
                 .collect::<Vec<_>>();
+            content_indexes.clear();
 
-            let content_ref = ContentReference::new(cid, block_size, locations);
+            let content_ref = ContentReference::new(cid, active_block.data_options(), locations);
             content_references.push(content_ref);
         }
 
@@ -667,8 +695,11 @@ impl DirectoryHandle {
 
         let mut inner_write = self.inner.write().await;
         let node = inner_write.by_perm_id_mut(&new_permanent_id).await?;
-        let node_data = node.data_mut().await;
 
+        #[cfg(feature = "mime-type")]
+        set_mime_type(data, node).await;
+
+        let node_data = node.data_mut().await;
         let file_content =
             FileContent::encrypted(locked_key, plaintext_cid, data_size, content_references);
         *node_data = NodeData::full_file(file_content);
@@ -737,16 +768,30 @@ fn walk_path<'a>(
     .boxed()
 }
 
+#[cfg(feature = "mime-type")]
+async fn set_mime_type(data: &[u8], node: &mut Node) {
+    if let Some(mime_type) = MimeGuesser::default()
+        .with_name(node.name().clone())
+        .with_data(data)
+        .guess_mime_type()
+    {
+        node.set_attribute(MetadataKey::MimeType, mime_type.to_string().into())
+            .await;
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::filesystem::drive::inner::test::build_interesting_inner;
+    #[cfg(feature = "mime-type")]
+    use crate::prelude::MemoryDataStore;
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn mv_dir_from_dir_to_cwd_specify_name() {
         let mut rng = crate::utils::crypto_rng();
-        let mut handle = interesting_handle().await;
+        let mut handle = interesting_handle(None).await;
         handle
             .mv(&mut rng, &["dir_1", "dir_2"], &["dir_2_new"])
             .await
@@ -766,7 +811,7 @@ mod test {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn mv_dir_from_dir_to_dir_specify_name() {
         let mut rng = crate::utils::crypto_rng();
-        let mut handle = interesting_handle().await;
+        let mut handle = interesting_handle(None).await;
         handle
             .mv(
                 &mut rng,
@@ -790,7 +835,7 @@ mod test {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn mv_file_from_dir_to_cwd_specify_name() {
         let mut rng = crate::utils::crypto_rng();
-        let mut handle = interesting_handle().await;
+        let mut handle = interesting_handle(None).await;
         handle
             .mv(
                 &mut rng,
@@ -814,7 +859,7 @@ mod test {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn mv_file_from_dir_to_dir_specify_name() {
         let mut rng = crate::utils::crypto_rng();
-        let mut handle = interesting_handle().await;
+        let mut handle = interesting_handle(None).await;
         handle
             .mv(
                 &mut rng,
@@ -838,7 +883,7 @@ mod test {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn mv_dir_from_dir_to_cwd_no_name() {
         let mut rng = crate::utils::crypto_rng();
-        let mut handle = interesting_handle().await;
+        let mut handle = interesting_handle(None).await;
         handle.mv(&mut rng, &["dir_1", "dir_2"], &[]).await.unwrap();
 
         let cwd_ls = handle.ls(&[]).await.unwrap();
@@ -855,7 +900,7 @@ mod test {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn mv_dir_from_dir_to_dir_no_name() {
         let mut rng = crate::utils::crypto_rng();
-        let mut handle = interesting_handle().await;
+        let mut handle = interesting_handle(None).await;
         handle
             .mv(&mut rng, &["dir_1", "dir_2", "dir_3"], &["dir_1"])
             .await
@@ -875,7 +920,7 @@ mod test {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn mv_file_from_dir_to_cwd_no_name() {
         let mut rng = crate::utils::crypto_rng();
-        let mut handle = interesting_handle().await;
+        let mut handle = interesting_handle(None).await;
         handle
             .mv(&mut rng, &["dir_1", "dir_2", "dir_3", "file_3"], &[])
             .await
@@ -895,7 +940,7 @@ mod test {
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn mv_file_from_dir_to_dir_no_name() {
         let mut rng = crate::utils::crypto_rng();
-        let mut handle = interesting_handle().await;
+        let mut handle = interesting_handle(None).await;
         handle
             .mv(&mut rng, &["dir_1", "dir_2", "dir_3", "file_3"], &["dir_1"])
             .await
@@ -911,7 +956,7 @@ mod test {
         );
     }
 
-    async fn interesting_handle() -> DirectoryHandle {
+    async fn interesting_handle(current_key: Option<SigningKey>) -> DirectoryHandle {
         //           -----file_1
         //         /
         // root ---------file_2
@@ -922,13 +967,194 @@ mod test {
         //                            \
         //                              ----file_5
         let mut rng = crate::utils::crypto_rng();
-        let inner = build_interesting_inner().await;
+        let inner = build_interesting_inner(current_key.clone()).await;
         let root_id = inner.root_node().unwrap().id();
         let inner = Arc::new(RwLock::new(inner));
         DirectoryHandle {
-            current_key: Arc::new(SigningKey::generate(&mut rng)),
+            current_key: Arc::new(current_key.unwrap_or_else(|| SigningKey::generate(&mut rng))),
             inner,
             cwd_id: root_id,
         }
+    }
+
+    #[cfg(feature = "mime-type")]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn sniff_html_mime_type() {
+        let mut rng = crate::utils::crypto_rng();
+        let current_key = SigningKey::generate(&mut rng);
+        let mut handle = interesting_handle(Some(current_key)).await;
+        let mut store = MemoryDataStore::default();
+
+        let test_cases = vec![
+            (b"<html><head><title>Test File</title></head><body><h1>Hello World!</h1></body></html>".to_vec(), "test.html"),
+            (b"<HTML><HEAD><TITLE>Test File</TITLE></HEAD><BODY><H1>Hello World!</H1></BODY></HTML>".to_vec(), "TEST.HTML"),
+            (b"<h1>Heading</h1><p>Paragraph</p>".to_vec(), "file.htm"),
+            (b"<div><span>Some text</span></div>".to_vec(), "page.php"),
+            (
+                b"<!docTYPE html><html><body>Content</body></html>".to_vec(),
+                "invalid_file_name",
+            ),
+        ];
+        for (data, file_name) in test_cases {
+            handle
+                .write(&mut rng, &mut store, &[file_name], &data)
+                .await
+                .unwrap();
+
+            let cwd_ls = handle.ls(&[]).await.unwrap();
+            assert_eq!(
+                cwd_ls
+                    .iter()
+                    .filter(|entry| entry.name() == NodeName::try_from(file_name).unwrap())
+                    .count(),
+                1
+            );
+
+            let file_entry = cwd_ls
+                .iter()
+                .find(|entry| entry.name() == NodeName::try_from(file_name).unwrap())
+                .unwrap();
+
+            assert_eq!(file_entry.kind(), NodeKind::File);
+
+            let file_data = handle.read(&mut store, &[file_name]).await.unwrap();
+            assert_eq!(file_data.as_slice(), data);
+
+            let mime_type = file_entry.mime_type().unwrap();
+            assert_eq!(mime_type, "text/html");
+        }
+    }
+
+    #[cfg(feature = "mime-type")]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn sniff_mp3_file_mime_type() {
+        let mut rng = crate::utils::crypto_rng();
+        let current_key = SigningKey::generate(&mut rng);
+        let mut handle = interesting_handle(Some(current_key)).await;
+        let mut store = MemoryDataStore::default();
+        let mp3_test_case: &[u8] = &[
+            0x49, 0x44, 0x33, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x22, 0x54, 0x53, 0x53, 0x45,
+            0x00, 0x00, 0x00, 0x0e, 0x00, 0x00, 0x03, 0x4c, 0x61, 0x76, 0x66, 0x36, 0x30, 0x2e,
+            0x33, 0x2e, 0x31, 0x30, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0xff, 0xfb, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+        let file_name = "the_audio.mp4";
+        handle
+            .write(&mut rng, &mut store, &[file_name], mp3_test_case)
+            .await
+            .unwrap();
+
+        let cwd_ls = handle.ls(&[]).await.unwrap();
+        assert_eq!(
+            cwd_ls
+                .iter()
+                .filter(|entry| entry.name() == NodeName::try_from(file_name).unwrap())
+                .count(),
+            1
+        );
+
+        let file_entry = cwd_ls
+            .iter()
+            .find(|entry| entry.name() == NodeName::try_from(file_name).unwrap())
+            .unwrap();
+
+        assert_eq!(file_entry.kind(), NodeKind::File);
+
+        let file_data = handle.read(&mut store, &[file_name]).await.unwrap();
+        assert_eq!(file_data.as_slice(), mp3_test_case);
+
+        let mime_type = file_entry.mime_type().unwrap();
+        assert_eq!(mime_type, "audio/mpeg");
+    }
+
+    #[cfg(feature = "mime-type")]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn sniff_mp4_file_mime_type() {
+        let mut rng = crate::utils::crypto_rng();
+        let current_key = SigningKey::generate(&mut rng);
+        let mut handle = interesting_handle(Some(current_key)).await;
+        let mut store = MemoryDataStore::default();
+        let mp4_test_case: &[u8] = &[
+            0x00, 0x00, 0x00, 0x1c, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0x00, 0x00,
+            0x02, 0x00, 0x69, 0x73, 0x6f, 0x6d, 0x69, 0x73, 0x6f, 0x32, 0x6d, 0x70, 0x34, 0x31,
+            0x00, 0x00, 0x00, 0x08,
+        ];
+        let file_name = "the_audio.mp3";
+        handle
+            .write(&mut rng, &mut store, &[file_name], mp4_test_case)
+            .await
+            .unwrap();
+
+        let cwd_ls = handle.ls(&[]).await.unwrap();
+        assert_eq!(
+            cwd_ls
+                .iter()
+                .filter(|entry| entry.name() == NodeName::try_from(file_name).unwrap())
+                .count(),
+            1
+        );
+
+        let file_entry = cwd_ls
+            .iter()
+            .find(|entry| entry.name() == NodeName::try_from(file_name).unwrap())
+            .unwrap();
+
+        assert_eq!(file_entry.kind(), NodeKind::File);
+
+        let file_data = handle.read(&mut store, &[file_name]).await.unwrap();
+        assert_eq!(file_data.as_slice(), mp4_test_case);
+
+        let mime_type = file_entry.mime_type().unwrap();
+        assert_eq!(mime_type, "video/mp4");
+    }
+
+    #[cfg(feature = "mime-type")]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn sniff_webm_file_mime_type() {
+        let mut rng = crate::utils::crypto_rng();
+        let current_key = SigningKey::generate(&mut rng);
+        let mut handle = interesting_handle(Some(current_key)).await;
+        let mut store = MemoryDataStore::default();
+        let webm_test_case: &[u8] = &[
+            0x1a, 0x45, 0xdf, 0xa3, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1f, 0x42, 0x86,
+            0x81, 0x01, 0x42, 0xf7, 0x81, 0x01, 0x42, 0xf2, 0x81, 0x04, 0x42, 0xf3, 0x81, 0x08,
+            0x42, 0x82, 0x84, 0x77, 0x65, 0x62, 0x6d, 0x42, 0x87, 0x81, 0x02, 0x42, 0x85, 0x81,
+            0x02, 0x18, 0x53, 0x80, 0x67, 0x01, 0x00, 0x00, 0x00, 0x00, 0x0d, 0xc0, 0x0a, 0x11,
+            0x4d, 0x9b, 0x74, 0x40, 0x3c, 0x4d, 0xbb, 0x8b, 0x53, 0xab, 0x84, 0x15, 0x49, 0xa9,
+            0x66, 0x53, 0xac, 0x81, 0xe5, 0x4d, 0xbb, 0x8c, 0x53, 0xab,
+        ];
+        let file_name = "the_audio.mp4";
+        handle
+            .write(&mut rng, &mut store, &[file_name], webm_test_case)
+            .await
+            .unwrap();
+
+        let cwd_ls = handle.ls(&[]).await.unwrap();
+        assert_eq!(
+            cwd_ls
+                .iter()
+                .filter(|entry| entry.name() == NodeName::try_from(file_name).unwrap())
+                .count(),
+            1
+        );
+
+        let file_entry = cwd_ls
+            .iter()
+            .find(|entry| entry.name() == NodeName::try_from(file_name).unwrap())
+            .unwrap();
+
+        assert_eq!(file_entry.kind(), NodeKind::File);
+
+        let file_data = handle.read(&mut store, &[file_name]).await.unwrap();
+        assert_eq!(file_data.as_slice(), webm_test_case);
+
+        let mime_type = file_entry.mime_type().unwrap();
+        assert_eq!(mime_type, "video/webm");
     }
 }

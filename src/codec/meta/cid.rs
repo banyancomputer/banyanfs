@@ -1,4 +1,7 @@
 use futures::{AsyncWrite, AsyncWriteExt};
+use serde::de::Deserializer;
+use serde::{Deserialize, Serialize};
+use std::fmt::{Debug, Display};
 use winnow::{token::take, Parser};
 
 use crate::codec::{ParserResult, Stream};
@@ -55,16 +58,23 @@ impl Cid {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum CidError {
-    #[error("unsupport encoding version provided")]
-    InvalidEncoding,
-
-    #[error("invalid hash size")]
-    InvalidHashSize,
+impl std::fmt::Debug for Cid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_base64url_multicodec())
+    }
 }
 
-impl std::fmt::Debug for Cid {
+impl<'de> Deserialize<'de> for Cid {
+    fn deserialize<D>(deserializer: D) -> Result<Cid, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Cid::try_from(s.as_str()).map_err(serde::de::Error::custom)
+    }
+}
+
+impl Display for Cid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_base64url_multicodec())
     }
@@ -73,6 +83,15 @@ impl std::fmt::Debug for Cid {
 impl From<[u8; CID_LENGTH]> for Cid {
     fn from(bytes: [u8; CID_LENGTH]) -> Self {
         Self(bytes)
+    }
+}
+
+impl Serialize for Cid {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.as_base64url_multicodec().serialize(serializer)
     }
 }
 
@@ -102,4 +121,13 @@ impl TryFrom<&str> for Cid {
 
         Ok(Cid::from(cid_bytes))
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CidError {
+    #[error("unsupport encoding version provided")]
+    InvalidEncoding,
+
+    #[error("invalid hash size")]
+    InvalidHashSize,
 }
