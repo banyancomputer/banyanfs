@@ -13,7 +13,7 @@ use crate::utils::crypto_rng;
 use crate::wasm::tomb_compat::{
     TombCompat, WasmBucket, WasmBucketMetadata, WasmFsMetadataEntry, WasmSnapshot,
 };
-use crate::wasm::WasmDataStorage;
+use crate::wasm::BrowserStore;
 
 #[derive(Clone)]
 #[wasm_bindgen]
@@ -22,7 +22,7 @@ pub struct WasmMount {
 
     bucket: WasmBucket,
     drive: Option<Drive>,
-    store: WasmDataStorage,
+    store: BrowserStore,
 
     // Dirty should be a derived attribute based on the state of the drive and knowledge of the
     // state of the data cache.
@@ -34,7 +34,7 @@ impl WasmMount {
     pub(crate) async fn initialize(
         bucket: WasmBucket,
         wasm_client: TombCompat,
-        store: WasmDataStorage,
+        store: BrowserStore,
     ) -> BanyanFsResult<Self> {
         let mut rng = crypto_rng();
         let signing_key = wasm_client.signing_key();

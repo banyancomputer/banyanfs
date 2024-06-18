@@ -7,137 +7,8 @@ use web_sys::{
     FileSystemWritableFileStream, StorageManager,
 };
 
-use crate::api::ApiClient;
 use crate::codec::meta::Cid;
-use crate::stores::{ApiSyncableStore, DataStore, DataStoreError, MemorySyncTracker};
-
-// todo(sstelfox): I really want WASM aware versions of this that can be shared between browser
-// tabs, likely this means using the filesystem for the data store and indexdb for the sync
-// tracker.
-pub(crate) type WasmDataStorage = ApiSyncableStore<WebFsDataStore, MemorySyncTracker>;
-
-pub(crate) fn initialize_store(api_client: ApiClient) -> WasmDataStorage {
-    let tracker = MemorySyncTracker::default();
-    ApiSyncableStore::new(api_client, WebFsDataStore, tracker)
-}
-
-//impl WasmDataStorage {
-//    #[instrument(skip(self))]
-//    pub async fn mark_synced(&self, cid: &Cid) -> Result<(), BanyanFsError> {
-//        let mut inner = self.inner.write().await;
-//        inner.mark_synced(cid).await
-//    }
-//
-//    #[instrument(skip(self))]
-//    pub async fn retrieve(&self, cid: &Cid) -> Result<Option<Vec<u8>>, BanyanFsError> {
-//        let inner = self.inner.read().await;
-//        inner.retrieve(cid).await
-//
-//        let raw_data = JsFuture::from(file.array_buffer())
-//            .await
-//            .map(Uint8Array::from)
-//            .map(|a| a.to_vec())
-//            .map_err(|e| format!("failed reading file data: {e:?}"))?;
-//
-//        Ok(Some(raw_data))
-//    }
-//
-//    #[instrument(skip(self, data))]
-//    pub async fn store(&self, cid: Cid, data: Vec<u8>) -> Result<(), BanyanFsError> {
-//        let mut inner = self.inner.write().await;
-//        inner.store(cid, data).await
-//    }
-//
-//    pub async fn unsynced_cids(&self) -> Vec<Cid> {
-//        let inner = self.inner.read().await;
-//        inner.unsynced_cids()
-//    }
-//
-//    pub async fn unsynced_data_size(&self) -> u64 {
-//        let inner = self.inner.read().await;
-//        inner.unsynced_data_size()
-//    }
-//}
-
-//#[derive(Default)]
-//struct DataStorageInner {
-//    stored_cids: HashSet<Cid>,
-//    unsynced_cids: HashSet<Cid>,
-//    unsynced_data_size: u64,
-//}
-
-//impl DataStorageInner {
-//    pub async fn retrieve(&self, cid: &Cid) -> Result<Option<Vec<u8>>, BanyanFsError> {
-//        let file = match get_cid_file(cid).await? {
-//            Some(file) => file,
-//            None => return Ok(None),
-//        };
-//    }
-//
-//    pub async fn store(&mut self, cid: Cid, data: Vec<u8>) -> Result<(), BanyanFsError> {
-//        let storage_dir = storage_directory().await?;
-//
-//        let name = format!("{:?}.blk", cid.as_base64url_multicodec());
-//        let mut open_opts = FileSystemGetFileOptions::new();
-//        open_opts.create(true);
-//
-//        let fh = JsFuture::from(storage_dir.get_file_handle_with_options(&name, &open_opts))
-//            .await
-//            .map(FileSystemFileHandle::from)
-//            .map_err(|e| format!("failed to open storage directory: {e:?}"))?;
-//
-//        let writer = JsFuture::from(fh.create_writable())
-//            .await
-//            .map(FileSystemWritableFileStream::from)
-//            .map_err(|e| format!("failed to get writable file handle: {e:?}"))?;
-//
-//        let write_promise = writer
-//            .write_with_u8_array(&data)
-//            .map_err(|e| format!("failed to create storage future: {e:?}"))?;
-//
-//        JsFuture::from(write_promise)
-//            .await
-//            .map_err(|e| format!("failed to store data: {e:?}"))?;
-//
-//        self.stored_cids.insert(cid.clone());
-//        self.unsynced_cids.insert(cid);
-//        self.unsynced_data_size += data.len() as u64;
-//
-//        Ok(())
-//    }
-//
-//    pub fn unsynced_cids(&self) -> Vec<Cid> {
-//        self.unsynced_cids.iter().cloned().collect()
-//    }
-//
-//    pub fn unsynced_data_size(&self) -> u64 {
-//        self.unsynced_data_size
-//    }
-//}
-
-//#[async_trait(?Send)]
-//impl DataStore for DataStorage {
-//    async fn retrieve(&self, cid: Cid) -> Result<Option<Vec<u8>>, DataStoreError> {
-//        // todo(sstelfox): should attempt to retrieve from the storag network using the api client
-//        // if not found locally
-//        self.retrieve(&cid)
-//            .await
-//            .map_err(|_| DataStoreError::LookupFailure)
-//    }
-//
-//    async fn store(&mut self, cid: Cid, data: Vec<u8>) -> Result<(), DataStoreError> {
-//        DataStorage::store(self, cid, data)
-//            .await
-//            .map_err(|_| DataStoreError::StoreFailure)
-//    }
-//}
-
-//pub struct IndexedDbSyncTracker;
-
-//#[async_trait(?Send)]
-//impl SyncTracker for MemorySyncTracker {
-//    todo!()
-//}
+use crate::stores::{DataStore, DataStoreError};
 
 pub struct WebFsDataStore;
 
@@ -190,7 +61,7 @@ impl DataStore for WebFsDataStore {
 async fn get_block(cid: &Cid) -> Result<Option<File>, DataStoreError> {
     let storage_dir = storage_directory().await?;
 
-    let name = format!("{:?}.blk", cid.as_base64url_multicodec());
+    let name = format!("{cid}.blk");
     let fh = match JsFuture::from(storage_dir.get_file_handle(&name)).await {
         Ok(fh) => FileSystemFileHandle::from(fh),
         Err(err) => {
@@ -212,7 +83,7 @@ async fn get_block(cid: &Cid) -> Result<Option<File>, DataStoreError> {
 
 async fn put_block(cid: &Cid, data: &[u8]) -> Result<(), WebFsDataStoreError> {
     let storage_dir = storage_directory().await?;
-    let name = format!("{:?}.blk", cid.as_base64url_multicodec());
+    let name = format!("{cid}.blk");
 
     let mut open_opts = FileSystemGetFileOptions::new();
     open_opts.create(true);
@@ -253,7 +124,7 @@ async fn put_block(cid: &Cid, data: &[u8]) -> Result<(), WebFsDataStoreError> {
 async fn remove_block(cid: &Cid) -> Result<(), WebFsDataStoreError> {
     let storage_dir = storage_directory().await?;
 
-    let name = format!("{:?}.blk", cid.as_base64url_multicodec());
+    let name = format!("{cid}.blk");
     if let Err(err) = JsFuture::from(storage_dir.remove_entry(&name)).await {
         let err_msg = format!("{err:?}");
         return Err(WebFsDataStoreError::RemovalFailed(err_msg))?;

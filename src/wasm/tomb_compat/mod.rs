@@ -32,7 +32,7 @@ use zeroize::Zeroize;
 use crate::prelude::*;
 
 use crate::api::platform::{DriveKind, StorageClass};
-use crate::wasm::data_storage::{initialize_store, WasmDataStorage};
+use crate::wasm::browser_store::{initialize_browser_store, BrowserStore};
 
 use models::TombBucket;
 
@@ -41,7 +41,7 @@ use models::TombBucket;
 pub struct TombCompat {
     client: ApiClient,
     key: Arc<SigningKey>,
-    store: WasmDataStorage,
+    store: BrowserStore,
 }
 
 impl TombCompat {
@@ -49,7 +49,7 @@ impl TombCompat {
         &self.client
     }
 
-    pub(crate) fn store(&self) -> WasmDataStorage {
+    pub(crate) fn store(&self) -> BrowserStore {
         self.store.clone()
     }
 
@@ -257,7 +257,7 @@ impl TombCompat {
         let client = ApiClient::new(&api_endpoint, &account_id, key.clone())
             .expect("need return type fixed");
 
-        let store = initialize_store(client.clone());
+        let store = initialize_browser_store(client.clone());
 
         Self { client, key, store }
     }
