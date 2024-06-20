@@ -257,7 +257,9 @@ impl TombCompat {
         let client = ApiClient::new(&api_endpoint, &account_id, key.clone())
             .expect("need return type fixed");
 
-        let store = initialize_browser_store(client.clone());
+        let store = initialize_browser_store(client.clone())
+            .await
+            .expect("failed to initialize browser store, return type needs to allow failures");
 
         Self { client, key, store }
     }
