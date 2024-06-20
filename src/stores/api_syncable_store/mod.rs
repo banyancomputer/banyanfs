@@ -125,8 +125,10 @@ impl<MS: DataStore, ST: SyncTracker> SyncTracker for ApiSyncableStore<MS, ST> {
 
 #[async_trait(?Send)]
 impl<MS: DataStore, ST: SyncTracker> SyncableDataStore for ApiSyncableStore<MS, ST> {
-    async fn set_sync_host(&mut self, host: Url) -> Result<(), DataStoreError> {
-        self.inner.write().await.set_sync_host(host).await
+    type SyncRemoteId = Url;
+
+    async fn set_sync_remote(&mut self, remote: Self::SyncRemoteId) -> Result<(), DataStoreError> {
+        self.inner.write().await.set_sync_host(remote).await
     }
 
     async fn sync(&mut self, metadata_id: &str) -> Result<(), DataStoreError> {

@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use url::Url;
 
 use crate::codec::Cid;
 
@@ -55,10 +54,12 @@ pub trait DataStore {
 /// multiple smaller writer, or implementing a cache layer over another block store.
 #[async_trait(?Send)]
 pub trait SyncableDataStore: DataStore + SyncTracker {
+    type SyncRemoteId;
+
     /// It is expected that syncable data stores may need to retrieve data from different hosts.
     /// This is intended as a mechanism to switch the default host to retrieve or store blocks
     /// with. Actual behavior is up to the implementor.
-    async fn set_sync_host(&mut self, host: Url) -> Result<(), DataStoreError>;
+    async fn set_sync_remote(&mut self, remote: Self::SyncRemoteId) -> Result<(), DataStoreError>;
 
     /// A variant of store that should immediate sync. This is conceptually similar to an fsync on
     /// a standard filesystem but limited only to the block being stored. By default this makes use
