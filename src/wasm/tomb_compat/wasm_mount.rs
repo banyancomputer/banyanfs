@@ -167,7 +167,7 @@ impl WasmMount {
         tracing::info!(metadata_id = ?new_metadata_id, state = push_response.state(), "metadata recorded");
 
         if let Some(host) = push_response.storage_host() {
-            if let Err(err) = self.store.set_sync_host(host.clone()).await {
+            if let Err(err) = self.store.set_sync_remote(host.clone()).await {
                 // In practice this should never happen, the trait defines an error type for
                 // flexibility in the future but no implementations currently produce an error.
                 tracing::warn!("failed to set sync host: {err}");
