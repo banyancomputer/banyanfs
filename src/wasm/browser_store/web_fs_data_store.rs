@@ -3,14 +3,24 @@ use js_sys::Uint8Array;
 use tracing::warn;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
-    File, FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemGetFileOptions,
+    window, File, FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemGetFileOptions,
     FileSystemWritableFileStream, StorageManager,
 };
 
 use crate::codec::meta::Cid;
 use crate::stores::{DataStore, DataStoreError};
+use crate::wasm::browser_store::worker;
 
-pub struct WebFsDataStore;
+pub struct WebFsDataStore {
+    storage: StorageManager,
+}
+
+impl WebFsDataStore {
+    pub async fn new() -> Result<Self, WebFsDataStoreError> {
+        let storage = storage_manager().await?;
+        Ok(Self { storage })
+    }
+}
 
 #[async_trait(?Send)]
 impl DataStore for WebFsDataStore {
@@ -91,17 +101,14 @@ async fn put_block(cid: &Cid, data: &[u8]) -> Result<(), WebFsDataStoreError> {
     let fh_promise = storage_dir.get_file_handle_with_options(&name, &open_opts);
     let fh = match JsFuture::from(fh_promise).await {
         Ok(fh) => FileSystemFileHandle::from(fh),
-        Err(err) => {
-            let err_msg = format!("{err:?}");
-            return Err(WebFsDataStoreError::FileHandleError(err_msg));
-        }
+        Err(err) => return Err(WebFsDataStoreError::FileHandleError(err.as_string())),
     };
 
     let writer = match JsFuture::from(fh.create_writable()).await {
         Ok(writer) => FileSystemWritableFileStream::from(writer),
         Err(err) => {
             let err_msg = format!("failed to make file handle writable: {err:?}");
-            return Err(WebFsDataStoreError::FileHandleError(err_msg));
+            return Err(WebFsDataStoreError::FileHandleError(Some(err_msg)));
         }
     };
 
@@ -115,7 +122,7 @@ async fn put_block(cid: &Cid, data: &[u8]) -> Result<(), WebFsDataStoreError> {
 
     if let Err(err) = JsFuture::from(write_promise).await {
         let err_msg = format!("write failed: {err:?}");
-        return Err(WebFsDataStoreError::FileHandleError(err_msg));
+        return Err(WebFsDataStoreError::FileHandleError(Some(err_msg)));
     }
 
     Ok(())
@@ -126,8 +133,7 @@ async fn remove_block(cid: &Cid) -> Result<(), WebFsDataStoreError> {
 
     let name = format!("{cid}.blk");
     if let Err(err) = JsFuture::from(storage_dir.remove_entry(&name)).await {
-        let err_msg = format!("{err:?}");
-        return Err(WebFsDataStoreError::RemovalFailed(err_msg))?;
+        return Err(WebFsDataStoreError::RemovalFailed(err.as_string()))?;
     }
 
     Ok(())
@@ -138,37 +144,58 @@ async fn storage_directory() -> Result<FileSystemDirectoryHandle, WebFsDataStore
 
     let storage_dir = match JsFuture::from(storage_manager.get_directory()).await {
         Ok(dir) => FileSystemDirectoryHandle::from(dir),
-        Err(err) => {
-            let err_msg = format!("{err:?}");
-            return Err(WebFsDataStoreError::StorageManagerUnavailable(err_msg));
-        }
+        Err(err) => return Err(WebFsDataStoreError::DirectoryHandleError(err.as_string())),
     };
 
     Ok(storage_dir)
 }
 
 async fn storage_manager() -> Result<StorageManager, WebFsDataStoreError> {
-    let window = web_sys::window().ok_or(WebFsDataStoreError::WindowUnavailable)?;
+    if let Some(sm) = window_storage_manager().await? {
+        return Ok(sm);
+    }
 
-    Ok(window.navigator().storage())
+    if let Some(sm) = worker_storage_manager().await? {
+        return Ok(sm);
+    }
+
+    Err(WebFsDataStoreError::StorageManagerUnavailable)
+}
+
+async fn window_storage_manager() -> Result<Option<StorageManager>, WebFsDataStoreError> {
+    let window = match window() {
+        Some(window) => window,
+        None => return Ok(None),
+    };
+
+    Ok(Some(window.navigator().storage()))
+}
+
+async fn worker_storage_manager() -> Result<Option<StorageManager>, WebFsDataStoreError> {
+    let worker = match worker() {
+        Some(worker) => worker,
+        None => return Ok(None),
+    };
+
+    Ok(Some(worker.navigator().storage()))
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum WebFsDataStoreError {
-    #[error("failed to get hold on file handle: {0}")]
-    FileHandleError(String),
+    #[error("failed to get hold on directory handle: {0:?}")]
+    DirectoryHandleError(Option<String>),
+
+    #[error("failed to get hold on file handle: {0:?}")]
+    FileHandleError(Option<String>),
 
     #[error("failed to generate a JS promise: {0}")]
     PromiseError(String),
 
-    #[error("failed to remove block: {0}")]
-    RemovalFailed(String),
+    #[error("failed to remove block: {0:?}")]
+    RemovalFailed(Option<String>),
 
-    #[error("failed to retrieve storage manager: {0}")]
-    StorageManagerUnavailable(String),
-
-    #[error("failed to get browser window object")]
-    WindowUnavailable,
+    #[error("failed to retrieve storage manager")]
+    StorageManagerUnavailable,
 }
 
 impl From<WebFsDataStoreError> for DataStoreError {

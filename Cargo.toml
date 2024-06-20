@@ -100,6 +100,8 @@ web-sys = { version = "^0.3", default-features = false, features = [
   "Storage",
   "StorageManager",
   "Window",
+  "WorkerGlobalScope",
+  "WorkerNavigator",
 ] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]

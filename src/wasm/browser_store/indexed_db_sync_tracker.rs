@@ -49,6 +49,12 @@ impl SyncTracker for IndexedDbSyncTracker {
 }
 
 async fn indexdb_handle() -> Result<IdbDatabase, IndexedDbSyncTrackerError> {
+    // note(sstelfox): This handle may not be available in a webworker. If not we need to
+    // conditionally get access to the IdbFactory through web_sys::WorkerGlobalScope but I'm not
+    // sure how to access that without further research...
+    //
+    // If this is failing in a webworker that is likely the next step that needs to be
+    // investigated.
     let window = match web_sys::window() {
         Some(window) => window,
         None => return Err(IndexedDbSyncTrackerError::WindowUnavailable),
