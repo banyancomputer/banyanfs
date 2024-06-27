@@ -9,11 +9,12 @@ use winnow::Parser;
 
 use crate::codec::crypto::{AuthenticationTag, EncryptedBuffer, Nonce, SigningKey};
 use crate::codec::header::{ContentOptions, IdentityHeader, KeyCount, PublicSettings};
-use crate::codec::meta::{FilesystemId, JournalCheckpoint, MetaKey};
+use crate::codec::meta::{FilesystemId, MetaKey};
 use crate::codec::parser::{
     ParserResult, ParserStateMachine, ProgressType, SegmentStreamer, StateError, StateResult,
 };
 use crate::codec::Stream;
+use crate::filesystem::drive::VectorClock;
 use crate::filesystem::{Drive, DriveAccess, InnerDrive};
 
 pub struct DriveLoader<'a> {
@@ -147,7 +148,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
             DriveLoaderState::EncryptedHeader(key_count, meta_key) => {
                 let payload_size = (**key_count as usize * DriveAccess::size())
                     + ContentOptions::size()
-                    + JournalCheckpoint::size();
+                    + VectorClock::size();
 
                 let (input, header_buffer) =
                     EncryptedBuffer::parse_and_decrypt(buffer, payload_size, &[], meta_key)?;
@@ -167,20 +168,20 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 let (hdr_stream, content_options) = ContentOptions::parse(hdr_stream)?;
                 trace!("drive_loader::encrypted_header::content_options");
 
-                let (hdr_stream, journal_start) = JournalCheckpoint::parse(hdr_stream)?;
-                trace!("drive_loader::encrypted_header::journal_checkpoint");
+                let (hdr_stream, vector_clock) = VectorClock::parse(hdr_stream)?;
+                trace!("drive_loader::encrypted_header::vector_clock");
 
                 debug_assert!(hdr_stream.is_empty());
 
                 self.drive_access = Some(access);
-                self.state = DriveLoaderState::PrivateContent(content_options, journal_start);
+                self.state = DriveLoaderState::PrivateContent(content_options, vector_clock);
 
                 let bytes_read = buffer.len() - input.len();
                 trace!(bytes_read, "drive_loader::encrypted_header::complete");
 
                 Ok(ProgressType::Advance(bytes_read))
             }
-            DriveLoaderState::PrivateContent(content_options, journal_start) => {
+            DriveLoaderState::PrivateContent(content_options, vector_clock) => {
                 if content_options.include_filesystem() {
                     let (input, encrypted_size) = content_length(buffer)?;
 
@@ -222,7 +223,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                     let (remaining, inner_drive) = InnerDrive::parse(
                         Stream::new(fs_buffer.as_slice()),
                         drive_access.clone(),
-                        journal_start.clone(),
+                        vector_clock.clone(),
                     )
                     .map_err(|e| match e {
                         ErrMode::Incomplete(_) => winnow::error::ErrMode::Cut(
@@ -324,7 +325,7 @@ enum DriveLoaderState {
 
     EscrowedAccessKeys(KeyCount),
     EncryptedHeader(KeyCount, MetaKey),
-    PrivateContent(ContentOptions, JournalCheckpoint),
+    PrivateContent(ContentOptions, VectorClock),
     //PublicPermissions(KeyCount),
     //PublicContent,
 

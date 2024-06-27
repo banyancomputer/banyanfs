@@ -1,3 +1,6 @@
+// Still needed for the journal entries
+#![allow(dead_code)]
+
 use futures::io::AsyncWrite;
 
 use crate::codec::meta::{Cid, VectorClock};
