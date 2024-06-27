@@ -99,7 +99,7 @@ impl Drive {
         let mut inner_header_size = inner_read.access().encode(rng, &mut *header_buffer).await?;
         inner_header_size += content_options.encode(&mut *header_buffer).await?;
         inner_header_size += inner_read
-            .journal_start()
+            .vector_clock()
             .encode(&mut *header_buffer)
             .await?;
 

@@ -19,7 +19,7 @@ use crate::filesystem::nodes::{Node, NodeData, NodeId, NodeName};
 use crate::filesystem::{ContentLocation, ContentReference, FileContent, NodeBuilder};
 use crate::stores::DataStore;
 
-use self::filesystem::FilePermissions;
+use self::filesystem::Permissions;
 
 const MAX_PATH_DEPTH: usize = 32;
 
@@ -66,13 +66,8 @@ impl DirectoryHandle {
         Ok(directory)
     }
 
-    /// Changes the permission on the target node. Currently not implemented and changes are
-    /// expected to combine the [`FilePermissions`] with the [`crate::codec::filesystem::DirectoryPermissions`] all at once.
-    pub async fn chmod(
-        &self,
-        _path: &[&str],
-        _owner: FilePermissions,
-    ) -> Result<(), OperationError> {
+    /// Changes the permission on the target node. Currently not implemented.
+    pub async fn chmod(&self, _path: &[&str], _owner: Permissions) -> Result<(), OperationError> {
         unimplemented!()
     }
 

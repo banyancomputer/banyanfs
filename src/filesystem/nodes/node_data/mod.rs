@@ -5,7 +5,7 @@ use futures::{AsyncWrite, AsyncWriteExt};
 use winnow::binary::le_u16;
 use winnow::Parser;
 
-use crate::codec::filesystem::{DirectoryPermissions, FilePermissions};
+use crate::codec::filesystem::Permissions;
 use crate::codec::{Cid, ParserResult, PermanentId, Stream};
 use crate::filesystem::nodes::{NodeKind, NodeName};
 use crate::filesystem::FileContent;
@@ -17,14 +17,14 @@ use self::child_map::ChildMapEntry;
 
 pub enum NodeData {
     File {
-        permissions: FilePermissions,
+        permissions: Permissions,
         associated_data: ChildMap,
         content: FileContent,
     },
     #[allow(dead_code)]
     AssociatedData { content: FileContent },
     Directory {
-        permissions: DirectoryPermissions,
+        permissions: Permissions,
         children: ChildMap,
     },
 }
@@ -112,7 +112,7 @@ impl NodeData {
 
     pub(crate) fn new_directory() -> Self {
         Self::Directory {
-            permissions: DirectoryPermissions::default(),
+            permissions: Permissions::default(),
             children: HashMap::new(),
         }
     }
@@ -161,7 +161,7 @@ impl NodeData {
 
         match kind {
             NodeKind::File => {
-                let (data_buf, permissions) = FilePermissions::parse(input)?;
+                let (data_buf, permissions) = Permissions::parse(input)?;
                 let (data_buf, associated_data) = parse_children(data_buf)?;
                 let (data_buf, content) = FileContent::parse(data_buf)?;
 
@@ -175,7 +175,7 @@ impl NodeData {
             }
             //NodeKind::AssociatedData => {}
             NodeKind::Directory => {
-                let (data_buf, permissions) = DirectoryPermissions::parse(input)?;
+                let (data_buf, permissions) = Permissions::parse(input)?;
                 let (data_buf, children) = parse_children(data_buf)?;
 
                 let data = NodeData::Directory {
@@ -217,11 +217,11 @@ impl NodeData {
         match self {
             NodeData::AssociatedData { content } => content.size(),
             NodeData::Directory { .. } => {
-                let base_size = DirectoryPermissions::size() + 8;
+                let base_size = Permissions::size() + 8;
                 base_size as u64 + self.children_size()
             }
             NodeData::File { content, .. } => {
-                let base_size = FilePermissions::size();
+                let base_size = Permissions::size();
 
                 base_size as u64 + content.size() + self.children_size()
             }
@@ -240,7 +240,7 @@ impl NodeData {
 
     pub(crate) fn empty_file() -> Self {
         Self::File {
-            permissions: FilePermissions::default(),
+            permissions: Permissions::default(),
             associated_data: HashMap::new(),
             content: FileContent::EmptyFile,
         }
@@ -248,7 +248,7 @@ impl NodeData {
 
     pub(crate) fn full_file(content: FileContent) -> Self {
         Self::File {
-            permissions: FilePermissions::default(),
+            permissions: Permissions::default(),
             associated_data: HashMap::new(),
             content,
         }
@@ -256,7 +256,7 @@ impl NodeData {
 
     pub(crate) fn stub_file(data_size: u64) -> Self {
         Self::File {
-            permissions: FilePermissions::default(),
+            permissions: Permissions::default(),
             associated_data: HashMap::new(),
             content: FileContent::Stub { data_size },
         }

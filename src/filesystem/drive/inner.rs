@@ -8,7 +8,7 @@ use winnow::binary::le_u64;
 use winnow::Parser;
 
 use crate::codec::*;
-use crate::filesystem::drive::DriveAccess;
+use crate::filesystem::drive::{DriveAccess, VectorClock};
 use crate::filesystem::nodes::{Node, NodeBuilder, NodeId};
 use crate::utils::std_io_err;
 
@@ -17,7 +17,10 @@ use super::OperationError;
 pub(crate) struct InnerDrive {
     access: DriveAccess,
 
-    journal_start: JournalCheckpoint,
+    /// This is the filesystem-wide vector clock used for tracking what permanent IDs are present
+    /// within the filesystem as well as access control related changes. Changes to individual
+    /// node's or their entry specific data should make use of the [`Node`]'s vector clock instead.
+    vector_clock: VectorClock,
     root_pid: PermanentId,
 
     nodes: Slab<Node>,
@@ -307,7 +310,7 @@ impl InnerDrive {
         actor_id: ActorId,
         access: DriveAccess,
     ) -> Result<Self, OperationError> {
-        let journal_start = JournalCheckpoint::initialize();
+        let vector_clock = VectorClock::initialize();
 
         let mut nodes = Slab::with_capacity(32);
         let mut permanent_id_map = HashMap::new();
@@ -326,7 +329,7 @@ impl InnerDrive {
 
         let inner = Self {
             access,
-            journal_start,
+            vector_clock,
 
             nodes,
             root_pid,
@@ -335,10 +338,6 @@ impl InnerDrive {
         };
 
         Ok(inner)
-    }
-
-    pub(crate) fn journal_start(&self) -> JournalCheckpoint {
-        self.journal_start.clone()
     }
 
     pub(crate) fn lookup_internal_id(
@@ -359,7 +358,7 @@ impl InnerDrive {
     pub(crate) fn parse(
         input: Stream<'_>,
         drive_access: DriveAccess,
-        journal_start: JournalCheckpoint,
+        vector_clock: VectorClock,
     ) -> ParserResult<'_, Self> {
         tracing::trace!(available_data = ?input.len(), "inner_drive::parse");
 
@@ -418,7 +417,7 @@ impl InnerDrive {
 
         let inner_drive = InnerDrive {
             access: drive_access,
-            journal_start,
+            vector_clock,
             root_pid,
             nodes,
             permanent_id_map,
@@ -481,6 +480,10 @@ impl InnerDrive {
 
     pub(crate) fn root_pid(&self) -> PermanentId {
         self.root_pid
+    }
+
+    pub(crate) fn vector_clock(&self) -> VectorClock {
+        self.vector_clock.clone()
     }
 }
 
@@ -551,15 +554,18 @@ pub(crate) mod test {
         let inner = build_interesting_inner(None).await;
 
         let access = inner.access();
-        let journal = inner.journal_start();
+        let vector_clock = inner.vector_clock();
         let mut encoded = Vec::new();
 
         let encoding_res = inner.encode(&mut encoded).await;
         assert!(encoding_res.is_ok());
 
-        let (remaining, parsed) =
-            InnerDrive::parse(Partial::new(encoded.as_slice()), access.to_owned(), journal)
-                .unwrap();
+        let (remaining, parsed) = InnerDrive::parse(
+            Partial::new(encoded.as_slice()),
+            access.to_owned(),
+            vector_clock,
+        )
+        .unwrap();
         assert!(remaining.is_empty());
         assert_eq!(inner.nodes.len(), parsed.nodes.len());
         for (_, node) in inner.nodes {
