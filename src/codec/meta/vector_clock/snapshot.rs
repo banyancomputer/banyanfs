@@ -62,13 +62,7 @@ impl From<u64> for Snapshot {
 
 impl PartialOrd for Snapshot {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        if self.0 < WRAP_THRESHOLD || other.0 < WRAP_THRESHOLD {
-            self.0
-                .wrapping_add(WRAP_THRESHOLD)
-                .partial_cmp(&other.0.wrapping_add(WRAP_THRESHOLD))
-        } else {
-            self.0.partial_cmp(&other.0)
-        }
+        Some(self.cmp(other))
     }
 }
 
