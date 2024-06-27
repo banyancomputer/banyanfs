@@ -16,4 +16,4 @@ pub use journal_checkpoint::JournalCheckpoint;
 pub use meta_key::MetaKey;
 pub use permanent_id::PermanentId;
 pub use user_agent::UserAgent;
-pub use vector_clock::VectorClock;
+pub use vector_clock::{VectorClock, VectorClockSnapshot};

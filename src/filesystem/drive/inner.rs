@@ -482,8 +482,8 @@ impl InnerDrive {
         self.root_pid
     }
 
-    pub(crate) fn vector_clock(&self) -> VectorClock {
-        self.vector_clock.clone()
+    pub fn vector_clock(&self) -> VectorClockSnapshot {
+        VectorClockSnapshot::from(&self.vector_clock)
     }
 }
 
@@ -563,7 +563,7 @@ pub(crate) mod test {
         let (remaining, parsed) = InnerDrive::parse(
             Partial::new(encoded.as_slice()),
             access.to_owned(),
-            vector_clock,
+            vector_clock.into(),
         )
         .unwrap();
         assert!(remaining.is_empty());
