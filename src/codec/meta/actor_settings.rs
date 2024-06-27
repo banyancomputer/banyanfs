@@ -8,7 +8,7 @@ use crate::codec::crypto::{
     AccessKey, AsymLockedAccessKey, AsymLockedAccessKeyError, SigningKey, VerifyingKey,
 };
 use crate::codec::header::AccessMask;
-use crate::codec::meta::{UserAgent, VectorClock};
+use crate::codec::meta::{UserAgent, VectorClock, VectorClockSnapshot};
 use crate::codec::{ParserResult, Stream};
 
 const KEY_PRESENT_BIT: u8 = 0b0000_0001;
@@ -234,8 +234,8 @@ impl ActorSettings {
         self.user_agent.clone()
     }
 
-    pub fn vector_clock(&self) -> VectorClock {
-        self.vector_clock.clone()
+    pub fn vector_clock(&self) -> VectorClockSnapshot {
+        VectorClockSnapshot::from(&self.vector_clock)
     }
 
     pub fn verifying_key(&self) -> VerifyingKey {

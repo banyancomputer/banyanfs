@@ -2,10 +2,12 @@ use std::cmp::PartialEq;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::{binary::le_u64, Parser};
+use futures::AsyncWrite;
 
 use crate::codec::{ParserResult, Stream};
+
+mod snapshot;
+pub use snapshot::Snapshot as VectorClockSnapshot;
 
 /// VectorClocks are used as monotonic clocks for a particular actor or resource within the
 /// filesystem and is used for providing strict ordering of events. The internal value is
@@ -22,20 +24,16 @@ impl VectorClock {
         &self,
         writer: &mut W,
     ) -> std::io::Result<usize> {
-        let current = self.0.load(Ordering::Relaxed);
-        let clock_bytes = current.to_le_bytes();
-
-        writer.write_all(&clock_bytes).await?;
-
-        Ok(clock_bytes.len())
+        VectorClockSnapshot::from(self).encode(writer).await
     }
 
     pub fn initialize() -> Self {
-        Self::from(0)
+        // TODO: make this actually initialize to a random value as the docs above indicate
+        Self::from(VectorClockSnapshot::from(0))
     }
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
-        let (input, value) = le_u64.parse_peek(input)?;
+        let (input, value) = VectorClockSnapshot::parse(input)?;
         Ok((input, Self::from(value)))
     }
 
@@ -44,9 +42,9 @@ impl VectorClock {
     }
 }
 
-impl From<u64> for VectorClock {
-    fn from(val: u64) -> Self {
-        Self(Arc::new(AtomicU64::new(val)))
+impl From<VectorClockSnapshot> for VectorClock {
+    fn from(val: VectorClockSnapshot) -> Self {
+        Self(Arc::new(AtomicU64::new(val.0)))
     }
 }
 

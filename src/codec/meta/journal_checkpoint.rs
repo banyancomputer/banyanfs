@@ -3,13 +3,13 @@
 
 use futures::io::AsyncWrite;
 
-use crate::codec::meta::{Cid, VectorClock};
+use crate::codec::meta::{Cid, VectorClockSnapshot};
 use crate::codec::{ParserResult, Stream};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct JournalCheckpoint {
     merkle_root_cid: Cid,
-    vector: VectorClock,
+    vector: VectorClockSnapshot,
 }
 
 impl JournalCheckpoint {
@@ -25,16 +25,9 @@ impl JournalCheckpoint {
         Ok(written_bytes)
     }
 
-    pub(crate) fn initialize() -> Self {
-        JournalCheckpoint {
-            merkle_root_cid: Cid::IDENTITY,
-            vector: VectorClock::initialize(),
-        }
-    }
-
     pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, merkle_root_cid) = Cid::parse(input)?;
-        let (input, vector) = VectorClock::parse(input)?;
+        let (input, vector) = VectorClockSnapshot::parse(input)?;
 
         let journal_checkpoint = JournalCheckpoint {
             merkle_root_cid,
@@ -45,7 +38,7 @@ impl JournalCheckpoint {
     }
 
     pub const fn size() -> usize {
-        Cid::size() + VectorClock::size()
+        Cid::size() + VectorClockSnapshot::size()
     }
 }
 
@@ -61,7 +54,10 @@ mod tests {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_user_agent_roundtrip() {
-        let checkpoint = JournalCheckpoint::initialize();
+        let checkpoint = JournalCheckpoint {
+            merkle_root_cid: Cid::from([0; 32]),
+            vector: VectorClockSnapshot::from(0),
+        };
 
         let mut buffer = Vec::with_capacity(JournalCheckpoint::size());
         checkpoint
