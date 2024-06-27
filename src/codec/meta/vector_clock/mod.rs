@@ -28,6 +28,7 @@ impl VectorClock {
     }
 
     pub fn initialize() -> Self {
+        // TODO: make this actually initialize to a random value as the docs above indicate
         Self::from(VectorClockSnapshot::from(0))
     }
 
