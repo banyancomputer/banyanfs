@@ -1,5 +1,4 @@
 use std::cmp::PartialEq;
-use std::marker::PhantomData;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -10,30 +9,6 @@ use crate::codec::{ParserResult, Stream};
 mod snapshot;
 pub use snapshot::Snapshot as VectorClockSnapshot;
 
-pub type  VectorClockFileSystem = VectorClock<FileSystem>;
-pub type VectorClockFileSystemSnapshot = VectorClockSnapshot<FileSystem>;
-
-pub type VectorClockNode = VectorClock<Node>;
-pub type VectorClockNodeSnapshot = VectorClockSnapshot<Node>;
-
-pub type VectorClockActor = VectorClock<Actor>;
-pub type VectorClockActorSnapshot = VectorClockSnapshot<Actor>;
-
-trait ClockType: Eq{}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct FileSystem;
-impl ClockType for FileSystem{}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Node;
-impl ClockType for Node{}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Actor;
-impl ClockType for Actor{}
-
-
 /// VectorClocks are used as monotonic clocks for a particular actor or resource within the
 /// filesystem and is used for providing strict ordering of events. The internal value is
 /// initialized to a random value when a new one is initialized.
@@ -42,9 +17,9 @@ impl ClockType for Actor{}
 /// and must be handled by all consumers. We consider a roll over valid if the last known ID was
 /// within 262,144 (2^18) ticks of rolling over.
 #[derive(Clone, Debug)]
-pub struct VectorClock<T: ClockType>(Arc<AtomicU64>, PhantomData<T>);
+pub struct VectorClock(Arc<AtomicU64>);
 
-impl<T:ClockType> VectorClock<T> {
+impl VectorClock {
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
@@ -54,7 +29,7 @@ impl<T:ClockType> VectorClock<T> {
 
     pub fn initialize() -> Self {
         // TODO: make this actually initialize to a random value as the docs above indicate
-        Self::from(VectorClockSnapshot::<T>::from(0))
+        Self::from(VectorClockSnapshot::from(0))
     }
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
@@ -67,13 +42,13 @@ impl<T:ClockType> VectorClock<T> {
     }
 }
 
-impl<T:ClockType> From<VectorClockSnapshot<T>> for VectorClock<T> {
-    fn from(val: VectorClockSnapshot<T>) -> Self {
-        Self(Arc::new(AtomicU64::new(val.0)), PhantomData)
+impl From<VectorClockSnapshot> for VectorClock {
+    fn from(val: VectorClockSnapshot) -> Self {
+        Self(Arc::new(AtomicU64::new(val.0)))
     }
 }
 
-impl<T:ClockType> PartialEq for VectorClock<T> {
+impl PartialEq for VectorClock {
     fn eq(&self, other: &Self) -> bool {
         self.0
             .load(Ordering::Relaxed)
@@ -93,9 +68,9 @@ mod tests {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test(async))]
     #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
     async fn test_user_agent_roundtrip() {
-        let checkpoint = VectorClock::<FileSystem>::initialize();
+        let checkpoint = VectorClock::initialize();
 
-        let mut buffer = Vec::with_capacity(VectorClock::<FileSystem>::size());
+        let mut buffer = Vec::with_capacity(VectorClock::size());
         checkpoint
             .encode(&mut buffer)
             .await
