@@ -1,6 +1,5 @@
 mod access_mask;
 mod content_options;
-mod format_header;
 mod identity_header;
 mod key_count;
 mod public_settings;

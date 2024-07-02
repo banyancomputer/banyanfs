@@ -9,20 +9,16 @@ use crate::codec::{ParserResult, Stream};
 pub struct KeyCount(u8);
 
 impl KeyCount {
-    pub async fn encode<W: AsyncWrite + Unpin + Send>(
+    pub(crate) async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
     ) -> std::io::Result<usize> {
         writer.write_all(&[self.0]).await?;
         Ok(1)
     }
-    pub fn parse(input: Stream) -> ParserResult<Self> {
+    pub(crate) fn parse(input: Stream) -> ParserResult<Self> {
         let (input, count) = take(1u8).parse_peek(input)?;
         Ok((input, Self(count[0])))
-    }
-
-    pub const fn size() -> usize {
-        1
     }
 }
 
