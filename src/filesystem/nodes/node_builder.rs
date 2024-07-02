@@ -2,10 +2,14 @@ use std::collections::HashMap;
 
 use elliptic_curve::rand_core::CryptoRngCore;
 
-use crate::codec::filesystem::NodeKind;
-use crate::codec::meta::{ActorId, VectorClock};
-use crate::filesystem::nodes::{
-    CidCache, MetadataKey, Node, NodeData, NodeId, NodeName, NodeNameError, PermanentId,
+use crate::{
+    codec::{
+        filesystem::NodeKind,
+        meta::{ActorId, VectorClockNode},
+    },
+    filesystem::nodes::{
+        CidCache, MetadataKey, Node, NodeData, NodeId, NodeName, NodeNameError, PermanentId,
+    },
 };
 
 pub(crate) struct NodeBuilder {
@@ -39,7 +43,7 @@ impl NodeBuilder {
             _ => unimplemented!("haven't made it there yet"),
         };
 
-        let vector_clock = VectorClock::initialize();
+        let vector_clock = VectorClockNode::initialize();
 
         let new_node = Node {
             id,

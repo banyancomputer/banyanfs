@@ -3,9 +3,11 @@ use std::collections::HashMap;
 use elliptic_curve::rand_core::CryptoRngCore;
 use futures::io::AsyncWrite;
 
-use crate::codec::crypto::{AccessKey, KeyId, SigningKey, VerifyingKey};
-use crate::codec::header::{AccessMask, AccessMaskBuilder, AccessMaskError};
-use crate::codec::{ActorId, ActorSettings, ActorSettingsError, ParserResult, Stream};
+use crate::codec::{
+    crypto::{AccessKey, KeyId, SigningKey, VerifyingKey},
+    header::{AccessMask, AccessMaskBuilder, AccessMaskError},
+    ActorId, ActorSettings, ActorSettingsError, ParserResult, Stream,
+};
 
 /// [`DriveAccess`] maintains a mapping of [`ActorId`] instances to their available permissions
 /// within the drive itself. When loaded this holds on to copies of any of the general keys the
@@ -301,7 +303,7 @@ impl DriveAccess {
             return Err(DriveAccessError::ActorAlreadyPresent);
         }
 
-        let mut actor_settings = ActorSettings::new(key, access_mask);
+        let mut actor_settings = ActorSettings::new(key, access_mask, actor_id);
 
         if access_mask.has_data_key() {
             let key = self

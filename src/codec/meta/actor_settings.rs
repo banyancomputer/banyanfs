@@ -1,22 +1,22 @@
 use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::binary::le_u8;
-use winnow::token::take;
-use winnow::Parser;
+use winnow::{binary::le_u8, token::take, Parser};
 
-use crate::codec::crypto::{
-    AccessKey, AsymLockedAccessKey, AsymLockedAccessKeyError, SigningKey, VerifyingKey,
+use crate::codec::{
+    crypto::{AccessKey, AsymLockedAccessKey, AsymLockedAccessKeyError, SigningKey, VerifyingKey},
+    header::AccessMask,
+    meta::{UserAgent, VectorClockActor, VectorClockActorSnapshot},
+    ParserResult, Stream,
 };
-use crate::codec::header::AccessMask;
-use crate::codec::meta::{UserAgent, VectorClock, VectorClockSnapshot};
-use crate::codec::{ParserResult, Stream};
+
+use super::ActorId;
 
 const KEY_PRESENT_BIT: u8 = 0b0000_0001;
 
 #[derive(Clone, Debug)]
 pub struct ActorSettings {
     verifying_key: VerifyingKey,
-    vector_clock: VectorClock,
+    vector_clock: VectorClockActor,
 
     access_mask: AccessMask,
     filesystem_key: Option<AsymLockedAccessKey>,
@@ -80,7 +80,7 @@ impl ActorSettings {
         let mut written_bytes = 0;
 
         written_bytes += self.verifying_key.encode(writer).await?;
-        written_bytes += self.vector_clock.encode(writer).await?;
+        written_bytes += self.vector_clock.to_snapshot().encode(writer).await?;
         written_bytes += self.access_mask.encode(writer).await?;
         written_bytes += self.user_agent().encode(writer).await?;
 
@@ -176,8 +176,8 @@ impl ActorSettings {
         Ok(Some(open_key))
     }
 
-    pub fn new(verifying_key: VerifyingKey, access_mask: AccessMask) -> Self {
-        let vector_clock = VectorClock::initialize();
+    pub fn new(verifying_key: VerifyingKey, access_mask: AccessMask, actor_id: ActorId) -> Self {
+        let vector_clock = VectorClockActor::initialize(actor_id);
         let user_agent = UserAgent::current();
 
         Self {
@@ -195,7 +195,7 @@ impl ActorSettings {
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, verifying_key) = VerifyingKey::parse(input)?;
-        let (input, vector_clock) = VectorClock::parse(input)?;
+        let (input, vector_clock) = VectorClockActor::parse(input)?;
         let (input, access_mask) = AccessMask::parse(input)?;
         let (input, user_agent) = UserAgent::parse(input)?;
 
@@ -220,7 +220,7 @@ impl ActorSettings {
 
     pub const fn size() -> usize {
         VerifyingKey::size()
-            + VectorClock::size()
+            + VectorClockActorSnapshot::size()
             + AccessMask::size()
             + UserAgent::size()
             + 3 * (1 + AsymLockedAccessKey::size())
@@ -234,8 +234,8 @@ impl ActorSettings {
         self.user_agent.clone()
     }
 
-    pub fn vector_clock(&self) -> VectorClockSnapshot {
-        VectorClockSnapshot::from(&self.vector_clock)
+    pub fn vector_clock(&self) -> VectorClockActorSnapshot {
+        (&self.vector_clock).into()
     }
 
     pub fn verifying_key(&self) -> VerifyingKey {

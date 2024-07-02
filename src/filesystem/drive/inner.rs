@@ -4,13 +4,16 @@ use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
 use slab::Slab;
 use tracing::instrument;
-use winnow::binary::le_u64;
-use winnow::Parser;
+use winnow::{binary::le_u64, Parser};
 
-use crate::codec::*;
-use crate::filesystem::drive::{DriveAccess, VectorClock};
-use crate::filesystem::nodes::{Node, NodeBuilder, NodeId};
-use crate::utils::std_io_err;
+use crate::{
+    codec::*,
+    filesystem::{
+        drive::{DriveAccess, VectorClockFilesystem},
+        nodes::{Node, NodeBuilder, NodeId},
+    },
+    utils::std_io_err,
+};
 
 use super::OperationError;
 
@@ -20,7 +23,7 @@ pub(crate) struct InnerDrive {
     /// This is the filesystem-wide vector clock used for tracking what permanent IDs are present
     /// within the filesystem as well as access control related changes. Changes to individual
     /// node's or their entry specific data should make use of the [`Node`]'s vector clock instead.
-    vector_clock: VectorClock,
+    vector_clock: VectorClockFilesystem,
     root_pid: PermanentId,
 
     nodes: Slab<Node>,
@@ -310,7 +313,7 @@ impl InnerDrive {
         actor_id: ActorId,
         access: DriveAccess,
     ) -> Result<Self, OperationError> {
-        let vector_clock = VectorClock::initialize();
+        let vector_clock = VectorClockFilesystem::initialize();
 
         let mut nodes = Slab::with_capacity(32);
         let mut permanent_id_map = HashMap::new();
@@ -358,7 +361,7 @@ impl InnerDrive {
     pub(crate) fn parse(
         input: Stream<'_>,
         drive_access: DriveAccess,
-        vector_clock: VectorClock,
+        vector_clock: VectorClockFilesystem,
     ) -> ParserResult<'_, Self> {
         tracing::trace!(available_data = ?input.len(), "inner_drive::parse");
 
@@ -482,8 +485,8 @@ impl InnerDrive {
         self.root_pid
     }
 
-    pub fn vector_clock(&self) -> VectorClockSnapshot {
-        VectorClockSnapshot::from(&self.vector_clock)
+    pub fn vector_clock(&self) -> VectorClockFilesystemSnapshot {
+        VectorClockFilesystemSnapshot::from(&self.vector_clock)
     }
 }
 
@@ -493,8 +496,7 @@ pub(crate) mod test {
 
     use winnow::Partial;
 
-    use crate::codec::crypto::SigningKey;
-    use crate::filesystem::nodes::NodeName;
+    use crate::{codec::crypto::SigningKey, filesystem::nodes::NodeName};
 
     fn initialize_inner_drive(signing_key: Option<SigningKey>) -> (ActorId, InnerDrive) {
         let mut rng = crate::utils::crypto_rng();
@@ -554,7 +556,7 @@ pub(crate) mod test {
         let inner = build_interesting_inner(None).await;
 
         let access = inner.access();
-        let vector_clock = inner.vector_clock();
+        let vector_clock = inner.vector_clock.clone();
         let mut encoded = Vec::new();
 
         let encoding_res = inner.encode(&mut encoded).await;

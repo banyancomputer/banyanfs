@@ -24,19 +24,27 @@ pub(crate) use node_builder::{NodeBuilder, NodeBuilderError};
 pub(crate) use node_data::{NodeData, NodeDataError};
 pub use node_name::{NodeName, NodeNameError};
 
-use std::collections::HashMap;
-use std::io::{Error as StdError, ErrorKind as StdErrorKind};
+use std::{
+    collections::HashMap,
+    io::{Error as StdError, ErrorKind as StdErrorKind},
+};
 
 use futures::{AsyncWrite, AsyncWriteExt};
-use winnow::binary::{le_i64, le_u32, le_u8};
-use winnow::stream::Offset;
-use winnow::token::take;
-use winnow::Parser;
+use winnow::{
+    binary::{le_i64, le_u32, le_u8},
+    stream::Offset,
+    token::take,
+    Parser,
+};
 
-use crate::codec::filesystem::NodeKind;
-use crate::codec::meta::{ActorId, Cid, PermanentId};
-use crate::codec::{ParserResult, Stream, VectorClock};
-use crate::filesystem::drive::OperationError;
+use crate::{
+    codec::{
+        filesystem::NodeKind,
+        meta::{ActorId, Cid, PermanentId},
+        ParserResult, Stream, VectorClockNode,
+    },
+    filesystem::drive::OperationError,
+};
 pub use metadata::MetadataKey;
 
 pub(crate) type NodeId = usize;
@@ -71,7 +79,7 @@ pub struct Node {
     owner_id: ActorId,
 
     cid: CidCache,
-    vector_clock: VectorClock,
+    vector_clock: VectorClockNode,
 
     created_at: i64,
     modified_at: i64,
@@ -327,7 +335,7 @@ impl Node {
         let node_data_start = input;
 
         let (input, permanent_id) = PermanentId::parse(input)?;
-        let (input, vector_clock) = VectorClock::parse(input)?;
+        let (input, vector_clock) = VectorClockNode::parse(input)?;
         let (input, parent_present) = take(1u8).parse_peek(input)?;
 
         tracing::trace!(node_data_len, ?cid, "cid/node_data_len");
