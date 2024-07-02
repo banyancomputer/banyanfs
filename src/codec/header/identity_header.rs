@@ -5,6 +5,8 @@ use winnow::Parser;
 use crate::codec::header::BANYAN_FS_MAGIC;
 use crate::codec::{ParserResult, Stream};
 
+const FORMAT_VERSION: u8 = 0x01;
+
 #[derive(Debug, PartialEq)]
 pub struct IdentityHeader;
 
@@ -14,7 +16,7 @@ impl IdentityHeader {
         writer: &mut W,
     ) -> std::io::Result<usize> {
         writer.write_all(BANYAN_FS_MAGIC).await?;
-        writer.write_all(&[0x01]).await?;
+        writer.write_all(&[FORMAT_VERSION]).await?;
 
         Ok(BANYAN_FS_MAGIC.len() + 1)
     }
