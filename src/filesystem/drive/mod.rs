@@ -49,7 +49,8 @@ use crate::filesystem::nodes::{Node, NodeBuilderError, NodeName};
 /// use banyanfs::prelude::*;
 /// # let mut rng = rand::thread_rng();
 /// let signing_key = Arc::new(SigningKey::generate(&mut rng));
-/// let new_drive = Drive::initialize_private(&mut rng, signing_key);
+/// let vector_clock_actor = VectorClockActor::initialize(signing_key.verifying_key().actor_id());
+/// let new_drive = Drive::initialize_private(&mut rng, signing_key, vector_clock_actor);
 /// ```
 #[derive(Clone)]
 pub struct Drive {
@@ -199,7 +200,7 @@ impl Drive {
         access_mask: AccessMask,
     ) -> Result<(), DriveAccessError> {
         let mut inner_write = self.inner.write().await;
-        let vector_clock_snapshot = inner_write.vector_clock();
+        let vector_clock_snapshot = inner_write.vector_clock().actor();
         inner_write
             .access_mut()
             .register_actor(rng, key, access_mask, vector_clock_snapshot)?;

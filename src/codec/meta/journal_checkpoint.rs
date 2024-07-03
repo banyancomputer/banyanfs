@@ -46,10 +46,7 @@ impl JournalCheckpoint {
 mod tests {
     use winnow::Partial;
 
-    use crate::codec::{
-        crypto::Fingerprint, ActorId, VectorClockActor, VectorClockFilesystem,
-        VectorClockFilesystemSnapshot,
-    };
+    use crate::codec::{crypto::Fingerprint, ActorId, VectorClockActor, VectorClockFilesystem};
 
     use super::*;
 

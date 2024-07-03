@@ -32,6 +32,14 @@ impl FilesystemActorSnapshot {
         let (input, actor) = ActorSnapshot::parse(input)?;
         Ok((input, Self::new(filesystem, actor)))
     }
+
+    pub fn filesystem(&self) -> FilesystemSnapshot {
+        self.0
+    }
+
+    pub fn actor(&self) -> ActorSnapshot {
+        self.1
+    }
 }
 
 impl PartialOrd for FilesystemActorSnapshot {

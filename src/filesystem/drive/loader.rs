@@ -14,7 +14,7 @@ use crate::codec::parser::{
     ParserResult, ParserStateMachine, ProgressType, SegmentStreamer, StateError, StateResult,
 };
 use crate::codec::Stream;
-use crate::filesystem::drive::VectorClockFilesystemActorSnapshot;
+use crate::filesystem::drive::{VectorClockFilesystemActorSnapshot, VectorClockFilesystemSnapshot};
 use crate::filesystem::{Drive, DriveAccess, InnerDrive};
 
 pub struct DriveLoader<'a> {
@@ -148,7 +148,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
             DriveLoaderState::EncryptedHeader(key_count, meta_key) => {
                 let payload_size = (**key_count as usize * DriveAccess::size())
                     + ContentOptions::size()
-                    + VectorClockFilesystemActorSnapshot::size();
+                    + VectorClockFilesystemSnapshot::size();
 
                 let (input, header_buffer) =
                     EncryptedBuffer::parse_and_decrypt(buffer, payload_size, &[], meta_key)?;
@@ -168,8 +168,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 let (hdr_stream, content_options) = ContentOptions::parse(hdr_stream)?;
                 trace!("drive_loader::encrypted_header::content_options");
 
-                let (hdr_stream, vector_clock) =
-                    VectorClockFilesystemActorSnapshot::parse(hdr_stream)?;
+                let (hdr_stream, vector_clock) = VectorClockFilesystemSnapshot::parse(hdr_stream)?;
                 trace!("drive_loader::encrypted_header::vector_clock");
 
                 debug_assert!(hdr_stream.is_empty());
@@ -182,7 +181,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
 
                 Ok(ProgressType::Advance(bytes_read))
             }
-            DriveLoaderState::PrivateContent(content_options, vector_clock) => {
+            DriveLoaderState::PrivateContent(content_options, filesystem_clock) => {
                 if content_options.include_filesystem() {
                     let (input, encrypted_size) = content_length(buffer)?;
 
@@ -221,10 +220,17 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                         "drive_loader::private_content::decrypt_successful"
                     );
 
+                    let actor_id = self.signing_key.actor_id();
+                    let actor_clock = drive_access
+                        .actor_vector_clock(&actor_id)
+                        .ok_or(DriveLoaderError::ActorIdNotAvailable)?;
+                    let vector_clocks =
+                        VectorClockFilesystemActorSnapshot::new(*filesystem_clock, actor_clock);
+
                     let (remaining, inner_drive) = InnerDrive::parse(
                         Stream::new(fs_buffer.as_slice()),
                         drive_access.clone(),
-                        vector_clock.clone(),
+                        vector_clocks,
                     )
                     .map_err(|e| match e {
                         ErrMode::Incomplete(_) => winnow::error::ErrMode::Cut(
@@ -286,6 +292,9 @@ pub enum DriveLoaderError {
 
     #[error("unexpected end of stream")]
     UnexpectedStreamEnd,
+
+    #[error("Actor Id not available in Drive Access")]
+    ActorIdNotAvailable,
 }
 
 impl StateError for DriveLoaderError {
@@ -326,7 +335,7 @@ enum DriveLoaderState {
 
     EscrowedAccessKeys(KeyCount),
     EncryptedHeader(KeyCount, MetaKey),
-    PrivateContent(ContentOptions, VectorClockFilesystemActorSnapshot),
+    PrivateContent(ContentOptions, VectorClockFilesystemSnapshot),
     //PublicPermissions(KeyCount),
     //PublicContent,
 

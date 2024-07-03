@@ -512,8 +512,9 @@ pub(crate) mod test {
         let signing_key = signing_key.unwrap_or_else(|| SigningKey::generate(&mut rng));
         let verifying_key = signing_key.verifying_key();
         let actor_id = verifying_key.actor_id();
+        let actor_clock = (&VectorClockActor::initialize(actor_id)).into();
 
-        let access = DriveAccess::initialize(&mut rng, verifying_key).unwrap();
+        let access = DriveAccess::initialize(&mut rng, verifying_key, actor_clock).unwrap();
 
         let vector_clock_actor = VectorClockActor::initialize(actor_id);
 

@@ -45,6 +45,12 @@ impl DriveAccess {
             .map(|settings| settings.access())
     }
 
+    pub fn actor_vector_clock(&self, actor_id: &ActorId) -> Option<VectorClockActorSnapshot> {
+        self.actor_settings
+            .get(actor_id)
+            .map(|settings| settings.vector_clock())
+    }
+
     /// Get the full [`VerifyingKey`] for a specific actor. If the actor doesn't have access to the
     /// drive this will return None.
     pub fn actor_key(&self, actor_id: &ActorId) -> Option<VerifyingKey> {
@@ -480,6 +486,7 @@ pub enum DriveAccessError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::filesystem::drive::VectorClockActor;
 
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::*;
@@ -507,8 +514,9 @@ mod tests {
         let mut rng = crate::utils::crypto_rng();
         let key = SigningKey::generate(&mut rng);
         let verifying_key = key.verifying_key();
+        let actor_clock = VectorClockActor::initialize(verifying_key.actor_id()).as_snapshot();
 
-        let access = DriveAccess::initialize(&mut rng, verifying_key).unwrap();
+        let access = DriveAccess::initialize(&mut rng, verifying_key, actor_clock).unwrap();
 
         let mut buffer = Vec::new();
         access.encode(&mut rng, &mut buffer).await.unwrap();
@@ -529,15 +537,16 @@ mod tests {
         let mut rng = crate::utils::crypto_rng();
         let key = SigningKey::generate(&mut rng);
         let verifying_key = key.verifying_key();
+        let actor_clock = VectorClockActor::initialize(verifying_key.actor_id()).as_snapshot();
 
-        let mut access = DriveAccess::initialize(&mut rng, verifying_key).unwrap();
+        let mut access = DriveAccess::initialize(&mut rng, verifying_key, actor_clock).unwrap();
 
         let second_key = SigningKey::generate(&mut rng);
         let second_verifying_key = second_key.verifying_key();
 
         let access_mask = AccessMaskBuilder::structural().build().unwrap();
         access
-            .register_actor(&mut rng, second_verifying_key, access_mask)
+            .register_actor(&mut rng, second_verifying_key, access_mask, actor_clock)
             .unwrap();
 
         let mut buffer = Vec::new();
@@ -559,9 +568,10 @@ mod tests {
         let mut rng = crate::utils::crypto_rng();
         let key = SigningKey::generate(&mut rng);
         let verifying_key = key.verifying_key();
+        let actor_clock = VectorClockActor::initialize(verifying_key.actor_id()).as_snapshot();
 
         let actor_id = verifying_key.actor_id();
-        let access = DriveAccess::initialize(&mut rng, verifying_key).unwrap();
+        let access = DriveAccess::initialize(&mut rng, verifying_key, actor_clock).unwrap();
 
         assert!(access.has_read_access(&actor_id));
         assert!(access.has_write_access(&actor_id));
@@ -577,9 +587,10 @@ mod tests {
         let mut rng = crate::utils::crypto_rng();
         let key = SigningKey::generate(&mut rng);
         let verifying_key = key.verifying_key();
+        let actor_clock = VectorClockActor::initialize(verifying_key.actor_id()).as_snapshot();
 
         let actor_id = verifying_key.actor_id();
-        let mut access = DriveAccess::initialize(&mut rng, verifying_key).unwrap();
+        let mut access = DriveAccess::initialize(&mut rng, verifying_key, actor_clock).unwrap();
 
         assert!(matches!(
             access.remove_actor(&key, &actor_id).unwrap_err(),
@@ -595,17 +606,27 @@ mod tests {
         let actor1_key = SigningKey::generate(&mut rng);
         let actor1_verifying_key = actor1_key.verifying_key();
         let actor1_id = actor1_verifying_key.actor_id();
+        let actor1_actor_clock =
+            VectorClockActor::initialize(actor1_verifying_key.actor_id()).as_snapshot();
 
         // actor1 implicitly gets owner privileges here
-        let mut access = DriveAccess::initialize(&mut rng, actor1_verifying_key).unwrap();
+        let mut access =
+            DriveAccess::initialize(&mut rng, actor1_verifying_key, actor1_actor_clock).unwrap();
 
         let actor2_key = SigningKey::generate(&mut rng);
         let actor2_verifying_key = actor2_key.verifying_key();
+        let actor2_actor_clock =
+            VectorClockActor::initialize(actor2_verifying_key.actor_id()).as_snapshot();
 
         // actor2 gets full access but is critically _not_ an owner
         let actor2_access_mask = AccessMaskBuilder::full_access().build().unwrap();
         access
-            .register_actor(&mut rng, actor2_verifying_key, actor2_access_mask)
+            .register_actor(
+                &mut rng,
+                actor2_verifying_key,
+                actor2_access_mask,
+                actor2_actor_clock,
+            )
             .unwrap();
 
         let removal_error = access.remove_actor(&actor2_key, &actor1_id).unwrap_err();
@@ -620,16 +641,26 @@ mod tests {
 
         let actor1_key = SigningKey::generate(&mut rng);
         let actor1_verifying_key = actor1_key.verifying_key();
+        let actor1_actor_clock =
+            VectorClockActor::initialize(actor1_verifying_key.actor_id()).as_snapshot();
 
-        let mut access = DriveAccess::initialize(&mut rng, actor1_verifying_key).unwrap();
+        let mut access =
+            DriveAccess::initialize(&mut rng, actor1_verifying_key, actor1_actor_clock).unwrap();
 
         let actor2_key = SigningKey::generate(&mut rng);
         let actor2_verifying_key = actor2_key.verifying_key();
         let actor2_id = actor2_verifying_key.actor_id();
+        let actor2_actor_clock =
+            VectorClockActor::initialize(actor2_verifying_key.actor_id()).as_snapshot();
 
         let actor2_access_mask = AccessMaskBuilder::full_access().build().unwrap();
         access
-            .register_actor(&mut rng, actor2_verifying_key, actor2_access_mask)
+            .register_actor(
+                &mut rng,
+                actor2_verifying_key,
+                actor2_access_mask,
+                actor2_actor_clock,
+            )
             .unwrap();
 
         assert!(access.active_actor_access(&actor2_id).is_some());
@@ -648,19 +679,29 @@ mod tests {
         let actor1_key = SigningKey::generate(&mut rng);
         let actor1_verifying_key = actor1_key.verifying_key();
         let actor1_id = actor1_verifying_key.actor_id();
+        let actor1_actor_clock =
+            VectorClockActor::initialize(actor1_verifying_key.actor_id()).as_snapshot();
 
         // actor1 implicitly gets owner privileges here, which should be sufficient
-        let mut access = DriveAccess::initialize(&mut rng, actor1_verifying_key).unwrap();
+        let mut access =
+            DriveAccess::initialize(&mut rng, actor1_verifying_key, actor1_actor_clock).unwrap();
 
         let actor2_key = SigningKey::generate(&mut rng);
         let actor2_verifying_key = actor2_key.verifying_key();
+        let actor2_actor_clock =
+            VectorClockActor::initialize(actor2_verifying_key.actor_id()).as_snapshot();
 
         let actor2_access_mask = AccessMaskBuilder::full_access()
             .protected()
             .build()
             .unwrap();
         access
-            .register_actor(&mut rng, actor2_verifying_key, actor2_access_mask)
+            .register_actor(
+                &mut rng,
+                actor2_verifying_key,
+                actor2_access_mask,
+                actor2_actor_clock,
+            )
             .unwrap();
 
         let removal_error = access.remove_actor(&actor2_key, &actor1_id).unwrap_err();
@@ -674,17 +715,27 @@ mod tests {
         let mut rng = crate::utils::crypto_rng();
         let actor1_key = SigningKey::generate(&mut rng);
         let actor1_verifying_key = actor1_key.verifying_key();
+        let actor1_actor_clock =
+            VectorClockActor::initialize(actor1_verifying_key.actor_id()).as_snapshot();
 
         let actor1_id = actor1_verifying_key.actor_id();
-        let mut access = DriveAccess::initialize(&mut rng, actor1_verifying_key).unwrap();
+        let mut access =
+            DriveAccess::initialize(&mut rng, actor1_verifying_key, actor1_actor_clock).unwrap();
 
         let actor2_key = SigningKey::generate(&mut rng);
         let actor2_verifying_key = actor2_key.verifying_key();
+        let actor2_actor_clock =
+            VectorClockActor::initialize(actor2_verifying_key.actor_id()).as_snapshot();
         let actor2_id = actor2_verifying_key.actor_id();
         let actor2_access_mask = AccessMaskBuilder::full_access().build().unwrap();
 
         access
-            .register_actor(&mut rng, actor2_verifying_key, actor2_access_mask)
+            .register_actor(
+                &mut rng,
+                actor2_verifying_key,
+                actor2_access_mask,
+                actor2_actor_clock,
+            )
             .unwrap();
 
         // Original actor should still have access
