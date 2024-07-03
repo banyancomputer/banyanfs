@@ -14,7 +14,7 @@ use crate::codec::parser::{
     ParserResult, ParserStateMachine, ProgressType, SegmentStreamer, StateError, StateResult,
 };
 use crate::codec::Stream;
-use crate::filesystem::drive::VectorClock;
+use crate::filesystem::drive::VectorClockFilesystemActorSnapshot;
 use crate::filesystem::{Drive, DriveAccess, InnerDrive};
 
 pub struct DriveLoader<'a> {
@@ -148,7 +148,7 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
             DriveLoaderState::EncryptedHeader(key_count, meta_key) => {
                 let payload_size = (**key_count as usize * DriveAccess::size())
                     + ContentOptions::size()
-                    + VectorClock::size();
+                    + VectorClockFilesystemActorSnapshot::size();
 
                 let (input, header_buffer) =
                     EncryptedBuffer::parse_and_decrypt(buffer, payload_size, &[], meta_key)?;
@@ -168,7 +168,8 @@ impl ParserStateMachine<Drive> for DriveLoader<'_> {
                 let (hdr_stream, content_options) = ContentOptions::parse(hdr_stream)?;
                 trace!("drive_loader::encrypted_header::content_options");
 
-                let (hdr_stream, vector_clock) = VectorClock::parse(hdr_stream)?;
+                let (hdr_stream, vector_clock) =
+                    VectorClockFilesystemActorSnapshot::parse(hdr_stream)?;
                 trace!("drive_loader::encrypted_header::vector_clock");
 
                 debug_assert!(hdr_stream.is_empty());
@@ -325,7 +326,7 @@ enum DriveLoaderState {
 
     EscrowedAccessKeys(KeyCount),
     EncryptedHeader(KeyCount, MetaKey),
-    PrivateContent(ContentOptions, VectorClock),
+    PrivateContent(ContentOptions, VectorClockFilesystemActorSnapshot),
     //PublicPermissions(KeyCount),
     //PublicContent,
 

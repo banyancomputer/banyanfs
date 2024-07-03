@@ -23,7 +23,8 @@ pub(crate) struct InnerDrive {
     /// This is the filesystem-wide vector clock used for tracking what permanent IDs are present
     /// within the filesystem as well as access control related changes. Changes to individual
     /// node's or their entry specific data should make use of the [`Node`]'s vector clock instead.
-    vector_clock: VectorClockFilesystem,
+    vector_clock_filesystem: VectorClockFilesystem,
+    vector_clock_actor: VectorClockActor,
     root_pid: PermanentId,
 
     nodes: Slab<Node>,
@@ -312,8 +313,9 @@ impl InnerDrive {
         rng: &mut impl CryptoRngCore,
         actor_id: ActorId,
         access: DriveAccess,
+        vector_clock_actor: VectorClockActor,
     ) -> Result<Self, OperationError> {
-        let vector_clock = VectorClockFilesystem::initialize();
+        let vector_clock_filesystem = VectorClockFilesystem::initialize();
 
         let mut nodes = Slab::with_capacity(32);
         let mut permanent_id_map = HashMap::new();
@@ -332,8 +334,8 @@ impl InnerDrive {
 
         let inner = Self {
             access,
-            vector_clock,
-
+            vector_clock_filesystem,
+            vector_clock_actor,
             nodes,
             root_pid,
             permanent_id_map,
@@ -361,9 +363,11 @@ impl InnerDrive {
     pub(crate) fn parse(
         input: Stream<'_>,
         drive_access: DriveAccess,
-        vector_clock: VectorClockFilesystem,
+        vector_clocks: VectorClockFilesystemActorSnapshot,
     ) -> ParserResult<'_, Self> {
         tracing::trace!(available_data = ?input.len(), "inner_drive::parse");
+
+        let (vector_clock_filesystem, vector_clock_actor) = vector_clocks.reanimate();
 
         let (remaining, root_pid) = PermanentId::parse(input)?;
         let bytes_read = input.len() - remaining.len();
@@ -420,7 +424,8 @@ impl InnerDrive {
 
         let inner_drive = InnerDrive {
             access: drive_access,
-            vector_clock,
+            vector_clock_actor,
+            vector_clock_filesystem,
             root_pid,
             nodes,
             permanent_id_map,
@@ -485,8 +490,11 @@ impl InnerDrive {
         self.root_pid
     }
 
-    pub fn vector_clock(&self) -> VectorClockFilesystemSnapshot {
-        VectorClockFilesystemSnapshot::from(&self.vector_clock)
+    pub fn vector_clock(&self) -> VectorClockFilesystemActorSnapshot {
+        VectorClockFilesystemActorSnapshot::new(
+            self.vector_clock_filesystem.to_snapshot(),
+            self.vector_clock_actor.to_snapshot(),
+        )
     }
 }
 

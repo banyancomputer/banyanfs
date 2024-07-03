@@ -16,6 +16,16 @@ impl Filesystem {
     pub fn initialize() -> Self {
         Self::new(ClockInner::initialize())
     }
+
+    pub fn to_snapshot(&self) -> FilesystemSnapshot {
+        self.into()
+    }
+}
+
+impl From<FilesystemSnapshot> for Filesystem {
+    fn from(value: FilesystemSnapshot) -> Self {
+        Self::new(value.clock.into())
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]

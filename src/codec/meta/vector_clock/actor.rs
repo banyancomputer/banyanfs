@@ -35,6 +35,12 @@ impl Actor {
     }
 }
 
+impl From<ActorSnapshot> for Actor {
+    fn from(value: ActorSnapshot) -> Self {
+        Self::new(value.id, value.clock.into())
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct ActorSnapshot {
     id: ActorId,

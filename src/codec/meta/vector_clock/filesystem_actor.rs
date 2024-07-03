@@ -1,4 +1,4 @@
-use super::{actor::ActorSnapshot, filesystem::FilesystemSnapshot};
+use super::{actor::ActorSnapshot, filesystem::FilesystemSnapshot, Actor, Filesystem};
 use crate::codec::{ParserResult, Stream};
 
 use futures::AsyncWrite;
@@ -13,6 +13,10 @@ impl FilesystemActorSnapshot {
 
     pub fn size() -> usize {
         FilesystemSnapshot::size() + ActorSnapshot::size()
+    }
+
+    pub fn reanimate(self) -> (Filesystem, Actor) {
+        (Filesystem::from(self.0), Actor::from(self.1))
     }
 
     pub async fn encode<W: AsyncWrite + Unpin + Send>(

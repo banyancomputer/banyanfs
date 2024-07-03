@@ -303,7 +303,7 @@ impl DriveAccess {
             return Err(DriveAccessError::ActorAlreadyPresent);
         }
 
-        let mut actor_settings = ActorSettings::new(key, access_mask, actor_id);
+        let mut actor_settings = ActorSettings::new(key, access_mask);
 
         if access_mask.has_data_key() {
             let key = self
