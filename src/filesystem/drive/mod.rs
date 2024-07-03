@@ -160,23 +160,25 @@ impl Drive {
     pub fn initialize_private(
         rng: &mut impl CryptoRngCore,
         current_key: Arc<SigningKey>,
+        vector_clock_actor: VectorClockActor,
     ) -> Result<Self, DriveError> {
         let filesystem_id = FilesystemId::generate(rng);
-        Self::initialize_private_with_id(rng, current_key, filesystem_id)
+        Self::initialize_private_with_id(rng, current_key, filesystem_id, vector_clock_actor)
     }
 
     pub fn initialize_private_with_id(
         rng: &mut impl CryptoRngCore,
         current_key: Arc<SigningKey>,
         filesystem_id: FilesystemId,
+        vector_clock_actor: VectorClockActor,
     ) -> Result<Self, DriveError> {
         let verifying_key = current_key.verifying_key();
         let actor_id = verifying_key.actor_id();
 
         trace!(?actor_id, ?filesystem_id, "drive::initializing_private");
 
-        let access = DriveAccess::initialize(rng, verifying_key)?;
-        let inner = InnerDrive::initialize(rng, actor_id, access)?;
+        let access = DriveAccess::initialize(rng, verifying_key, vector_clock_actor.as_snapshot())?;
+        let inner = InnerDrive::initialize(rng, actor_id, access, vector_clock_actor)?;
 
         let drive = Self {
             current_key,
@@ -197,9 +199,10 @@ impl Drive {
         access_mask: AccessMask,
     ) -> Result<(), DriveAccessError> {
         let mut inner_write = self.inner.write().await;
+        let vector_clock_snapshot = inner_write.vector_clock();
         inner_write
             .access_mut()
-            .register_actor(rng, key, access_mask)?;
+            .register_actor(rng, key, access_mask, vector_clock_snapshot)?;
         Ok(())
     }
 

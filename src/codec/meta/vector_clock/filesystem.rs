@@ -17,7 +17,7 @@ impl Filesystem {
         Self::new(ClockInner::initialize())
     }
 
-    pub fn to_snapshot(&self) -> FilesystemSnapshot {
+    pub fn as_snapshot(&self) -> FilesystemSnapshot {
         self.into()
     }
 }
@@ -34,11 +34,11 @@ pub struct FilesystemSnapshot {
 }
 
 impl FilesystemSnapshot {
-    fn new(clock: ClockInnerSnapshot) -> Self {
+    pub fn new(clock: ClockInnerSnapshot) -> Self {
         Self { clock }
     }
 
-    pub fn size() -> usize {
+    pub const fn size() -> usize {
         ClockInnerSnapshot::size()
     }
 

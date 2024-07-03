@@ -6,6 +6,7 @@ use futures::io::AsyncWrite;
 use crate::codec::{
     crypto::{AccessKey, KeyId, SigningKey, VerifyingKey},
     header::{AccessMask, AccessMaskBuilder, AccessMaskError},
+    meta::VectorClockActorSnapshot,
     ActorId, ActorSettings, ActorSettingsError, ParserResult, Stream,
 };
 
@@ -168,6 +169,7 @@ impl DriveAccess {
     pub(crate) fn initialize(
         rng: &mut impl CryptoRngCore,
         verifying_key: VerifyingKey,
+        vector_clock_actor_snapshot: VectorClockActorSnapshot,
     ) -> Result<Self, DriveAccessError> {
         let mut access = Self {
             actor_settings: HashMap::new(),
@@ -182,7 +184,7 @@ impl DriveAccess {
             .protected()
             .build()?;
 
-        access.register_actor(rng, verifying_key, access_mask)?;
+        access.register_actor(rng, verifying_key, access_mask, vector_clock_actor_snapshot)?;
 
         Ok(access)
     }
@@ -291,6 +293,7 @@ impl DriveAccess {
         rng: &mut impl CryptoRngCore,
         key: VerifyingKey,
         access_mask: AccessMask,
+        vector_clock_actor_snapshot: VectorClockActorSnapshot,
     ) -> Result<(), DriveAccessError> {
         // todo(sstelfox): need to add a check that prevents a user from granting privileges beyond
         // their own (they couldn't anyways as they don't have access to the symmetric keys
@@ -303,7 +306,7 @@ impl DriveAccess {
             return Err(DriveAccessError::ActorAlreadyPresent);
         }
 
-        let mut actor_settings = ActorSettings::new(key, access_mask);
+        let mut actor_settings = ActorSettings::new(key, access_mask, vector_clock_actor_snapshot);
 
         if access_mask.has_data_key() {
             let key = self

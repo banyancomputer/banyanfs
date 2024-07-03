@@ -5,7 +5,7 @@ use winnow::{binary::le_u8, token::take, Parser};
 use crate::codec::{
     crypto::{AccessKey, AsymLockedAccessKey, AsymLockedAccessKeyError, SigningKey, VerifyingKey},
     header::AccessMask,
-    meta::{UserAgent, VectorClockActor, VectorClockActorSnapshot},
+    meta::{UserAgent, VectorClockActorSnapshot},
     ParserResult, Stream,
 };
 

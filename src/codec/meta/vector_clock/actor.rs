@@ -18,7 +18,7 @@ impl Actor {
         Self::new(actor_id, ClockInner::initialize())
     }
 
-    pub fn to_snapshot(&self) -> ActorSnapshot {
+    pub fn as_snapshot(&self) -> ActorSnapshot {
         self.into()
     }
 

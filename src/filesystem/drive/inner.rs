@@ -492,8 +492,8 @@ impl InnerDrive {
 
     pub fn vector_clock(&self) -> VectorClockFilesystemActorSnapshot {
         VectorClockFilesystemActorSnapshot::new(
-            self.vector_clock_filesystem.to_snapshot(),
-            self.vector_clock_actor.to_snapshot(),
+            self.vector_clock_filesystem.as_snapshot(),
+            self.vector_clock_actor.as_snapshot(),
         )
     }
 }
@@ -515,9 +515,11 @@ pub(crate) mod test {
 
         let access = DriveAccess::initialize(&mut rng, verifying_key).unwrap();
 
+        let vector_clock_actor = VectorClockActor::initialize(actor_id);
+
         (
             actor_id,
-            InnerDrive::initialize(&mut rng, actor_id, access).unwrap(),
+            InnerDrive::initialize(&mut rng, actor_id, access, vector_clock_actor).unwrap(),
         )
     }
 
@@ -564,7 +566,7 @@ pub(crate) mod test {
         let inner = build_interesting_inner(None).await;
 
         let access = inner.access();
-        let vector_clock = inner.vector_clock.clone();
+        let vector_clock = inner.vector_clock();
         let mut encoded = Vec::new();
 
         let encoding_res = inner.encode(&mut encoded).await;

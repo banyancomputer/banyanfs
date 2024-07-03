@@ -11,7 +11,7 @@ impl FilesystemActorSnapshot {
         Self(filesystem, actor)
     }
 
-    pub fn size() -> usize {
+    pub const fn size() -> usize {
         FilesystemSnapshot::size() + ActorSnapshot::size()
     }
 
