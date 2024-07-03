@@ -27,7 +27,8 @@ async fn main() {
 
     let mut memory_store = MemoryDataStore::default();
 
-    let drive = Drive::initialize_private(&mut rng, signing_key.clone(), vector_clock_actor).unwrap();
+    let drive =
+        Drive::initialize_private(&mut rng, signing_key.clone(), vector_clock_actor).unwrap();
     assert!(
         drive.has_read_access(&actor_id).await,
         "creation key to have read access"
