@@ -3,13 +3,13 @@
 
 use futures::io::AsyncWrite;
 
-use crate::codec::meta::{Cid, VectorClockFilesystemActorSnapshot};
+use crate::codec::meta::{Cid, VectorClockFilesystemSnapshot};
 use crate::codec::{ParserResult, Stream};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct JournalCheckpoint {
     merkle_root_cid: Cid,
-    vector: VectorClockFilesystemActorSnapshot,
+    vector: VectorClockFilesystemSnapshot,
 }
 
 impl JournalCheckpoint {
@@ -27,7 +27,7 @@ impl JournalCheckpoint {
 
     pub fn parse(input: Stream) -> ParserResult<Self> {
         let (input, merkle_root_cid) = Cid::parse(input)?;
-        let (input, vector) = VectorClockFilesystemActorSnapshot::parse(input)?;
+        let (input, vector) = VectorClockFilesystemSnapshot::parse(input)?;
 
         let journal_checkpoint = JournalCheckpoint {
             merkle_root_cid,
@@ -38,7 +38,7 @@ impl JournalCheckpoint {
     }
 
     pub const fn size() -> usize {
-        Cid::size() + VectorClockFilesystemActorSnapshot::size()
+        Cid::size() + VectorClockFilesystemSnapshot::size()
     }
 }
 
@@ -46,7 +46,7 @@ impl JournalCheckpoint {
 mod tests {
     use winnow::Partial;
 
-    use crate::codec::{crypto::Fingerprint, ActorId, VectorClockActor, VectorClockFilesystem};
+    use crate::codec::VectorClockFilesystem;
 
     use super::*;
 
@@ -58,10 +58,7 @@ mod tests {
     async fn test_user_agent_roundtrip() {
         let checkpoint = JournalCheckpoint {
             merkle_root_cid: Cid::from([0; 32]),
-            vector: VectorClockFilesystemActorSnapshot::from((
-                &VectorClockFilesystem::initialize(),
-                &VectorClockActor::initialize(ActorId::from(Fingerprint::from([0; 32]))),
-            )),
+            vector: (&VectorClockFilesystem::initialize()).as_snapshot(),
         };
 
         let mut buffer = Vec::with_capacity(JournalCheckpoint::size());
