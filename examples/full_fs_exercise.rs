@@ -23,12 +23,10 @@ async fn main() {
     let signing_key = std::sync::Arc::new(SigningKey::generate(&mut rng));
     let verifying_key = signing_key.verifying_key();
     let actor_id = verifying_key.actor_id();
-    let vector_clock_actor = VectorClockActor::initialize(actor_id);
 
     let mut memory_store = MemoryDataStore::default();
 
-    let drive =
-        Drive::initialize_private(&mut rng, signing_key.clone(), vector_clock_actor).unwrap();
+    let drive = Drive::initialize_private(&mut rng, signing_key.clone()).unwrap();
     assert!(
         drive.has_read_access(&actor_id).await,
         "creation key to have read access"

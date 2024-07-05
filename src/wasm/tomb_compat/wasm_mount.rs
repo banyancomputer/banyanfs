@@ -54,15 +54,9 @@ impl WasmMount {
         }
 
         let filesystem_id = FilesystemId::from(id_bytes);
-        let actor_vector_clock = VectorClockActor::initialize(signing_key.actor_id());
 
-        let drive = Drive::initialize_private_with_id(
-            &mut rng,
-            signing_key,
-            filesystem_id,
-            actor_vector_clock,
-        )
-        .map_err(|e| BanyanFsError::from(e.to_string()))?;
+        let drive = Drive::initialize_private_with_id(&mut rng, signing_key, filesystem_id)
+            .map_err(|e| BanyanFsError::from(e.to_string()))?;
 
         let pubkey = wasm_client.client().platform_public_key().await?;
         ensure_platform_key_present(&mut rng, &drive, pubkey).await?;

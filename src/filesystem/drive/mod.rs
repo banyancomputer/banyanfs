@@ -49,8 +49,7 @@ use crate::filesystem::nodes::{Node, NodeBuilderError, NodeName};
 /// use banyanfs::prelude::*;
 /// # let mut rng = rand::thread_rng();
 /// let signing_key = Arc::new(SigningKey::generate(&mut rng));
-/// let vector_clock_actor = VectorClockActor::initialize(signing_key.verifying_key().actor_id());
-/// let new_drive = Drive::initialize_private(&mut rng, signing_key, vector_clock_actor);
+/// let new_drive = Drive::initialize_private(&mut rng, signing_key);
 /// ```
 #[derive(Clone)]
 pub struct Drive {
@@ -161,20 +160,19 @@ impl Drive {
     pub fn initialize_private(
         rng: &mut impl CryptoRngCore,
         current_key: Arc<SigningKey>,
-        vector_clock_actor: VectorClockActor,
     ) -> Result<Self, DriveError> {
         let filesystem_id = FilesystemId::generate(rng);
-        Self::initialize_private_with_id(rng, current_key, filesystem_id, vector_clock_actor)
+        Self::initialize_private_with_id(rng, current_key, filesystem_id)
     }
 
     pub fn initialize_private_with_id(
         rng: &mut impl CryptoRngCore,
         current_key: Arc<SigningKey>,
         filesystem_id: FilesystemId,
-        vector_clock_actor: VectorClockActor,
     ) -> Result<Self, DriveError> {
         let verifying_key = current_key.verifying_key();
         let actor_id = verifying_key.actor_id();
+        let vector_clock_actor = VectorClockActor::initialize(actor_id);
 
         trace!(?actor_id, ?filesystem_id, "drive::initializing_private");
 
