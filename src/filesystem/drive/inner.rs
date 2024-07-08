@@ -4,13 +4,16 @@ use ecdsa::signature::rand_core::CryptoRngCore;
 use futures::io::{AsyncWrite, AsyncWriteExt};
 use slab::Slab;
 use tracing::instrument;
-use winnow::binary::le_u64;
-use winnow::Parser;
+use winnow::{binary::le_u64, Parser};
 
-use crate::codec::*;
-use crate::filesystem::drive::{DriveAccess, VectorClock};
-use crate::filesystem::nodes::{Node, NodeBuilder, NodeId};
-use crate::utils::std_io_err;
+use crate::{
+    codec::*,
+    filesystem::{
+        drive::{DriveAccess, VectorClockFilesystem},
+        nodes::{Node, NodeBuilder, NodeId},
+    },
+    utils::std_io_err,
+};
 
 use super::OperationError;
 
@@ -20,7 +23,8 @@ pub(crate) struct InnerDrive {
     /// This is the filesystem-wide vector clock used for tracking what permanent IDs are present
     /// within the filesystem as well as access control related changes. Changes to individual
     /// node's or their entry specific data should make use of the [`Node`]'s vector clock instead.
-    vector_clock: VectorClock,
+    vector_clock_filesystem: VectorClockFilesystem,
+    vector_clock_actor: VectorClockActor,
     root_pid: PermanentId,
 
     nodes: Slab<Node>,
@@ -309,8 +313,9 @@ impl InnerDrive {
         rng: &mut impl CryptoRngCore,
         actor_id: ActorId,
         access: DriveAccess,
+        vector_clock_actor: VectorClockActor,
     ) -> Result<Self, OperationError> {
-        let vector_clock = VectorClock::initialize();
+        let vector_clock_filesystem = VectorClockFilesystem::initialize();
 
         let mut nodes = Slab::with_capacity(32);
         let mut permanent_id_map = HashMap::new();
@@ -329,8 +334,8 @@ impl InnerDrive {
 
         let inner = Self {
             access,
-            vector_clock,
-
+            vector_clock_filesystem,
+            vector_clock_actor,
             nodes,
             root_pid,
             permanent_id_map,
@@ -358,9 +363,11 @@ impl InnerDrive {
     pub(crate) fn parse(
         input: Stream<'_>,
         drive_access: DriveAccess,
-        vector_clock: VectorClock,
+        vector_clocks: VectorClockFilesystemActorSnapshot,
     ) -> ParserResult<'_, Self> {
         tracing::trace!(available_data = ?input.len(), "inner_drive::parse");
+
+        let (vector_clock_filesystem, vector_clock_actor) = vector_clocks.reanimate();
 
         let (remaining, root_pid) = PermanentId::parse(input)?;
         let bytes_read = input.len() - remaining.len();
@@ -417,7 +424,8 @@ impl InnerDrive {
 
         let inner_drive = InnerDrive {
             access: drive_access,
-            vector_clock,
+            vector_clock_actor,
+            vector_clock_filesystem,
             root_pid,
             nodes,
             permanent_id_map,
@@ -482,8 +490,11 @@ impl InnerDrive {
         self.root_pid
     }
 
-    pub fn vector_clock(&self) -> VectorClockSnapshot {
-        VectorClockSnapshot::from(&self.vector_clock)
+    pub fn vector_clock(&self) -> VectorClockFilesystemActorSnapshot {
+        VectorClockFilesystemActorSnapshot::new(
+            self.vector_clock_filesystem.as_snapshot(),
+            self.vector_clock_actor.as_snapshot(),
+        )
     }
 }
 
@@ -493,8 +504,7 @@ pub(crate) mod test {
 
     use winnow::Partial;
 
-    use crate::codec::crypto::SigningKey;
-    use crate::filesystem::nodes::NodeName;
+    use crate::{codec::crypto::SigningKey, filesystem::nodes::NodeName};
 
     fn initialize_inner_drive(signing_key: Option<SigningKey>) -> (ActorId, InnerDrive) {
         let mut rng = crate::utils::crypto_rng();
@@ -502,12 +512,15 @@ pub(crate) mod test {
         let signing_key = signing_key.unwrap_or_else(|| SigningKey::generate(&mut rng));
         let verifying_key = signing_key.verifying_key();
         let actor_id = verifying_key.actor_id();
+        let actor_clock = (&VectorClockActor::initialize(actor_id)).into();
 
-        let access = DriveAccess::initialize(&mut rng, verifying_key).unwrap();
+        let access = DriveAccess::initialize(&mut rng, verifying_key, actor_clock).unwrap();
+
+        let vector_clock_actor = VectorClockActor::initialize(actor_id);
 
         (
             actor_id,
-            InnerDrive::initialize(&mut rng, actor_id, access).unwrap(),
+            InnerDrive::initialize(&mut rng, actor_id, access, vector_clock_actor).unwrap(),
         )
     }
 

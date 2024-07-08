@@ -35,4 +35,5 @@ pub mod prelude {
     pub use crate::codec::crypto::{SigningKey, VerifyingKey};
     pub use crate::codec::header::{AccessMask, AccessMaskBuilder, ContentOptions};
     pub use crate::codec::FilesystemId;
+    pub use crate::codec::VectorClockActor;
 }

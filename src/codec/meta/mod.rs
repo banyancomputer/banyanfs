@@ -16,4 +16,10 @@ pub use journal_checkpoint::JournalCheckpoint;
 pub use meta_key::MetaKey;
 pub use permanent_id::PermanentId;
 pub use user_agent::UserAgent;
-pub use vector_clock::{VectorClock, VectorClockSnapshot};
+pub use vector_clock::{
+    Actor as VectorClockActor, ActorSnapshot as VectorClockActorSnapshot,
+    Filesystem as VectorClockFilesystem,
+    FilesystemActorSnapshot as VectorClockFilesystemActorSnapshot,
+    FilesystemSnapshot as VectorClockFilesystemSnapshot, Node as VectorClockNode,
+    NodeActorSnapshot as VectorClockNodeActorSnapshot, NodeSnapshot as VectorClockNodeSnapshot,
+};
